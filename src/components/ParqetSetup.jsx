@@ -65,7 +65,7 @@ export default function ParqetSetup({ onDone }) {
 </p>
 
 <ol style={{ color: '#7a8ba0', fontSize: 13, lineHeight: 2, paddingLeft: 18, marginBottom: 20 }}>
-  <li>Gehe zu <a href="https://app.parqet.com/settings/developer" target="_blank" rel="noreferrer" style={{ color: '#009991' }}>app.parqet.com → Einstellungen → Entwickler</a></li>
+  <li>Gehe zu <a href="https://developer.parqet.com/" target="_blank" rel="noreferrer" style={{ color: '#009991' }}>app.parqet.com → Einstellungen → Entwickler</a></li>
   <li>Erstelle eine neue OAuth App</li>
   <li>Trage als Redirect URI folgendes ein:</li>
 </ol>
