@@ -97,10 +97,6 @@ export default function ParqetSetup({ onDone }) {
 <ol start={4} style={{ color: '#7a8ba0', fontSize: 13, lineHeight: 2, paddingLeft: 18, marginBottom: 24 }}>
   <li>Kopiere die generierte <strong style={{ color: '#93c5fd' }}>Client ID</strong> und füge sie unten ein</li>
 </ol>
-      <p>
-          Deine Daten werden sicher gespeichert und nur für deinen Account verwendet.
-        </p>
-
         {error && (
           <div style={{
             background: '#2d0a0a', border: '1px solid #7f1d1d', color: '#fca5a5',
@@ -131,6 +127,15 @@ export default function ParqetSetup({ onDone }) {
             {loading ? '⟳ Speichern…' : 'Speichern & weiter'}
           </button>
         </form>
+        <p style={{
+        color: '#3d5266',
+        fontSize: 11,
+        textAlign: 'center',
+        marginTop: 12,
+        lineHeight: 1.5,
+        }}>
+        🔒 Deine Client ID wird verschlüsselt gespeichert und ausschließlich für deinen Account verwendet.
+        </p>
       </div>
     </div>
   )
