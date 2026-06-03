@@ -60,10 +60,12 @@ export default function ParqetSetup({ onDone }) {
         </h2>
         <p style={{ color: '#7a8ba0', fontSize: 13, marginBottom: 24 }}>
           Gib deine Parqet <strong style={{ color: '#93c5fd' }}>Client ID</strong> ein.
-          Diese findest du in den Parqet-Entwicklereinstellungen unter{' '}
-          <a href="https://app.parqet.com" target="_blank" rel="noreferrer"
-             style={{ color: '#009991' }}>app.parqet.com</a>.
-          Sie wird sicher gespeichert und nur für deinen Account verwendet.
+          Dort musst du eine neue Integration mit Lese-Rechten erstellen.
+          Diese findest du in den Parqet-Entwicklereinstellungen unter{' '}. Zudem musst du folgenden Link als zugelassene Redirect URI eingeben.
+          <textarea> https://dividenddashboard.netlify.app/callback </textarea>
+          <a href="https://developer.parqet.com/" target="_blank" rel="noreferrer"
+             style={{ color: '#009991' }}>https://developer.parqet.com/</a>.
+          Deine Daten werd sicher gespeichert und nur für deinen Account verwendet.
         </p>
 
         {error && (
@@ -78,7 +80,7 @@ export default function ParqetSetup({ onDone }) {
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input
             type="text"
-            placeholder="z.B. abc123def456"
+            placeholder="ClientID z.B. abc123def456"
             value={clientId}
             onChange={e => setClientId(e.target.value)}
             required
