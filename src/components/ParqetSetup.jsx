@@ -58,14 +58,47 @@ export default function ParqetSetup({ onDone }) {
         <h2 style={{ color: '#e0e6f0', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
           🔑 Parqet verbinden
         </h2>
-        <p style={{ color: '#7a8ba0', fontSize: 13, marginBottom: 24 }}>
-          Gib deine Parqet <strong style={{ color: '#93c5fd' }}>Client ID</strong> ein.
-          Dort musst du eine neue Integration mit Lese-Rechten erstellen.
-          Diese findest du in den Parqet-Entwicklereinstellungen unter{' '}. Zudem musst du folgenden Link als zugelassene Redirect URI eingeben.
-          <textarea> https://dividenddashboard.netlify.app/callback </textarea>
-          <a href="https://developer.parqet.com/" target="_blank" rel="noreferrer"
-             style={{ color: '#009991' }}>https://developer.parqet.com/</a>.
-          Deine Daten werd sicher gespeichert und nur für deinen Account verwendet.
+        {/* Beschreibungstext */}
+<p style={{ color: '#7a8ba0', fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
+  Um dein Parqet-Konto zu verbinden, benötigst du eine <strong style={{ color: '#93c5fd' }}>Client ID</strong>.
+  Folge diesen Schritten:
+</p>
+
+<ol style={{ color: '#7a8ba0', fontSize: 13, lineHeight: 2, paddingLeft: 18, marginBottom: 20 }}>
+  <li>Gehe zu <a href="https://app.parqet.com/settings/developer" target="_blank" rel="noreferrer" style={{ color: '#009991' }}>app.parqet.com → Einstellungen → Entwickler</a></li>
+  <li>Erstelle eine neue OAuth App</li>
+  <li>Trage als Redirect URI folgendes ein:</li>
+</ol>
+
+{/* Kopierbarer Block */}
+<div
+  onClick={() => navigator.clipboard.writeText('https://dividenddashboard.netlify.app/callback')}
+  title="Klicken zum Kopieren"
+  style={{
+    background: '#0f1420',
+    border: '1px solid #2a3a50',
+    borderRadius: 8,
+    padding: '10px 14px',
+    fontSize: 13,
+    color: '#93c5fd',
+    fontFamily: 'monospace',
+    cursor: 'pointer',
+    marginBottom: 20,
+    userSelect: 'all',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  }}
+>
+  https://dividenddashboard.netlify.app/callback
+  <span style={{ color: '#3d5266', fontSize: 11 }}>📋 Kopieren</span>
+</div>
+
+<ol start={4} style={{ color: '#7a8ba0', fontSize: 13, lineHeight: 2, paddingLeft: 18, marginBottom: 24 }}>
+  <li>Kopiere die generierte <strong style={{ color: '#93c5fd' }}>Client ID</strong> und füge sie unten ein</li>
+</ol>
+      <p>
+          Deine Daten werden sicher gespeichert und nur für deinen Account verwendet.
         </p>
 
         {error && (
