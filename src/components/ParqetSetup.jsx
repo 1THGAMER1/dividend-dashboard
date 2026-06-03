@@ -27,6 +27,11 @@ export default function ParqetSetup({ onDone }) {
     }
   }
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
+
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center',
@@ -35,7 +40,21 @@ export default function ParqetSetup({ onDone }) {
       <div style={{
         background: '#161b27', border: '1px solid #1e2a3a',
         borderRadius: 16, padding: '40px 36px', width: '100%', maxWidth: 420,
+        position: 'relative',
       }}>
+
+        <button
+          onClick={handleSignOut}
+          style={{
+            position: 'absolute', top: 14, right: 16,
+            background: 'none', border: 'none',
+            color: '#3d5266', fontSize: 11, cursor: 'pointer',
+            textDecoration: 'underline', padding: 0,
+          }}
+        >
+          Abmelden
+        </button>
+
         <h2 style={{ color: '#e0e6f0', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
           🔑 Parqet verbinden
         </h2>
