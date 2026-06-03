@@ -19,23 +19,29 @@ export default async (request, context) => {
     targetUrl = `https://connect.parqet.com${path}${url.search}`
   }
 
-  const headers = new Headers(request.headers)
-  headers.delete('host')
-  headers.delete('origin')
+  const forwardHeaders = new Headers()
+  const contentType = request.headers.get('content-type')
+  const authorization = request.headers.get('authorization')
+  if (contentType)   forwardHeaders.set('content-type', contentType)
+  if (authorization) forwardHeaders.set('authorization', authorization)
 
   try {
     const response = await fetch(targetUrl, {
       method: request.method,
-      headers,
+      headers: forwardHeaders,
       body: request.method !== 'GET' && request.method !== 'HEAD'
         ? await request.arrayBuffer()
         : undefined,
     })
 
-    const responseHeaders = new Headers(response.headers)
+    // Parse body as text to avoid encoding issues
+    const body = await response.text()
+
+    const responseHeaders = new Headers()
+    responseHeaders.set('content-type', response.headers.get('content-type') || 'application/json')
     Object.entries(CORS_HEADERS).forEach(([k, v]) => responseHeaders.set(k, v))
 
-    return new Response(response.body, {
+    return new Response(body, {
       status: response.status,
       headers: responseHeaders,
     })
