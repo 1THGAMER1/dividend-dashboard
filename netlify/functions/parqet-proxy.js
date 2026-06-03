@@ -10,17 +10,24 @@ export default async (request, context) => {
   }
 
   const url = new URL(request.url)
-  const path = url.pathname.replace('/.netlify/functions/parqet-proxy', '')
-
   let targetUrl
-  if (path === '/token' || path === '' || url.pathname === '/oauth/token') {
+
+  if (url.pathname === '/oauth/token') {
+    // Token endpoint
     targetUrl = 'https://connect.parqet.com/oauth2/token'
+  } else if (url.pathname.startsWith('/api/')) {
+    // Strip /api prefix: /api/portfolios -> /portfolios
+    const stripped = url.pathname.replace('/api', '')
+    targetUrl = `https://connect.parqet.com${stripped}${url.search}`
   } else {
-    targetUrl = `https://connect.parqet.com${path}${url.search}`
+    return new Response(JSON.stringify({ error: 'Not found' }), {
+      status: 404,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    })
   }
 
   const forwardHeaders = new Headers()
-  const contentType = request.headers.get('content-type')
+  const contentType   = request.headers.get('content-type')
   const authorization = request.headers.get('authorization')
   if (contentType)   forwardHeaders.set('content-type', contentType)
   if (authorization) forwardHeaders.set('authorization', authorization)
@@ -34,7 +41,6 @@ export default async (request, context) => {
         : undefined,
     })
 
-    // Parse body as text to avoid encoding issues
     const body = await response.text()
 
     const responseHeaders = new Headers()
