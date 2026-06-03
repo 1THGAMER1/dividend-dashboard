@@ -10,8 +10,6 @@ export async function getPortfolioId() {
   return _portfolioId
 }
 
-const PID  = await getPortfolioId()
-
 async function request(path, options = {}) {
   const token = await getAccessToken()
   if (!token) throw new Error('Nicht eingeloggt')
@@ -28,6 +26,7 @@ async function request(path, options = {}) {
 }
 
 export async function fetchDividendActivities() {
+  const PID = await getPortfolioId()
   let all = [], cursor = null
   do {
     const params = new URLSearchParams({ activityType: 'dividend', limit: '200' })
@@ -40,6 +39,7 @@ export async function fetchDividendActivities() {
 }
 
 export async function fetchBuyActivities() {
+  const PID = await getPortfolioId()
   let all = [], cursor = null
   do {
     const params = new URLSearchParams({ activityType: 'buy', limit: '200' })
@@ -67,6 +67,7 @@ export async function fetchPurchaseValuePerHolding() {
 }
 
 export async function fetchHoldingNames() {
+  const PID = await getPortfolioId()
   const data  = await request(`/portfolios/${PID}/holdings`)
   const names   = {}
   const types   = {}
@@ -124,6 +125,7 @@ export function calcKpiFromActivities(activities, range = 'all') {
 }
 
 export async function fetchCurrentValue() {
+  const PID = await getPortfolioId()
   try {
     const data = await request('/performance', {
       method: 'POST',
