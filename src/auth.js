@@ -1,8 +1,31 @@
-const CLIENT_ID    = import.meta.env.VITE_CLIENT_ID
+import { supabase } from './supabaseClient'
+
+let CLIENT_ID = null
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
 const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
 const TOKEN_URL    = '/oauth/token'
 const SCOPE        = 'portfolio:read'
+
+export async function getClientId() {
+  if (CLIENT_ID) return CLIENT_ID
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('parqet_client_id')
+    .eq('id', user.id)
+    .single()
+
+  if (error) throw error
+  CLIENT_ID = data?.parqet_client_id || null
+  return CLIENT_ID
+}
+
+export function clearCachedClientId() {
+  CLIENT_ID = null
+}
 
 function generateCodeVerifier() {
   const arr = new Uint8Array(32)
@@ -17,6 +40,9 @@ async function generateCodeChallenge(verifier) {
 }
 
 export async function startOAuthFlow() {
+  const clientId = await getClientId()
+  if (!clientId) throw new Error('Keine Parqet Client ID hinterlegt')
+
   const verifier  = generateCodeVerifier()
   const challenge = await generateCodeChallenge(verifier)
   const state     = crypto.randomUUID()
@@ -26,7 +52,7 @@ export async function startOAuthFlow() {
 
   const params = new URLSearchParams({
     response_type:         'code',
-    client_id:             CLIENT_ID,
+    client_id:             clientId,
     redirect_uri:          REDIRECT_URI,
     scope:                 SCOPE,
     state,
@@ -37,6 +63,9 @@ export async function startOAuthFlow() {
 }
 
 export async function handleCallback() {
+  const clientId = await getClientId()
+  if (!clientId) throw new Error('Keine Parqet Client ID hinterlegt')
+
   const params = new URLSearchParams(window.location.search)
   const code   = params.get('code')
   const state  = params.get('state')
@@ -51,7 +80,7 @@ export async function handleCallback() {
     grant_type:    'authorization_code',
     code,
     redirect_uri:  REDIRECT_URI,
-    client_id:     CLIENT_ID,
+    client_id:     clientId,
     code_verifier: verifier,
   })
 
@@ -79,16 +108,17 @@ export async function getAccessToken() {
   const token        = localStorage.getItem('parqet_access_token')
   const expiresAt    = Number(localStorage.getItem('parqet_expires_at') || 0)
   const refreshToken = localStorage.getItem('parqet_refresh_token')
+  const clientId     = await getClientId()
 
   if (!token) return null
   if (Date.now() < expiresAt - 60_000) return token
-  if (!refreshToken) { logout(); return null }
+  if (!refreshToken || !clientId) { logout(); return null }
 
   try {
     const body = new URLSearchParams({
       grant_type:    'refresh_token',
       refresh_token: refreshToken,
-      client_id:     CLIENT_ID,
+      client_id:     clientId,
     })
     const res = await fetch(TOKEN_URL, {
       method:  'POST',
@@ -107,10 +137,12 @@ export async function getAccessToken() {
   }
 }
 
-export function logout() {
+export async function logout() {
   localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_refresh_token')
   localStorage.removeItem('parqet_expires_at')
+  await supabase.auth.signOut()
+  clearCachedClientId()
   window.location.href = '/'
 }
 
