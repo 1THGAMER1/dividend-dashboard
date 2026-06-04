@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtSm  = n => n >= 100 ? Math.round(n) + ' €' : (+n).toFixed(1) + ' €'
 
@@ -9,17 +11,14 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
   const cy  = now.getFullYear()
   const cm  = now.getMonth()
 
-  // Für jeden Monat: tatsächlich (vergangen) oder Prognose (zukunft)
   const monthData = Array.from({ length: 12 }, (_, m) => {
     const isPast    = m < cm
     const isCurrent = m === cm
     const actual    = monthly?.[cy]?.[m] ?? 0
 
-    // Prognose: Summe aus forecastByHolding
     const forecast  = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
     const amount    = (isPast || isCurrent) && actual > 0 ? actual : forecast
 
-    // Positionen die in diesem Monat zahlen
     const positions = Object.entries(forecastByHolding)
       .filter(([isin, mMap]) => {
         if ((isPast || isCurrent) && actual > 0) {
@@ -41,9 +40,7 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
 
   const maxAmount = Math.max(...monthData.map(d => d.amount), 0.01)
 
-  const [selected, setSelected] = React.useState(null)
-
-  // Selektierter Monat: aktueller Monat als Standard
+  const [selected, setSelected] = useState(null)
   const activeMonth = selected ?? cm
   const active      = monthData[activeMonth]
 
@@ -54,7 +51,6 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
         <span style={{ fontSize:11, color:'#3d5266' }}>Klick auf Monat für Details</span>
       </div>
 
-      {/* 12-Monats-Grid */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(6, 1fr)', gap:6, marginBottom:16 }}>
         {monthData.map(({ m, isPast, isCurrent, amount, isPrognose }) => {
           const isActive   = m === activeMonth
@@ -78,7 +74,6 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#111827' }}
               onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = '#0f1420' }}
             >
-              {/* Monats-Label */}
               <div style={{
                 fontSize:   10,
                 fontWeight: isCurrent ? 700 : 400,
@@ -88,7 +83,6 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
                 {MONTHS[m]}
               </div>
 
-              {/* Mini-Balken */}
               <div style={{ height:48, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
                 <div style={{
                   width:        '60%',
@@ -105,7 +99,6 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
                 }} />
               </div>
 
-              {/* Betrag */}
               <div style={{
                 fontSize:   9,
                 fontWeight: 600,
@@ -115,7 +108,6 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
                 {hasPayment ? fmtSm(amount) : '–'}
               </div>
 
-              {/* Prognose-Marker */}
               {isPrognose && hasPayment && (
                 <div style={{ position:'absolute', top:3, right:4, fontSize:7, color:'#6366f1' }}>●</div>
               )}
@@ -124,7 +116,6 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
         })}
       </div>
 
-      {/* Legende */}
       <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:14 }}>
         {[
           { color:'#3b5bdb', label:'Vergangen' },
@@ -138,7 +129,6 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
         ))}
       </div>
 
-      {/* Detail-Panel für selektierten Monat */}
       <div style={{
         background:   '#0f1420',
         border:       '1px solid #1e2a3a',
