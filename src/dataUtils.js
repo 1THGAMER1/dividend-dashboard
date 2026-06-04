@@ -53,9 +53,7 @@ export function buildForecast(cum, activities, buyActivities = []) {
   }
 
   function currentShares(isin) {
-    // Zuerst aus Buy-Aktivitäten – aktuell und genau
     if (currentSharesFromBuys[isin] > 0) return currentSharesFromBuys[isin]
-    // Fallback: letzter bekannter Wert aus Dividend-Aktivitäten
     const years = Object.keys(byIsin[isin] || {}).map(Number).sort()
     for (const y of [...years].reverse()) {
       for (let m = 11; m >= 0; m--) {
@@ -94,21 +92,61 @@ export function buildForecast(cum, activities, buyActivities = []) {
     }
   }
 
+  // ─── Verbesserte DPS-Schätzung pro Monat ───────────────────────────────────
+  // Gewichtung: letztes Jahr 70%, vorletztes Jahr 30%
+  // Mindestens 2 echte Datenpunkte über alle Jahre nötig
+  // Quarterly-Stabilisierung: wenn Monat 0, aber Nachbarmonat im gleichen Quartal zahlte → Quartalsbetrag / 3 aufteilen
+  function estimateDps(isin, month) {
+    const yearData = byIsin[isin] || {}
+    const refYears = [cy - 1, cy - 2]
+    const weights  = [0.7, 0.3]
+
+    const points = refYears.map(y => {
+      const e = yearData[y]?.[month]
+      return e && e.shares > 0 ? e.amount / e.shares : null
+    })
+
+    // Mindestens 1 echter Datenpunkt nötig
+    const validPoints = points.filter(v => v !== null)
+    if (validPoints.length === 0) {
+      // Quarterly-Stabilisierung: schaue ob ein Nachbarmonat im Quartal Daten hat
+      const qStart = Math.floor(month / 3) * 3
+      const qMonths = [qStart, qStart + 1, qStart + 2].filter(m => m !== month)
+      for (const qm of qMonths) {
+        const qPoints = refYears.map(y => {
+          const e = yearData[y]?.[qm]
+          return e && e.shares > 0 ? e.amount / e.shares : null
+        }).filter(v => v !== null)
+        if (qPoints.length > 0) {
+          // Quartalszahlung in diesem Monat vermutet → Betrag direkt verwenden (nicht /3, da quartalsweise)
+          const qAvg = qPoints.reduce((a, b) => a + b, 0) / qPoints.length
+          return qAvg
+        }
+      }
+      return 0
+    }
+
+    // Gewichteter Durchschnitt (nur verfügbare Jahre)
+    let weightedSum = 0, weightTotal = 0
+    points.forEach((v, i) => {
+      if (v !== null) {
+        weightedSum  += v * weights[i]
+        weightTotal  += weights[i]
+      }
+    })
+    return weightTotal > 0 ? weightedSum / weightTotal : 0
+  }
+
   const forecastByHolding = {}
   for (const isin of isins) {
     forecastByHolding[isin] = {}
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
       if (actual && actual.amount > 0) {
+        // Bereits tatsächlich gezahlt → direkt übernehmen
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
       } else {
-        const vals = [cy - 1, cy - 2]
-            .map(y => {
-              const e = byIsin[isin][y]?.[m]
-              return e && e.shares > 0 ? e.amount / e.shares : null
-            })
-            .filter(v => v !== null)
-        const dps    = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
+        const dps    = estimateDps(isin, m)
         const shares = currentShares(isin)
         forecastByHolding[isin][m] = +(dps * shares).toFixed(4)
       }

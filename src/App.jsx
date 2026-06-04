@@ -11,6 +11,8 @@ import DividendChart      from './components/DividendChart'
 import DividendHeatmap    from './components/DividendHeatmap'
 import PositionsTable     from './components/PositionsTable'
 import DividendCalculator from './pages/DividendCalculator'
+import UpcomingDividends  from './components/UpcomingDividends'
+import DividendCalendar   from './components/DividendCalendar'
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -22,8 +24,9 @@ const KPI_RANGES = [
 ]
 
 const NAV_TABS = [
-  { id: 'dashboard',  label: '📊 Dashboard' },
-  { id: 'calculator', label: '🧮 Rechner'   },
+  { id: 'dashboard',  label: '📊 Dashboard'  },
+  { id: 'calendar',   label: '🗓 Kalender'   },
+  { id: 'calculator', label: '🧮 Rechner'    },
 ]
 
 function getStatusIndicator(dataSource) {
@@ -143,34 +146,6 @@ export default function App() {
 
   const forecast12m = calcForecastNext12m()
 
-  const topHolder = (() => {
-    if (!byHolding || Object.keys(byHolding).length === 0) return null
-    const now = new Date()
-    let topIsin = null, topNet = 0
-    for (const [isin, h] of Object.entries(byHolding)) {
-      let net = 0
-      for (const [year, months] of Object.entries(h.monthly || {})) {
-        for (let m = 0; m < 12; m++) {
-          const val  = months[m] || 0
-          const date = new Date(+year, m, 1)
-          const diff = (now - date) / 864e5
-          if (kpiRange === 'ytd' && date.getFullYear() !== now.getFullYear()) continue
-          if (kpiRange === '12m' && diff > 365) continue
-          net += val
-        }
-      }
-      if (net > topNet) { topNet = net; topIsin = isin }
-    }
-    if (!topIsin) return null
-    const totalNet = (kpi[kpiRange] || kpi['all']).net || 1
-    const share    = totalNet > 0 ? +((topNet / totalNet) * 100).toFixed(1) : 0
-    return {
-      name:  byHolding[topIsin].name || topIsin,
-      value: fmt(topNet),
-      share: `${String(share).replace('.', ',')} %`,
-    }
-  })()
-
   const calcKpi = () => {
     const k = kpi[kpiRange] || kpi['all']
     return {
@@ -251,8 +226,8 @@ export default function App() {
     totalDividendsNet:     calcForecastNext12mNet(),
     dividendYield:         ((dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0) + 0.01) / 100,
     forecastDividendYield: currentValue > 0 ? calcForecastNext12mNet() / currentValue : 0,
-    cagrTotal,    // kann null sein
-    cagrOrganic,  // kann null sein
+    cagrTotal,
+    cagrOrganic,
   }
 
   const statusIndicator = getStatusIndicator(dataSource)
@@ -300,8 +275,25 @@ export default function App() {
         </div>
       </nav>
 
-      {page === 'calculator' && (
-        <DividendCalculator portfolioData={portfolioData} />
+      {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
+
+      {page === 'calendar' && (
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 20px' }}>
+          <div style={{ marginBottom: 24 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
+            <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
+          </div>
+          <UpcomingDividends
+            forecastByHolding={forecastByHolding}
+            byHolding={byHolding}
+            days={90}
+          />
+          <DividendCalendar
+            forecastByHolding={forecastByHolding}
+            byHolding={byHolding}
+            monthly={monthly}
+          />
+        </div>
       )}
 
       {page === 'dashboard' && (
@@ -341,7 +333,6 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Zeile 1: 4 Karten */}
               <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:20 }}>
                 <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
                          detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
