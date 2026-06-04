@@ -36,15 +36,23 @@ function getStatusIndicator(dataSource) {
   return { color: '#fb923c', text: '○ Fehler' }
 }
 
-function countActiveDivMonths(monthly, endYear, endMonth) {
-  let count = 0
+// Summe aller Dividenden in einem Kalenderjahr
+function yearTotal(monthly, year) {
+  const arr = monthly?.[year]
+  if (!arr) return 0
+  return arr.reduce((s, v) => s + (v || 0), 0)
+}
+
+// Rollierende 12-Monats-Summe bis einschließlich endYear/endMonth
+function rolling12m(monthly, endYear, endMonth) {
+  let total = 0
   for (let i = 0; i < 12; i++) {
     let m = endMonth - i
     let y = endYear
     if (m < 0) { m += 12; y -= 1 }
-    if ((monthly?.[y]?.[m] ?? 0) > 0) count++
+    total += monthly?.[y]?.[m] ?? 0
   }
-  return count
+  return total
 }
 
 export default function App() {
@@ -157,69 +165,49 @@ export default function App() {
   }
   const k = calcKpi()
 
-  const rolling12m = (endYear, endMonth) => {
-    let total = 0
-    for (let i = 0; i < 12; i++) {
-      let m = endMonth - i
-      let y = endYear
-      if (m < 0) { m += 12; y -= 1 }
-      total += monthly?.[y]?.[m] ?? 0
-    }
-    return total
+  // ─── YoY-Wachstum: letztes rollierende 12M vs. vorheriges ───
+  const calcYoY = () => {
+    const now        = new Date()
+    const endYear    = now.getFullYear()
+    const endMonth   = now.getMonth()  // laufender Monat inkl.
+
+    const latest   = rolling12m(monthly, endYear, endMonth)
+    const previous = rolling12m(monthly, endYear - 1, endMonth)
+
+    if (latest < 1 || previous < 1) return null
+    return +((latest / previous - 1) * 100).toFixed(1)
   }
 
-  const rollingBuyValue12m = (endYear, endMonth) => {
-    if (!buyActs || buyActs.length === 0) return 0
-    const endDate   = new Date(endYear, endMonth + 1, 0)
-    const startDate = new Date(endYear, endMonth - 11, 1)
-    let total = 0
-    for (const a of buyActs) {
-      const d = new Date(a.datetime)
-      if (d >= startDate && d <= endDate) {
-        total += Math.abs(a.amount ?? a.amountNet ?? 0)
-      }
-    }
-    return total
+  // ─── Echter CAGR über alle verfügbaren Kalenderjahre ───
+  // Formel: (EndWert / Startwert) ^ (1 / Jahre) - 1
+  // Erstes vollständiges Jahr als Startwert, letztes abgeschlossenes Jahr als Endwert
+  const calcTrueCagr = () => {
+    const years = Object.keys(monthly)
+      .map(Number)
+      .filter(y => y < cy)           // nur abgeschlossene Jahre
+      .sort()
+
+    if (years.length < 2) return null
+
+    const firstYear = years[0]
+    const lastYear  = years[years.length - 1]
+    const numYears  = lastYear - firstYear
+
+    const startVal = yearTotal(monthly, firstYear)
+    const endVal   = yearTotal(monthly, lastYear)
+
+    if (startVal < 1 || endVal < 1 || numYears < 1) return null
+
+    const cagr = (Math.pow(endVal / startVal, 1 / numYears) - 1) * 100
+    return { value: +cagr.toFixed(1), from: firstYear, to: lastYear, years: numYears }
   }
 
-  const calcBothCagrs = () => {
-    const now = new Date()
-    let baseMonth = now.getMonth() - 1
-    let baseYear  = now.getFullYear()
-    if (baseMonth < 0) { baseMonth += 12; baseYear -= 1 }
+  const yoy      = calcYoY()
+  const trueCagr = calcTrueCagr()
 
-    const latestDiv   = rolling12m(baseYear, baseMonth)
-    const earliestDiv = rolling12m(baseYear - 1, baseMonth)
-
-    const MIN_DIV    = 10
-    const MIN_MONTHS = 3
-    const activeNow  = countActiveDivMonths(monthly, baseYear, baseMonth)
-    const activePrev = countActiveDivMonths(monthly, baseYear - 1, baseMonth)
-
-    const hasEnoughData = latestDiv >= MIN_DIV && earliestDiv >= MIN_DIV
-                       && activeNow >= MIN_MONTHS && activePrev >= MIN_MONTHS
-
-    if (!hasEnoughData) return { cagrTotal: null, cagrOrganic: null }
-
-    const growthTotal = (latestDiv / earliestDiv - 1) * 100
-    const cagrTotal   = +growthTotal.toFixed(1)
-
-    const buyValueNow  = rollingBuyValue12m(baseYear, baseMonth)
-    const buyValuePrev = rollingBuyValue12m(baseYear - 1, baseMonth)
-
-    let cagrOrganic = null
-    if (buyValueNow > 0 && buyValuePrev > 0) {
-      const yieldNow  = latestDiv  / buyValueNow
-      const yieldPrev = earliestDiv / buyValuePrev
-      if (yieldPrev > 0) {
-        cagrOrganic = +((yieldNow / yieldPrev - 1) * 100).toFixed(1)
-      }
-    }
-
-    return { cagrTotal, cagrOrganic }
-  }
-
-  const { cagrTotal, cagrOrganic } = calcBothCagrs()
+  // Legacy für DividendCalculator
+  const cagrTotal   = yoy
+  const cagrOrganic = null
 
   const portfolioData = {
     currentValue,
@@ -283,16 +271,8 @@ export default function App() {
             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
             <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
           </div>
-          <UpcomingDividends
-            forecastByHolding={forecastByHolding}
-            byHolding={byHolding}
-            days={90}
-          />
-          <DividendCalendar
-            forecastByHolding={forecastByHolding}
-            byHolding={byHolding}
-            monthly={monthly}
-          />
+          <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
+          <DividendCalendar  forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
         </div>
       )}
 
@@ -344,17 +324,36 @@ export default function App() {
                   color="#34d399"
                   sub="auf den Einstandskurs"
                 />
+                {/* YoY-Wachstum */}
                 <KpiCard
-                  label="Dividendenwachstum (12M)"
+                  label="YoY-Wachstum"
                   value={
-                    cagrTotal === null
+                    yoy === null
                       ? '–'
-                      : (cagrTotal >= 0 ? '+' : '') + String(cagrTotal).replace('.', ',') + ' %'
+                      : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'
                   }
-                  color={cagrTotal === null ? '#556070' : cagrTotal >= 0 ? '#22c55e' : '#ef4444'}
-                  sub={cagrTotal === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr'}
+                  color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
+                  sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
                 />
               </div>
+
+              {/* Echter CAGR ─ eigene Zeile */}
+              {trueCagr !== null && (
+                <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:20 }}>
+                  <KpiCard
+                    label={`CAGR (${trueCagr.years}J)`}
+                    value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
+                    color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
+                    sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
+                  />
+                  <KpiCard
+                    label="Startjahr Dividenden"
+                    value={`${trueCagr.from}`}
+                    color="#a78bfa"
+                    sub={`${fmt(yearTotal(monthly, trueCagr.from))} → ${fmt(yearTotal(monthly, trueCagr.to))}`}
+                  />
+                </div>
+              )}
 
               <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
                 Prognose · Nächste 12 Monate
@@ -364,30 +363,28 @@ export default function App() {
                          detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }}
                          sub="Prognose basierend auf Vorjahren" />
                 <KpiCard
-                  label="Wachstum ggü. letztem Jahr"
+                  label={`Wachstum ${cy} vs. ${cy - 1}`}
                   value={(() => {
                     const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
-                    const actualLastYear = (Object.values(monthly[cy - 1] || [])).reduce((s, v) => s + v, 0)
+                    const actualLastYear = yearTotal(monthly, cy - 1)
                     if (actualLastYear === 0) return '–'
                     const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100
                     return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %'
                   })()}
                   color={(() => {
                     const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
-                    const actualLastYear = (Object.values(monthly[cy - 1] || [])).reduce((s, v) => s + v, 0)
+                    const actualLastYear = yearTotal(monthly, cy - 1)
                     if (actualLastYear === 0) return '#7a8ba0'
-                    const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100
-                    return growth >= 0 ? '#22c55e' : '#ef4444'
+                    return ((forecastCurrentYear - actualLastYear) / actualLastYear) >= 0 ? '#22c55e' : '#ef4444'
                   })()}
-                  sub={`${cy} vs. ${cy - 1}`}
+                  sub="Prognose Gesamtjahr"
                 />
                 <KpiCard
                   label="Progn. Dividendenrendite"
                   value={(() => {
                     const forecastNet = calcForecastNext12mNet()
                     if (!currentValue || currentValue === 0) return '–'
-                    const yield12m = (forecastNet / currentValue) * 100
-                    return fmtPct(yield12m)
+                    return fmtPct((forecastNet / currentValue) * 100)
                   })()}
                   color="#5bcec2"
                   sub="Prognose nächste 12M / Marktwert"
