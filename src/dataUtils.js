@@ -34,7 +34,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
   const cm = new Date().getMonth()
   const ny = cy + 1
 
-  // Auto-Merge: gleicher Name = gleiche Position
   const mergeMap = buildIsinMergeMap(activities, names)
   const resolve  = makeResolver(mergeMap)
 
@@ -97,27 +96,25 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
     }
   }
 
+  /**
+   * Gibt den geschätzten DPS für (isin, month) zurück.
+   * WICHTIG: Nur wenn in mindestens einem Referenzjahr wirklich in
+   * genau diesem Monat gezahlt wurde – sonst 0.
+   * Kein Quarterly-Fallback mehr (der hat Phantomzahlungen erzeugt).
+   */
   function estimateDps(isin, month) {
     const yearData = byIsin[isin] || {}
     const refYears = [cy - 1, cy - 2]
     const weights  = [0.7, 0.3]
+
     const points = refYears.map(y => {
       const e = yearData[y]?.[month]
-      return e && e.shares > 0 ? e.amount / e.shares : null
+      return (e && e.shares > 0) ? e.amount / e.shares : null
     })
-    const validPoints = points.filter(v => v !== null)
-    if (validPoints.length === 0) {
-      const qStart  = Math.floor(month / 3) * 3
-      const qMonths = [qStart, qStart + 1, qStart + 2].filter(m => m !== month)
-      for (const qm of qMonths) {
-        const qPoints = refYears.map(y => {
-          const e = yearData[y]?.[qm]
-          return e && e.shares > 0 ? e.amount / e.shares : null
-        }).filter(v => v !== null)
-        if (qPoints.length > 0) return qPoints.reduce((a, b) => a + b, 0) / qPoints.length
-      }
-      return 0
-    }
+
+    // Mindestens ein Referenzjahr muss diesen Monat wirklich gezahlt haben
+    if (points.every(p => p === null)) return 0
+
     let weightedSum = 0, weightTotal = 0
     points.forEach((v, i) => {
       if (v !== null) { weightedSum += v * weights[i]; weightTotal += weights[i] }
@@ -131,8 +128,10 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
       if (actual && actual.amount > 0) {
+        // Bereits geflossen – Ist-Wert
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
       } else {
+        // Prognose nur wenn Vorjahre diesen Monat wirklich gezeigt haben
         const dps    = estimateDps(isin, m)
         const shares = currentShares(isin)
         forecastByHolding[isin][m] = +(dps * shares).toFixed(4)
@@ -191,7 +190,6 @@ export function heatColor(value, max) {
 }
 
 export function groupByHolding(activities, names = {}, types = {}, purchaseValues = {}, tickers = {}) {
-  // Auto-Merge: gleicher Name = gleiche Position
   const mergeMap = buildIsinMergeMap(activities, names)
   const resolve  = makeResolver(mergeMap)
 
@@ -204,7 +202,6 @@ export function groupByHolding(activities, names = {}, types = {}, purchaseValue
   for (const a of activities) {
     const rawIsin = a.asset?.isin || a.asset?.symbol || 'unknown'
     const isin    = resolve(rawIsin)
-    // Namen: kanonische ISIN zuerst, dann Original, dann Activity
     const name   = names[isin] || names[rawIsin] || a.asset?.name || a.asset?.symbol || isin
     const type   = types[isin] || types[rawIsin] || a.holdingAssetType || 'security'
     const ticker = tickers[isin] || tickers[rawIsin] || null
