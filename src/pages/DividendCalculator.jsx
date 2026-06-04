@@ -234,9 +234,9 @@ export default function DividendCalculator({ portfolioData }) {
 
     const presets = [
         { label: 'Konservativ',         value: 3,           color: '#556070', disabled: false },
-        { label: 'Markt\u00a0\u00d8',   value: 5.5,         color: '#34d399', disabled: false },
+        { label: 'Markt',   value: 5.5,         color: '#34d399', disabled: false },
         { label: 'Organisch',           value: cagrOrganic, color: '#a78bfa', disabled: cagrOrganic === null },
-        { label: 'Inkl.\u00a0K\u00e4ufe', value: cagrTotal, color: '#60a5fa', disabled: cagrTotal === null },
+        { label: 'Inkl. Käufe', value: cagrTotal, color: '#60a5fa', disabled: cagrTotal === null },
     ]
 
     return (
@@ -332,7 +332,7 @@ export default function DividendCalculator({ portfolioData }) {
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10, marginBottom:20 }}>
-                <ResultCard label="Ben\u00f6tigtes Kapital" value={`€{CURRENCY_FMT(requiredCapital)}`} sub={`f ${targetMonthly}\u00a0€/Monat netto`} accent />
+                <ResultCard label="Ben\u00f6tigtes Kapital" value={`€{CURRENCY_FMT(requiredCapital)}`} sub={`f ${targetMonthly}€/Monat netto`} accent />
                 <ResultCard label="Noch fehlendes Kapital"
                     value={additionalCapital > 0 ? `€{CURRENCY_FMT(additionalCapital)}` : ' Ziel erreicht!'}
                     sub={additionalCapital > 0 ? `aktuell: €{CURRENCY_FMT(currentValue)}` : undefined} />
