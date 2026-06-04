@@ -93,6 +93,9 @@ function GrowthTable({ currentDividends, targetNet, growthRate, yearsToGoal }) {
     )
 }
 
+// Hoehe der Balken-Zone in px (feste Konstante = korrekte Offset-Berechnung)
+const BAR_H = 160
+
 function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
     const rows = useMemo(() => {
         const out = []
@@ -106,46 +109,91 @@ function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
     }, [currentDividends, targetNet, growthRate, yearsToGoal])
 
     const maxVal = Math.max(...rows.map(r => r.netto), targetNet)
-    const chartH = 200
+    // Ziellinie: x% von unten innerhalb des BAR_H-Containers
+    const goalPx = Math.round((targetNet / maxVal) * BAR_H)
 
     return (
-        <div style={{ position: 'relative' }}>
-            <div style={{
-                position:  'absolute', left: 0, right: 0,
-                bottom:    `${24 + (targetNet / maxVal) * (chartH - 24)}px`,
-                borderTop: '1px dashed #009991', zIndex: 2,
-            }}>
-                <span style={{ fontSize: 10, color: '#009991', position: 'absolute', left: 0, top: -14, whiteSpace: 'nowrap' }}>
-                    Ziel\u00b7 {CURRENCY_FMT(targetNet / 12)}\u00a0€/Mo
-                </span>
-            </div>
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:chartH, paddingBottom:15, marginTop:8, minWidth: 280 }}>
+        <div style={{ marginTop: 8 }}>
+            {/* Bar-Container mit position:relative — Ziellinie ist darin absolut */}
+            <div style={{ position: 'relative', height: BAR_H, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+
+                {/* Ziellinie */}
+                <div style={{
+                    position:      'absolute',
+                    left:          0,
+                    right:         0,
+                    bottom:        goalPx,
+                    borderTop:     '1px dashed #009991',
+                    zIndex:        3,
+                    pointerEvents: 'none',
+                }}>
+                    <span style={{
+                        position:     'absolute',
+                        left:         0,
+                        top:          -16,
+                        fontSize:     10,
+                        color:        '#009991',
+                        background:   '#161b27',
+                        padding:      '1px 4px',
+                        borderRadius: 3,
+                        whiteSpace:   'nowrap',
+                    }}>
+                        Ziel\u00a0\u00b7\u00a0{CURRENCY_FMT(targetNet / 12)}\u00a0€/Mo
+                    </span>
+                </div>
+
+                {/* Balken-Reihe — gleiche Höhe wie Container, align-items:flex-end */}
+                <div style={{
+                    display:    'flex',
+                    alignItems: 'flex-end',
+                    gap:        3,
+                    height:     '100%',
+                    minWidth:   'max-content',
+                }}>
                     {rows.map(r => {
                         const reached = r.netto >= targetNet
-                        const h = Math.max(2, (r.netto / maxVal) * (chartH - 24))
+                        const h = Math.max(2, (r.netto / maxVal) * BAR_H)
                         return (
-                            <div key={r.year} style={{ display:'flex', flexDirection:'column', alignItems:'center', flex:'1 0 auto', minWidth:24 }}>
+                            <div key={r.year} style={{ display:'flex', flexDirection:'column', alignItems:'center', width:28 }}>
                                 <div
                                     title={`${r.year}: € ${CURRENCY_FMT(r.netto)} / Jahr`}
                                     style={{
-                                        width:28, height:h, borderRadius:'4px 4px 0 0',
-                                        background: reached ? 'linear-gradient(180deg,#5bcec2,#009991)' : 'linear-gradient(180deg,#3b5bdb,#1e3a5f)',
-                                        transition: 'height 0.3s ease', cursor:'pointer',
+                                        width:        28,
+                                        height:       h,
+                                        borderRadius: '3px 3px 0 0',
+                                        background:   reached
+                                            ? 'linear-gradient(180deg,#5bcec2,#009991)'
+                                            : 'linear-gradient(180deg,#3b5bdb,#1e3a5f)',
+                                        transition:   'height 0.3s ease',
+                                        cursor:       'pointer',
                                     }}
                                 />
-                                <span style={{ fontSize:9, color:'#3d5266', marginTop:4, writingMode:'vertical-rl', transform:'rotate(180deg)', height:20 }}>{r.year}</span>
                             </div>
                         )
                     })}
                 </div>
             </div>
-            <div style={{ display:'flex', gap:16, marginTop:8, flexWrap:'wrap' }}>
+
+            {/* Jahreslabels — separate Reihe unterhalb der Balken */}
+            <div style={{ display:'flex', gap:3, overflowX:'hidden', marginTop:4 }}>
+                {rows.map(r => (
+                    <div key={r.year} style={{ width:28, flexShrink:0, textAlign:'center' }}>
+                        <span style={{ fontSize:9, color:'#3d5266', writingMode:'vertical-rl', transform:'rotate(180deg)', display:'inline-block', height:20 }}>
+                            {r.year}
+                        </span>
+                    </div>
+                ))}
+            </div>
+
+            {/* Legende */}
+            <div style={{ display:'flex', gap:16, marginTop:10, flexWrap:'wrap' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color:'#556070' }}>
-                    <div style={{ width:12, height:12, borderRadius:2, background:'linear-gradient(180deg,#3b5bdb,#1e3a5f)' }} /> Unter Ziel
+                    <div style={{ width:12, height:12, borderRadius:2, background:'linear-gradient(180deg,#3b5bdb,#1e3a5f)', flexShrink:0 }} />
+                    Unter Ziel
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color:'#556070' }}>
-                    <div style={{ width:12, height:12, borderRadius:2, background:'linear-gradient(180deg,#5bcec2,#009991)' }} /> Ziel erreicht
+                    <div style={{ width:12, height:12, borderRadius:2, background:'linear-gradient(180deg,#5bcec2,#009991)', flexShrink:0 }} />
+                    Ziel erreicht
                 </div>
             </div>
         </div>
@@ -182,13 +230,13 @@ export default function DividendCalculator({ portfolioData }) {
 
     const yearsToGoal = yearsToGoalByGrowth(totalDividendsNet, targetAnnual, growthRate)
 
-    const fmtCagrBtn = val => val === null ? '\u2013' : val + ' %'
+    const fmtCagrBtn = val => val === null ? '\u2013' : val + '\u00a0%'
 
     const presets = [
-        { label: 'Konservativ', value: 3,           color: '#556070',  disabled: false },
-        { label: 'Markt\u00a0\u00d8',   value: 5.5,         color: '#34d399',  disabled: false },
-        { label: 'Organisch',   value: cagrOrganic, color: '#a78bfa',  disabled: cagrOrganic === null },
-        { label: 'Inkl.\u00a0K\u00e4ufe', value: cagrTotal, color: '#60a5fa', disabled: cagrTotal === null  },
+        { label: 'Konservativ',         value: 3,           color: '#556070', disabled: false },
+        { label: 'Markt\u00a0\u00d8',   value: 5.5,         color: '#34d399', disabled: false },
+        { label: 'Organisch',           value: cagrOrganic, color: '#a78bfa', disabled: cagrOrganic === null },
+        { label: 'Inkl.\u00a0K\u00e4ufe', value: cagrTotal, color: '#60a5fa', disabled: cagrTotal === null },
     ]
 
     return (
@@ -211,14 +259,13 @@ export default function DividendCalculator({ portfolioData }) {
                     <Slider label="J\u00e4hrl. Dividendenwachstum" min={0} max={30} step={0.5}
                         value={growthRate} onChange={setGrowthRate} unit="\u00a0%" color="#6366f1" />
 
-                    {/* CAGR Info Box — 1 col on mobile, 2 col on wider */}
                     <div className="calc-cagr-grid">
                         <div style={{ background:'#0f1420', border:'1px solid #1e2a3a', borderRadius:8, padding:'8px 12px', fontSize:12 }}>
                             <div style={{ color:'#3d5266', marginBottom:2 }}>CAGR inkl. K\u00e4ufe</div>
                             <div style={{ color: cagrTotal === null ? '#3d5266' : '#60a5fa', fontWeight:700, fontSize:15 }}>
                                 {cagrTotal === null ? '\u2013 Nicht gen\u00fcgend Daten' : cagrTotal + '\u00a0%'}
                             </div>
-                            <div style={{ color:'#3d5266', fontSize:10, marginTop:2 }}>Tats\u00e4chl. Wachstum (durch K\u00e4ufe + Unternehmen)</div>
+                            <div style={{ color:'#3d5266', fontSize:10, marginTop:2 }}>Tats\u00e4chl. Wachstum (K\u00e4ufe + Unternehmen)</div>
                         </div>
                         <div style={{ background:'#0f1420', border:'1px solid #1e2a3a', borderRadius:8, padding:'8px 12px', fontSize:12 }}>
                             <div style={{ color:'#3d5266', marginBottom:2 }}>CAGR organisch</div>
@@ -227,7 +274,7 @@ export default function DividendCalculator({ portfolioData }) {
                             </div>
                             <div style={{ color:'#3d5266', fontSize:10, marginTop:2 }}>Nur Dividendenwachstum der Unternehmen</div>
                         </div>
-      				</div>
+                    </div>
 
                     <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
                         {presets.map(p => (
@@ -260,8 +307,8 @@ export default function DividendCalculator({ portfolioData }) {
                     <span style={{ fontSize:13, color:'#7a8ba0' }}>Rendite-Basis</span>
                     <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                         {[
-                            { val: false, label: `Aktuell\u00b7${(dividendYield * 100).toFixed(2)}\u00a0%` },
-                            { val: true,  label: `Prognose\u00b7${(forecastDividendYield * 100).toFixed(2)}\u00a0%` },
+                            { val: false, label: `Aktuell\u00a0\u00b7\u00a0${(dividendYield * 100).toFixed(2)}\u00a0%` },
+                            { val: true,  label: `Prognose\u00a0\u00b7\u00a0${(forecastDividendYield * 100).toFixed(2)}\u00a0%` },
                         ].map(({ val, label }) => (
                             <button key={String(val)} onClick={() => setUseForecastYield(val)} style={{
                                 padding:'5px 14px', borderRadius:20, fontSize:12, cursor:'pointer',
@@ -315,7 +362,6 @@ export default function DividendCalculator({ portfolioData }) {
 
             {growthRate > 0 && (
                 <div style={{ background:'#161b27', border:'1px solid #1e2a3a', borderRadius:14, padding:'18px 16px' }}>
-                    {/* Header: title+text links, toggle rechts — auf Mobile umbruch */}
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, marginBottom:14, flexWrap:'wrap' }}>
                         <div style={{ flex:1, minWidth:0 }}>
                             <h2 style={{ fontSize:15, fontWeight:600, margin:0 }}>📈 Wachstums-Projektion</h2>
