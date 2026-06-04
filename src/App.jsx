@@ -197,19 +197,12 @@ export default function App() {
   const yoy      = calcYoY()
   const trueCagr = calcTrueCagr()
 
-  // cagrTotal für den Rechner: YoY nur wenn plausibel (<= 100%), sonst trueCagr, sonst null
-  const calcReasonableCagr = () => {
-    if (yoy !== null && yoy <= 100) return yoy
-    if (trueCagr !== null && trueCagr.value <= 100) return trueCagr.value
-    return null
-  }
-
   const portfolioData = {
     currentValue,
     totalDividendsNet:     calcForecastNext12mNet(),
     dividendYield:         ((dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0) + 0.01) / 100,
     forecastDividendYield: currentValue > 0 ? calcForecastNext12mNet() / currentValue : 0,
-    cagrTotal:   calcReasonableCagr(),
+    cagrTotal:   yoy,
     cagrOrganic: null,
   }
 
