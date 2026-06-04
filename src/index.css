@@ -65,14 +65,17 @@ body {
   .positions-desktop { display: none; }
 }
 
-/* --- Charts & heatmap: horizontal scroll on mobile --- */
-.chart-scroll-wrapper {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
+/* --- Heatmap: normal on desktop, scrollable on mobile --- */
+.heatmap-desktop { display: block; }
+.heatmap-mobile  { display: none; }
 
-.heatmap-inner {
-  min-width: 480px;
+@media (max-width: 700px) {
+  .heatmap-desktop { display: none; }
+  .heatmap-mobile  {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* --- Scrollbars --- */
