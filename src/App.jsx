@@ -29,11 +29,15 @@ const NAV_TABS = [
   { id: 'calculator', label: '🧮 Rechner'    },
 ]
 
+const STATUS_INFO = {
+  live:  { color: '#22c55e', text: '● Live',      tooltip: 'Frische Daten direkt von Parqet — gerade eben geladen.' },
+  cache: { color: '#60a5fa', text: '● Cache',     tooltip: 'Gespeicherte Daten aus der Datenbank. Klicke „Aktualisieren“ für neue Daten.' },
+  stale: { color: '#fb923c', text: '◑ Veraltet',  tooltip: 'Die Daten sind älter als 24 Stunden. Klicke „Aktualisieren“, um sie zu erneuern.' },
+  error: { color: '#fb923c', text: '○ Fehler',    tooltip: 'Daten konnten nicht geladen werden. Bitte Aktualisieren versuchen.' },
+}
+
 function getStatusIndicator(dataSource) {
-  if (dataSource === 'live')  return { color: '#22c55e', text: '● Live' }
-  if (dataSource === 'cache') return { color: '#60a5fa', text: '● Cache' }
-  if (dataSource === 'stale') return { color: '#fb923c', text: '◑ Veraltet' }
-  return { color: '#fb923c', text: '○ Fehler' }
+  return STATUS_INFO[dataSource] ?? STATUS_INFO.error
 }
 
 // Summe aller Dividenden in einem Kalenderjahr
@@ -73,6 +77,7 @@ export default function App() {
   const [appUser,       setAppUser]       = useState(undefined)
   const [clientIdReady, setClientIdReady] = useState(false)
   const [profileLoading,setProfileLoading]= useState(true)
+  const [tooltipVisible, setTooltipVisible] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -165,47 +170,34 @@ export default function App() {
   }
   const k = calcKpi()
 
-  // ─── YoY-Wachstum: letztes rollierende 12M vs. vorheriges ───
   const calcYoY = () => {
-    const now        = new Date()
-    const endYear    = now.getFullYear()
-    const endMonth   = now.getMonth()  // laufender Monat inkl.
-
+    const now      = new Date()
+    const endYear  = now.getFullYear()
+    const endMonth = now.getMonth()
     const latest   = rolling12m(monthly, endYear, endMonth)
     const previous = rolling12m(monthly, endYear - 1, endMonth)
-
     if (latest < 1 || previous < 1) return null
     return +((latest / previous - 1) * 100).toFixed(1)
   }
 
-  // ─── Echter CAGR über alle verfügbaren Kalenderjahre ───
-  // Formel: (EndWert / Startwert) ^ (1 / Jahre) - 1
-  // Erstes vollständiges Jahr als Startwert, letztes abgeschlossenes Jahr als Endwert
   const calcTrueCagr = () => {
     const years = Object.keys(monthly)
       .map(Number)
-      .filter(y => y < cy)           // nur abgeschlossene Jahre
+      .filter(y => y < cy)
       .sort()
-
     if (years.length < 2) return null
-
     const firstYear = years[0]
     const lastYear  = years[years.length - 1]
     const numYears  = lastYear - firstYear
-
-    const startVal = yearTotal(monthly, firstYear)
-    const endVal   = yearTotal(monthly, lastYear)
-
+    const startVal  = yearTotal(monthly, firstYear)
+    const endVal    = yearTotal(monthly, lastYear)
     if (startVal < 1 || endVal < 1 || numYears < 1) return null
-
     const cagr = (Math.pow(endVal / startVal, 1 / numYears) - 1) * 100
     return { value: +cagr.toFixed(1), from: firstYear, to: lastYear, years: numYears }
   }
 
   const yoy      = calcYoY()
   const trueCagr = calcTrueCagr()
-
-  // Legacy für DividendCalculator
   const cagrTotal   = yoy
   const cagrOrganic = null
 
@@ -242,9 +234,30 @@ export default function App() {
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {lastUpdated && (
-            <span style={{ color: statusIndicator.color, fontSize: 12 }}>
-              {statusIndicator.text} · {lastUpdated.toLocaleTimeString('de-DE')}
-            </span>
+            <div
+              style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+              onMouseEnter={() => setTooltipVisible(true)}
+              onMouseLeave={() => setTooltipVisible(false)}
+            >
+              <span style={{ color: statusIndicator.color, fontSize: 12, cursor: 'default', userSelect: 'none' }}>
+                {statusIndicator.text} · {lastUpdated.toLocaleTimeString('de-DE')}
+              </span>
+              {tooltipVisible && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                  background: '#1e2a3a', border: '1px solid #2a3a50',
+                  borderRadius: 8, padding: '8px 12px',
+                  fontSize: 12, color: '#c0ccd8', whiteSpace: 'nowrap',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.4)', zIndex: 200,
+                  pointerEvents: 'none',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ color: statusIndicator.color, fontSize: 10 }}>●</span>
+                    {statusIndicator.tooltip}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           <button onClick={loadData} disabled={loading} style={{
             background: loading ? '#1a2233' : '#1e3a5f',
@@ -324,7 +337,6 @@ export default function App() {
                   color="#34d399"
                   sub="auf den Einstandskurs"
                 />
-                {/* YoY-Wachstum */}
                 <KpiCard
                   label="YoY-Wachstum"
                   value={
@@ -337,7 +349,6 @@ export default function App() {
                 />
               </div>
 
-              {/* Echter CAGR ─ eigene Zeile */}
               {trueCagr !== null && (
                 <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:20 }}>
                   <KpiCard
