@@ -1,7 +1,13 @@
 import { heatColor } from '../dataUtils'
 
 const MONTHS = ['Jan','Feb','Mrz','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
-const fmt    = n => n > 0 ? (+n).toFixed(0) + '€' : ''
+
+function fmt(n) {
+  if (!n || n <= 0) return ''
+  if (n < 10)  return (+n).toFixed(2) + '€'
+  if (n < 100) return (+n).toFixed(1) + '€'
+  return (+n).toFixed(0) + '€'
+}
 
 export default function DividendHeatmap({ monthly = {} }) {
   const years   = Object.keys(monthly).map(Number).sort()
