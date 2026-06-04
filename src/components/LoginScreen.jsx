@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { supabase } from '../supabaseClient'
 
 const FEATURES = [
     { icon: '📊', title: 'Dividenden-Übersicht',   desc: 'Alle Ausschüttungen auf einen Blick – monatlich, YTD oder Seit Kauf' },
@@ -8,7 +9,6 @@ const FEATURES = [
     { icon: '💼', title: 'Positionen',              desc: 'Rendite und Ausschüttungen pro Holding im Detail' },
     { icon: '🧮', title: 'Dividenden-Rechner',      desc: 'Wann erreichst du deine gewünschte Dividendenrendite?' },
     { icon: '➕', title: 'Und vieles mehr',         desc: 'Weitere Funktionen folgen bald!' },
-
 ]
 
 function AnimatedBackground() {
@@ -26,7 +26,6 @@ function AnimatedBackground() {
         resize()
         window.addEventListener('resize', resize)
 
-        // Floating particles
         const particles = Array.from({ length: 40 }, () => ({
             x:    Math.random() * canvas.width,
             y:    Math.random() * canvas.height,
@@ -36,7 +35,6 @@ function AnimatedBackground() {
             alpha: Math.random() * 0.4 + 0.1,
         }))
 
-        // Floating numbers
         const nums = Array.from({ length: 15 }, () => ({
             x:     Math.random() * canvas.width,
             y:     Math.random() * canvas.height,
@@ -48,7 +46,6 @@ function AnimatedBackground() {
         const draw = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-            // Particles
             for (const p of particles) {
                 ctx.beginPath()
                 ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
@@ -60,7 +57,6 @@ function AnimatedBackground() {
                 if (p.y < 0 || p.y > canvas.height)  p.vy *= -1
             }
 
-            // Connecting lines between nearby particles
             for (let i = 0; i < particles.length; i++) {
                 for (let j = i + 1; j < particles.length; j++) {
                     const dx   = particles[i].x - particles[j].x
@@ -77,7 +73,6 @@ function AnimatedBackground() {
                 }
             }
 
-            // Floating numbers
             for (const n of nums) {
                 ctx.font      = '11px monospace'
                 ctx.fillStyle = `rgba(34, 197, 94, ${n.alpha})`
@@ -110,6 +105,11 @@ function AnimatedBackground() {
 }
 
 export default function LoginScreen({ onLogin, loading, error }) {
+    const handleSignOut = async () => {
+        await supabase.auth.signOut()
+        window.location.href = '/'
+    }
+
     return (
         <div style={{
             minHeight:      '100vh',
@@ -122,6 +122,19 @@ export default function LoginScreen({ onLogin, loading, error }) {
             padding:        '40px 20px',
         }}>
             <AnimatedBackground />
+
+            {/* Abmelden oben rechts */}
+            <button
+                onClick={handleSignOut}
+                style={{
+                    position: 'absolute', top: 16, right: 20, zIndex: 10,
+                    background: 'none', border: 'none',
+                    color: '#3d5266', fontSize: 12, cursor: 'pointer',
+                    textDecoration: 'underline', padding: 0,
+                }}
+            >
+                Abmelden
+            </button>
 
             <div style={{
                 position:      'relative',
