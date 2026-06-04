@@ -61,7 +61,7 @@ export default function ParqetSetup({ onDone }) {
           <li>Trage als Redirect URI folgendes ein:</li>
         </ol>
 
-        <div style={{ background: '#0f1420', border: '1px solid #2a3a50', borderRadius: 8, padding: '10px 14px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: '#0f1420', border: '1px solid #2a3a50', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <span style={{ color: '#93c5fd', fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all', userSelect: 'text' }}>
             {REDIRECT_URI}
           </span>
@@ -71,6 +71,14 @@ export default function ParqetSetup({ onDone }) {
           >
             {copied ? '✓ Kopiert' : '📋 Kopieren'}
           </button>
+        </div>
+
+        {/* Leserechte-Hinweis */}
+        <div style={{ background: '#1a2a1a', border: '1px solid #14532d', borderRadius: 8, padding: '10px 14px', marginBottom: 20, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 15, lineHeight: 1, flexShrink: 0 }}>💡</span>
+          <p style={{ color: '#86efac', fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+            <strong>Wichtig:</strong> Aktiviere beim Erstellen der App unter <em>Scopes</em> mindestens <strong>Leserechte</strong> (z. B. <code style={{ background: '#0f2010', padding: '1px 5px', borderRadius: 4, fontSize: 11 }}>read</code>). Ohne diese Berechtigung kann die App keine Daten abrufen.
+          </p>
         </div>
 
         <ol start={4} style={{ color: '#7a8ba0', fontSize: 13, lineHeight: 2, paddingLeft: 18, marginBottom: 24 }}>
