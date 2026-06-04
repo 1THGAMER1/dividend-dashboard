@@ -243,7 +243,7 @@ export default function DividendCalculator({ portfolioData }) {
             <div style={{ marginBottom:24 }}>
                 <h1 style={{ fontSize:20, fontWeight:700, margin:0 }}>🧮 Dividenden-Rechner</h1>
                 <p style={{ color:'#556070', fontSize:14, marginTop:6 }}>
-                    Rendite: <strong style={{ color:'#5bcec2' }}>{yieldPct}%</strong>
+                    Rendite: <strong style={{ color:'#5bcec2' }}>{yieldPct}% </strong>
                     <span style={{ color:'#3d5266', marginLeft:8, fontSize:12 }}>({useForecastYield ? 'Prognose' : 'Aktuell'})</span>
                 </p>
             </div>
