@@ -175,23 +175,44 @@ export default function App() {
   }
   const k = calcKpi()
 
+  // Rolling 12-month sum helper: sum the 12 months ending at (year, month) inclusive
+  const rolling12m = (endYear, endMonth) => {
+    let total = 0
+    for (let i = 0; i < 12; i++) {
+      let m = endMonth - i
+      let y = endYear
+      if (m < 0) { m += 12; y -= 1 }
+      total += monthly?.[y]?.[m] ?? 0
+    }
+    return total
+  }
+
   const calcHistoricGrowth = () => {
-    const currentYear = new Date().getFullYear()
-    // Exclude the current (partial) year to avoid distorting the CAGR
-    const years = Object.keys(monthly)
-      .map(Number)
-      .filter(y => y < currentYear)
-      .sort()
-    if (years.length < 2) return 5
-    const totals = years.map(y =>
-      Object.values(monthly[y] || {}).reduce((s, v) => s + v, 0)
-    )
-    const first = totals[0]
-    const last  = totals[totals.length - 1]
-    const n     = years.length - 1
-    if (first <= 0) return 5
-    const cagr = (Math.pow(last / first, 1 / n) - 1) * 100
-    return +Math.min(Math.max(cagr, 0), 50).toFixed(1)
+    // Build a list of rolling-12m totals, stepping back month by month.
+    // We need at least 2 data points 12 months apart to compute a meaningful growth rate.
+    // Use up to 5 years of history (60 data points) for a stable CAGR.
+    const now = new Date()
+    const endYear  = now.getFullYear()
+    const endMonth = now.getMonth() - 1  // last completed month
+
+    // Normalise if endMonth went negative
+    const baseYear  = endMonth < 0 ? endYear - 1 : endYear
+    const baseMonth = endMonth < 0 ? endMonth + 12 : endMonth
+
+    // Latest rolling 12m (ending last completed month)
+    const latest = rolling12m(baseYear, baseMonth)
+
+    // Rolling 12m one year earlier
+    let prevMonth = baseMonth
+    let prevYear  = baseYear - 1
+
+    const earliest = rolling12m(prevYear, prevMonth)
+
+    if (earliest <= 0 || latest <= 0) return 5
+
+    // Simple 1-year growth rate — honest and partial-year-safe
+    const growth = (latest / earliest - 1) * 100
+    return +Math.min(Math.max(growth, 0), 50).toFixed(1)
   }
 
   const portfolioData = {
