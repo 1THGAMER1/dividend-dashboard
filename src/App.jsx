@@ -26,6 +26,13 @@ const NAV_TABS = [
   { id: 'calculator', label: '🧮 Rechner'   },
 ]
 
+function getStatusIndicator(dataSource) {
+  if (dataSource === 'live')  return { color: '#22c55e', text: '● Live' }
+  if (dataSource === 'cache') return { color: '#60a5fa', text: '● Cache' }
+  if (dataSource === 'stale') return { color: '#fb923c', text: '◑ Veraltet' }
+  return { color: '#fb923c', text: '○ Fehler' }
+}
+
 export default function App() {
   const {
     loggedIn,
@@ -176,7 +183,6 @@ export default function App() {
   }
   const k = calcKpi()
 
-  // Rolling 12-month sum helper
   const rolling12m = (endYear, endMonth) => {
     let total = 0
     for (let i = 0; i < 12; i++) {
@@ -188,11 +194,10 @@ export default function App() {
     return total
   }
 
-  // Kaufwert rolling 12m: Summe aller Käufe in den 12 Monaten bis (endYear, endMonth)
   const rollingBuyValue12m = (endYear, endMonth) => {
     if (!buyActs || buyActs.length === 0) return 0
-    const endDate   = new Date(endYear, endMonth + 1, 0) // letzter Tag des Monats
-    const startDate = new Date(endYear, endMonth - 11, 1) // 12 Monate zurück
+    const endDate   = new Date(endYear, endMonth + 1, 0)
+    const startDate = new Date(endYear, endMonth - 11, 1)
     let total = 0
     for (const a of buyActs) {
       const d = new Date(a.datetime)
@@ -209,18 +214,15 @@ export default function App() {
     let baseYear  = now.getFullYear()
     if (baseMonth < 0) { baseMonth += 12; baseYear -= 1 }
 
-    const latestDiv  = rolling12m(baseYear, baseMonth)
+    const latestDiv   = rolling12m(baseYear, baseMonth)
     const earliestDiv = rolling12m(baseYear - 1, baseMonth)
 
-    // CAGR total (inkl. Investitionen)
     let cagrTotal = 5
     if (earliestDiv > 0 && latestDiv > 0) {
       const growth = (latestDiv / earliestDiv - 1) * 100
       cagrTotal = +Math.min(Math.max(growth, 0), 200).toFixed(1)
     }
 
-    // CAGR organisch: Dividende pro investiertem Euro jetzt vs. vor 12M
-    // = (div_jetzt / kaufwert_jetzt) / (div_vor12m / kaufwert_vor12m) - 1
     const buyValueNow  = rollingBuyValue12m(baseYear, baseMonth)
     const buyValuePrev = rollingBuyValue12m(baseYear - 1, baseMonth)
 
@@ -248,6 +250,8 @@ export default function App() {
     cagrOrganic,
   }
 
+  const statusIndicator = getStatusIndicator(dataSource)
+
   return (
     <div style={{ minHeight: '100vh', background: '#0f1420' }}>
       <nav style={{
@@ -270,8 +274,8 @@ export default function App() {
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {lastUpdated && (
-            <span style={{ color: dataSource === 'live' ? '#22c55e' : '#fb923c', fontSize: 12 }}>
-              {dataSource === 'live' ? '● Live' : '○ Fehler'} · {lastUpdated.toLocaleTimeString('de-DE')}
+            <span style={{ color: statusIndicator.color, fontSize: 12 }}>
+              {statusIndicator.text} · {lastUpdated.toLocaleTimeString('de-DE')}
             </span>
           )}
           <button onClick={loadData} disabled={loading} style={{
