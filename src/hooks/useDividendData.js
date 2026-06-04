@@ -13,6 +13,7 @@ export default function useDividendData() {
     const [byHolding,         setByHolding]         = useState({})
     const [forecastByHolding, setForecastByHolding] = useState({})
     const [dividendYield,     setDividendYield]     = useState({ all: 0, ytd: 0, '12m': 0 })
+    const [buyActs,           setBuyActs]           = useState([])
     const [kpi,               setKpi]               = useState({
         all:   { net:0, gross:0, tax:0, avgMonthly:0 },
         ytd:   { net:0, gross:0, tax:0, avgMonthly:0 },
@@ -34,7 +35,8 @@ export default function useDividendData() {
             .catch(e  => { setError(e.message); setAuthLoading(false) })
     }, [])
 
-    const applyData = useCallback(({ m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal }) => {
+    const applyData = useCallback((payload) => {
+        const { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData } = payload
         setMonthly(m)
         setCum(c)
         setCurrentValue(currentVal)
@@ -42,6 +44,7 @@ export default function useDividendData() {
         setForecastMonthly(fc.monthly)
         setByHolding(bh)
         setForecastByHolding(fc.forecastByHolding)
+        setBuyActs(buyActsData ?? [])
         setKpi({ all: kpiAll, ytd: kpiYtd, '12m': kpi12m })
         setDividendYield({
             all:   purchaseValue > 0 ? +((kpiAll.net / purchaseValue) * 100).toFixed(2) : 0,
@@ -51,7 +54,7 @@ export default function useDividendData() {
     }, [])
 
     const fetchFromParqet = useCallback(async () => {
-        const [acts, buyActs, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
+        const [acts, buyActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
             fetchDividendActivities(),
             fetchBuyActivities(),
             fetchHoldingNames(),
@@ -62,12 +65,12 @@ export default function useDividendData() {
         const { names, types, tickers } = holdingData
         const m  = groupByYearMonth(acts)
         const c  = toCumulative(m)
-        const fc = buildForecast(c, acts, buyActs)
+        const fc = buildForecast(c, acts, buyActsData)
         const bh = groupByHolding(acts, names, types, purchaseValuePerHolding, tickers)
         const kpiAll = calcKpiFromActivities(acts, 'all')
         const kpiYtd = calcKpiFromActivities(acts, 'ytd')
         const kpi12m = calcKpiFromActivities(acts, '12m')
-        const dataset = { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal }
+        const dataset = { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData }
         writeCache(dataset).catch(err => console.warn('Cache-Schreiben fehlgeschlagen:', err))
         return dataset
     }, [])
@@ -112,12 +115,11 @@ export default function useDividendData() {
                             `⚠️ Parqet Rate-Limit aktiv — Daten vom ${stale.cachedAt.toLocaleString('de-DE')} werden angezeigt. Bitte später erneut aktualisieren.`
                         )
                     } else {
-                        // Kein Cache vorhanden — echter Fehler
                         setError('Rate-Limit aktiv und kein Cache verfügbar. Bitte später versuchen.')
                         setDataSource(null)
                     }
                 } else {
-                    throw apiErr // Anderer Fehler weiterwerfen
+                    throw apiErr
                 }
             }
         } catch (e) {
@@ -127,7 +129,6 @@ export default function useDividendData() {
     }, [applyData, fetchFromParqet])
 
     useEffect(() => { if (loggedIn) loadData() }, [loggedIn, loadData])
-    // Kein 5-Minuten-Interval mehr — durch Cache unnötig
 
     return {
         loggedIn, setLoggedIn,
@@ -136,6 +137,7 @@ export default function useDividendData() {
         byHolding, forecastByHolding,
         kpi, dividendYield,
         currentValue,
+        buyActs,
         loading, authLoading,
         lastUpdated, dataSource, error,
         cacheInfo,
