@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { handleCallback, isLoggedIn } from '../auth'
 import { groupByYearMonth, toCumulative, buildForecast, groupByHolding } from '../dataUtils'
 import { fetchDividendActivities, fetchBuyActivities, calcKpiFromActivities, fetchHoldingNames, fetchPurchaseValue, fetchPurchaseValuePerHolding, fetchCurrentValue } from '../api'
-import { readCache, writeCache } from '../cache'
+import { readCache, writeCache, readStaleCache } from '../cache'
 
 export default function useDividendData() {
     const [loggedIn,          setLoggedIn]          = useState(isLoggedIn())
@@ -24,8 +24,7 @@ export default function useDividendData() {
     const [dataSource,  setDataSource]  = useState(null)
     const [error,       setError]       = useState(null)
     const [currentValue, setCurrentValue] = useState(0)
-    // Zeigt an ob die Daten aus dem Cache kommen und wann der Cache abläuft
-    const [cacheInfo,   setCacheInfo]   = useState(null) // { cachedAt: Date } | null
+    const [cacheInfo,   setCacheInfo]   = useState(null)
 
     useEffect(() => {
         if (window.location.pathname !== '/callback') return
@@ -35,7 +34,6 @@ export default function useDividendData() {
             .catch(e  => { setError(e.message); setAuthLoading(false) })
     }, [])
 
-    /** Setzt alle State-Variablen aus einem fertigen Datensatz */
     const applyData = useCallback(({ m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal }) => {
         setMonthly(m)
         setCum(c)
@@ -52,10 +50,6 @@ export default function useDividendData() {
         })
     }, [])
 
-    /**
-     * Holt Daten von Parqet (ignoriert Cache).
-     * Schreibt Ergebnis anschließend in den Cache.
-     */
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActs, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
             fetchDividendActivities(),
@@ -66,33 +60,23 @@ export default function useDividendData() {
             fetchCurrentValue(),
         ])
         const { names, types, tickers } = holdingData
-
         const m  = groupByYearMonth(acts)
         const c  = toCumulative(m)
         const fc = buildForecast(c, acts, buyActs)
         const bh = groupByHolding(acts, names, types, purchaseValuePerHolding, tickers)
-
         const kpiAll = calcKpiFromActivities(acts, 'all')
         const kpiYtd = calcKpiFromActivities(acts, 'ytd')
         const kpi12m = calcKpiFromActivities(acts, '12m')
-
         const dataset = { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal }
-
-        // In Cache schreiben (fire & forget — Fehler blockieren nicht den UI-Fluss)
         writeCache(dataset).catch(err => console.warn('Cache-Schreiben fehlgeschlagen:', err))
-
         return dataset
     }, [])
 
-    /**
-     * Haupt-Ladefunktion.
-     * @param {boolean} forceRefresh  true = Cache ignorieren, direkt Parqet anfragen
-     */
     const loadData = useCallback(async (forceRefresh = false) => {
         if (!isLoggedIn()) return
         setLoading(true); setError(null)
         try {
-            // 1. Cache prüfen (außer bei erzwungenem Refresh)
+            // 1. Frischen Cache prüfen (überspringen bei forceRefresh)
             if (!forceRefresh) {
                 const cached = await readCache()
                 if (cached) {
@@ -105,21 +89,45 @@ export default function useDividendData() {
                 }
             }
 
-            // 2. Frisch von Parqet holen
-            const dataset = await fetchFromParqet()
-            applyData(dataset)
-            setLastUpdated(new Date())
-            setDataSource('live')
-            setCacheInfo(null)
+            // 2. Parqet anfragen
+            try {
+                const dataset = await fetchFromParqet()
+                applyData(dataset)
+                setLastUpdated(new Date())
+                setDataSource('live')
+                setCacheInfo(null)
+                setError(null)
+            } catch (apiErr) {
+                const isRateLimit = apiErr.message?.includes('429')
+
+                // 3. Bei Rate-Limit: abgelaufenen Cache als Fallback laden
+                if (isRateLimit) {
+                    const stale = await readStaleCache()
+                    if (stale) {
+                        applyData(stale.payload)
+                        setLastUpdated(stale.cachedAt)
+                        setDataSource('stale')
+                        setCacheInfo({ cachedAt: stale.cachedAt })
+                        setError(
+                            `⚠️ Parqet Rate-Limit aktiv — Daten vom ${stale.cachedAt.toLocaleString('de-DE')} werden angezeigt. Bitte später erneut aktualisieren.`
+                        )
+                    } else {
+                        // Kein Cache vorhanden — echter Fehler
+                        setError('Rate-Limit aktiv und kein Cache verfügbar. Bitte später versuchen.')
+                        setDataSource(null)
+                    }
+                } else {
+                    throw apiErr // Anderer Fehler weiterwerfen
+                }
+            }
         } catch (e) {
             setError(e.message)
             setDataSource(null)
         } finally { setLoading(false) }
     }, [applyData, fetchFromParqet])
 
-    // Beim Login einmalig laden
     useEffect(() => { if (loggedIn) loadData() }, [loggedIn, loadData])
-    // Kein automatisches 5-Minuten-Interval mehr — wird durch Cache unnötig
+    // Kein 5-Minuten-Interval mehr — durch Cache unnötig
 
     return {
         loggedIn, setLoggedIn,
@@ -131,6 +139,6 @@ export default function useDividendData() {
         loading, authLoading,
         lastUpdated, dataSource, error,
         cacheInfo,
-        loadData: () => loadData(true), // Manueller Refresh = immer frisch
+        loadData: () => loadData(true),
     }
 }
