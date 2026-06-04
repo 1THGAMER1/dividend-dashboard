@@ -78,8 +78,8 @@ function GrowthTable({ currentDividends, targetNet, growthRate, yearsToGoal }) {
                         background:   r.reached ? 'rgba(0,153,145,0.07)' : 'transparent',
                     }}>
                         <td style={{ padding: '7px 10px', color: '#7a8ba0', whiteSpace: 'nowrap' }}>{r.year}</td>
-                        <td style={{ padding: '7px 10px', color: '#c8d4e0', whiteSpace: 'nowrap' }}>€{CURRENCY_FMT(r.netto)}</td>
-                        <td style={{ padding: '7px 10px', color: '#c8d4e0', whiteSpace: 'nowrap' }}>€{CURRENCY_FMT(r.netto / 12)}</td>
+                        <td style={{ padding: '7px 10px', color: '#c8d4e0', whiteSpace: 'nowrap' }}>€ {CURRENCY_FMT(r.netto)}</td>
+                        <td style={{ padding: '7px 10px', color: '#c8d4e0', whiteSpace: 'nowrap' }}>€ {CURRENCY_FMT(r.netto / 12)}</td>
                         <td style={{ padding: '7px 10px' }}>
                             {r.reached
                                 ? <span style={{ color: '#5bcec2', fontWeight: 600, whiteSpace: 'nowrap' }}>✓ Erreicht</span>
@@ -109,12 +109,10 @@ function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
     }, [currentDividends, targetNet, growthRate, yearsToGoal])
 
     const maxVal = Math.max(...rows.map(r => r.netto), targetNet)
-    // Ziellinie: x% von unten innerhalb des BAR_H-Containers
     const goalPx = Math.round((targetNet / maxVal) * BAR_H)
 
     return (
         <div style={{ marginTop: 8 }}>
-            {/* Bar-Container mit position:relative — Ziellinie ist darin absolut */}
             <div style={{ position: 'relative', height: BAR_H, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
                 {/* Ziellinie */}
@@ -138,11 +136,11 @@ function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
                         borderRadius: 3,
                         whiteSpace:   'nowrap',
                     }}>
-                        Ziel {CURRENCY_FMT(targetNet / 12)}\€/Mo
+                        Ziel · {CURRENCY_FMT(targetNet / 12)} €/Mo
                     </span>
                 </div>
 
-                {/* Balken-Reihe — gleiche Höhe wie Container, align-items:flex-end */}
+                {/* Balken-Reihe */}
                 <div style={{
                     display:    'flex',
                     alignItems: 'flex-end',
@@ -174,7 +172,7 @@ function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
                 </div>
             </div>
 
-            {/* Jahreslabels — separate Reihe unterhalb der Balken */}
+            {/* Jahreslabels */}
             <div style={{ display:'flex', gap:3, overflowX:'hidden', marginTop:4 }}>
                 {rows.map(r => (
                     <div key={r.year} style={{ width:28, flexShrink:0, textAlign:'center' }}>
@@ -233,10 +231,10 @@ export default function DividendCalculator({ portfolioData }) {
     const fmtCagrBtn = val => val === null ? '' : val + '%'
 
     const presets = [
-        { label: 'Konservativ',         value: 3,           color: '#556070', disabled: false },
-        { label: 'Markt',   value: 5.5,         color: '#34d399', disabled: false },
-        { label: 'Organisch',           value: cagrOrganic, color: '#a78bfa', disabled: cagrOrganic === null },
-        { label: 'Inkl. Käufe', value: cagrTotal, color: '#60a5fa', disabled: cagrTotal === null },
+        { label: 'Konservativ',  value: 3,           color: '#556070', disabled: false },
+        { label: 'Markt',        value: 5.5,         color: '#34d399', disabled: false },
+        { label: 'Organisch',    value: cagrOrganic, color: '#a78bfa', disabled: cagrOrganic === null },
+        { label: 'Inkl. Käufe', value: cagrTotal,   color: '#60a5fa', disabled: cagrTotal === null },
     ]
 
     return (
@@ -270,7 +268,7 @@ export default function DividendCalculator({ portfolioData }) {
                         <div style={{ background:'#0f1420', border:'1px solid #1e2a3a', borderRadius:8, padding:'8px 12px', fontSize:12 }}>
                             <div style={{ color:'#3d5266', marginBottom:2 }}>CAGR organisch</div>
                             <div style={{ color: cagrOrganic === null ? '#3d5266' : '#a78bfa', fontWeight:700, fontSize:15 }}>
-                                {cagrOrganic === null ? ' Nicht genügend Daten' : cagrOrganic + '%'}
+                                {cagrOrganic === null ? 'Nicht genügend Daten' : cagrOrganic + '%'}
                             </div>
                             <div style={{ color:'#3d5266', fontSize:10, marginTop:2 }}>Nur Dividendenwachstum der Unternehmen</div>
                         </div>
@@ -307,8 +305,8 @@ export default function DividendCalculator({ portfolioData }) {
                     <span style={{ fontSize:13, color:'#7a8ba0' }}>Rendite-Basis</span>
                     <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                         {[
-                            { val: false, label: `Aktuell${(dividendYield * 100).toFixed(2)}%` },
-                            { val: true,  label: `Prognose${(forecastDividendYield * 100).toFixed(2)}%` },
+                            { val: false, label: `Aktuell · ${(dividendYield * 100).toFixed(2)}%` },
+                            { val: true,  label: `Prognose · ${(forecastDividendYield * 100).toFixed(2)}%` },
                         ].map(({ val, label }) => (
                             <button key={String(val)} onClick={() => setUseForecastYield(val)} style={{
                                 padding:'5px 14px', borderRadius:20, fontSize:12, cursor:'pointer',
@@ -332,19 +330,22 @@ export default function DividendCalculator({ portfolioData }) {
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10, marginBottom:20 }}>
-                <ResultCard label="Ben\u00f6tigtes Kapital" value={`€{CURRENCY_FMT(requiredCapital)}`} sub={`f ${targetMonthly}€/Monat netto`} accent />
+                <ResultCard label="Benötigtes Kapital"
+                    value={`€ ${CURRENCY_FMT(requiredCapital)}`}
+                    sub={`für ${targetMonthly} €/Monat netto`}
+                    accent />
                 <ResultCard label="Noch fehlendes Kapital"
-                    value={additionalCapital > 0 ? `€{CURRENCY_FMT(additionalCapital)}` : ' Ziel erreicht!'}
-                    sub={additionalCapital > 0 ? `aktuell: €{CURRENCY_FMT(currentValue)}` : undefined} />
+                    value={additionalCapital > 0 ? `€ ${CURRENCY_FMT(additionalCapital)}` : '✓ Ziel erreicht!'}
+                    sub={additionalCapital > 0 ? `aktuell: € ${CURRENCY_FMT(currentValue)}` : undefined} />
                 <ResultCard label="Aktuelle Netto-Dividenden"
-                    value={`€{CURRENCY_FMT(currentNetMonthly)}/ Mo`}
-                    sub={`€${CURRENCY_FMT(currentNetAnnual)}/ Jahr`} />
+                    value={`€ ${CURRENCY_FMT(currentNetMonthly)} / Mo`}
+                    sub={`€ ${CURRENCY_FMT(currentNetAnnual)} / Jahr`} />
             </div>
 
             <div style={{ background:'#161b27', border:'1px solid #1e2a3a', borderRadius:12, padding:'14px 16px', marginBottom:20 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:10 }}>
                     <span style={{ color:'#7a8ba0' }}>Fortschritt zum Ziel</span>
-                    <span style={{ color:'#5bcec2', fontWeight:600, whiteSpace:'nowrap', marginLeft:8 }}>{progressPct.toFixed(1)}</span>
+                    <span style={{ color:'#5bcec2', fontWeight:600, whiteSpace:'nowrap', marginLeft:8 }}>{progressPct.toFixed(1)} %</span>
                 </div>
                 <div style={{ height:8, background:'#1e2a3a', borderRadius:4, overflow:'hidden' }}>
                     <div style={{
@@ -355,7 +356,7 @@ export default function DividendCalculator({ portfolioData }) {
                 </div>
                 <div style={{ fontSize:12, color:'#3d5266', marginTop:8, lineHeight:1.5 }}>
                     {progressPct < 100
-                        ? `Noch €{CURRENCY_FMT((targetAnnual - currentNetAnnual) / 12)}/ Monat bis zum Ziel`
+                        ? `Noch € ${CURRENCY_FMT((targetAnnual - currentNetAnnual) / 12)} / Monat bis zum Ziel`
                         : 'Dein Portfolio erreicht bereits das Ziel!'}
                 </div>
             </div>
@@ -372,7 +373,7 @@ export default function DividendCalculator({ portfolioData }) {
                             </p>
                         </div>
                         <div style={{ display:'flex', gap:4, flexShrink:0 }}>
-                            {[{ id:'table', icon:'\u2630' }, { id:'chart', icon:'\u25a6' }].map(v => (
+                            {[{ id:'table', icon:'☰' }, { id:'chart', icon:'▦' }].map(v => (
                                 <button key={v.id} onClick={() => setProjectionView(v.id)} style={{
                                     padding:'6px 12px', borderRadius:6, fontSize:14, cursor:'pointer',
                                     border:'1px solid #2a3a50',
