@@ -19,13 +19,13 @@ export default function useDividendData() {
         ytd:   { net:0, gross:0, tax:0, avgMonthly:0 },
         '12m': { net:0, gross:0, tax:0, avgMonthly:0 },
     })
-    const [loading,     setLoading]     = useState(false)
-    const [authLoading, setAuthLoading] = useState(false)
-    const [lastUpdated, setLastUpdated] = useState(null)
-    const [dataSource,  setDataSource]  = useState(null)
-    const [error,       setError]       = useState(null)
+    const [loading,      setLoading]      = useState(false)
+    const [authLoading,  setAuthLoading]  = useState(false)
+    const [lastUpdated,  setLastUpdated]  = useState(null)
+    const [dataSource,   setDataSource]   = useState(null)
+    const [error,        setError]        = useState(null)
     const [currentValue, setCurrentValue] = useState(0)
-    const [cacheInfo,   setCacheInfo]   = useState(null)
+    const [cacheInfo,    setCacheInfo]    = useState(null)
 
     useEffect(() => {
         if (window.location.pathname !== '/callback') return
@@ -65,7 +65,8 @@ export default function useDividendData() {
         const { names, types, tickers } = holdingData
         const m  = groupByYearMonth(acts)
         const c  = toCumulative(m)
-        const fc = buildForecast(c, acts, buyActsData)
+        // names an buildForecast übergeben für automatischen ISIN-Merge
+        const fc = buildForecast(c, acts, buyActsData, names)
         const bh = groupByHolding(acts, names, types, purchaseValuePerHolding, tickers)
         const kpiAll = calcKpiFromActivities(acts, 'all')
         const kpiYtd = calcKpiFromActivities(acts, 'ytd')
@@ -79,7 +80,6 @@ export default function useDividendData() {
         if (!isLoggedIn()) return
         setLoading(true); setError(null)
         try {
-            // 1. Frischen Cache prüfen (überspringen bei forceRefresh)
             if (!forceRefresh) {
                 const cached = await readCache()
                 if (cached) {
@@ -92,7 +92,6 @@ export default function useDividendData() {
                 }
             }
 
-            // 2. Parqet anfragen
             try {
                 const dataset = await fetchFromParqet()
                 applyData(dataset)
@@ -102,8 +101,6 @@ export default function useDividendData() {
                 setError(null)
             } catch (apiErr) {
                 const isRateLimit = apiErr.message?.includes('429')
-
-                // 3. Bei Rate-Limit: abgelaufenen Cache als Fallback laden
                 if (isRateLimit) {
                     const stale = await readStaleCache()
                     if (stale) {

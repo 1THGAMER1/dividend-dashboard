@@ -40,14 +40,12 @@ function getStatusIndicator(dataSource) {
   return STATUS_INFO[dataSource] ?? STATUS_INFO.error
 }
 
-// Summe aller Dividenden in einem Kalenderjahr
 function yearTotal(monthly, year) {
   const arr = monthly?.[year]
   if (!arr) return 0
   return arr.reduce((s, v) => s + (v || 0), 0)
 }
 
-// Rollierende 12-Monats-Summe bis einschließlich endYear/endMonth
 function rolling12m(monthly, endYear, endMonth) {
   let total = 0
   for (let i = 0; i < 12; i++) {
@@ -72,11 +70,11 @@ export default function App() {
     buyActs,
   } = useDividendData()
 
-  const [kpiRange,      setKpiRange]      = useState('all')
-  const [page,          setPage]          = useState('dashboard')
-  const [appUser,       setAppUser]       = useState(undefined)
-  const [clientIdReady, setClientIdReady] = useState(false)
-  const [profileLoading,setProfileLoading]= useState(true)
+  const [kpiRange,       setKpiRange]       = useState('all')
+  const [page,           setPage]           = useState('dashboard')
+  const [appUser,        setAppUser]        = useState(undefined)
+  const [clientIdReady,  setClientIdReady]  = useState(false)
+  const [profileLoading, setProfileLoading] = useState(true)
   const [tooltipVisible, setTooltipVisible] = useState(false)
 
   useEffect(() => {
@@ -356,12 +354,6 @@ export default function App() {
                     value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
                     color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
                     sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
-                  />
-                  <KpiCard
-                    label="Startjahr Dividenden"
-                    value={`${trueCagr.from}`}
-                    color="#a78bfa"
-                    sub={`${fmt(yearTotal(monthly, trueCagr.from))} → ${fmt(yearTotal(monthly, trueCagr.to))}`}
                   />
                 </div>
               )}

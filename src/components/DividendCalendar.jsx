@@ -1,7 +1,16 @@
 import { useState } from 'react'
 
-const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
-const fmtSm  = n => n >= 100 ? Math.round(n) + ' €' : (+n).toFixed(1) + ' €'
+// Cents nur bei Beträgen < 1000€, sonst ganzzahlig
+const fmtAmt = n => {
+  if (n >= 1000) return Math.round(n).toLocaleString('de-DE') + ' €'
+  return (+n).toFixed(2).replace('.', ',') + ' €'
+}
+// Kleine Balken-Beschriftung (kompakter)
+const fmtSm = n => {
+  if (n >= 1000) return Math.round(n) + ' €'
+  if (n >= 100)  return Math.round(n) + ' €'
+  return (+n).toFixed(2).replace('.', ',') + ' €'
+}
 
 const MONTHS     = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
 const MONTH_FULL = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember']
@@ -14,28 +23,49 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
   const monthData = Array.from({ length: 12 }, (_, m) => {
     const isPast    = m < cm
     const isCurrent = m === cm
-    const actual    = monthly?.[cy]?.[m] ?? 0
+    const isFuture  = m > cm
 
-    const forecast  = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
-    const amount    = (isPast || isCurrent) && actual > 0 ? actual : forecast
+    // Ist-Wert dieses Monats (nur wenn wirklich schon Geld eingegangen ist)
+    const actual = monthly?.[cy]?.[m] ?? 0
 
+    let amount
+    let isPrognose
+
+    if (isPast) {
+      // Vergangener Monat → immer nur Ist-Wert, NIE Prognose
+      amount     = actual
+      isPrognose = false
+    } else if (isCurrent) {
+      // Laufender Monat → Ist + ggf. noch ausstehende Prognose (bereits in forecastByHolding kombiniert)
+      const forecast = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
+      amount     = forecast > 0 ? forecast : actual
+      isPrognose = true // laufender Monat ist immer "noch nicht abgeschlossen"
+    } else {
+      // Zukünftiger Monat → reine Prognose
+      amount     = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
+      isPrognose = true
+    }
+
+    // Detail-Positionen für die Monats-Detailansicht
     const positions = Object.entries(forecastByHolding)
-      .filter(([isin, mMap]) => {
-        if ((isPast || isCurrent) && actual > 0) {
-          return (byHolding[isin]?.monthly?.[cy]?.[m] ?? 0) > 0
+      .map(([isin, mMap]) => {
+        let posAmount
+        if (isPast) {
+          // Vergangener Monat: nur was wirklich geflossen ist
+          posAmount = byHolding[isin]?.monthly?.[cy]?.[m] ?? 0
+        } else {
+          // Aktuell / Zukunft: aus forecastByHolding (kombiniert Ist + Prognose)
+          posAmount = mMap[m] ?? 0
         }
-        return (mMap[m] ?? 0) > 0.01
+        return {
+          name:   byHolding[isin]?.name || isin,
+          amount: posAmount,
+        }
       })
-      .map(([isin, mMap]) => ({
-        name:   byHolding[isin]?.name || isin,
-        amount: (isPast || isCurrent) && actual > 0
-          ? byHolding[isin]?.monthly?.[cy]?.[m] ?? 0
-          : mMap[m],
-      }))
       .filter(p => p.amount > 0.01)
       .sort((a, b) => b.amount - a.amount)
 
-    return { m, isPast, isCurrent, amount, positions, isPrognose: !(isPast || isCurrent) || actual === 0 }
+    return { m, isPast, isCurrent, isFuture, amount, positions, isPrognose }
   })
 
   const maxAmount = Math.max(...monthData.map(d => d.amount), 0.01)
@@ -108,7 +138,8 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
                 {hasPayment ? fmtSm(amount) : '–'}
               </div>
 
-              {isPrognose && hasPayment && (
+              {/* Prognose-Punkt nur bei zukünftigen Monaten */}
+              {isPrognose && !isCurrent && hasPayment && (
                 <div style={{ position:'absolute', top:3, right:4, fontSize:7, color:'#6366f1' }}>●</div>
               )}
             </div>
@@ -139,21 +170,21 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
           <span style={{ fontSize:14, fontWeight:600, color:'#c8d4e0' }}>
             {MONTH_FULL[active.m]} {cy}
             {active.isCurrent && <span style={{ fontSize:11, color:'#22c55e', marginLeft:8 }}>Aktuell</span>}
-            {active.isPrognose && <span style={{ fontSize:11, color:'#6366f1', marginLeft:8 }}>Prognose</span>}
+            {active.isFuture  && <span style={{ fontSize:11, color:'#6366f1', marginLeft:8 }}>Prognose</span>}
           </span>
           <span style={{ fontSize:15, fontWeight:700, color:'#22c55e' }}>
-            {active.amount > 0 ? fmt(active.amount) : '–'}
+            {active.amount > 0 ? fmtAmt(active.amount) : '–'}
           </span>
         </div>
 
         {active.positions.length === 0 ? (
-          <p style={{ color:'#3d5266', fontSize:13 }}>Keine Dividenden in diesem Monat prognostiziert.</p>
+          <p style={{ color:'#3d5266', fontSize:13 }}>Keine Dividenden in diesem Monat{active.isPast ? '.' : ' prognostiziert.'}</p>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
             {active.positions.map(p => (
               <div key={p.name} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #1a2233' }}>
                 <span style={{ fontSize:13, color:'#7a8ba0' }}>{p.name}</span>
-                <span style={{ fontSize:13, fontWeight:600, color:'#5bcec2' }}>{fmt(p.amount)}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:'#5bcec2' }}>{fmtAmt(p.amount)}</span>
               </div>
             ))}
           </div>
