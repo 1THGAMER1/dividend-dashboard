@@ -36,6 +36,7 @@ export default function App() {
     lastUpdated, dataSource, error,
     loadData,
     currentValue,
+    buyActs,
   } = useDividendData()
 
   const [kpiRange,      setKpiRange]      = useState('all')
@@ -175,7 +176,7 @@ export default function App() {
   }
   const k = calcKpi()
 
-  // Rolling 12-month sum helper: sum the 12 months ending at (year, month) inclusive
+  // Rolling 12-month sum helper
   const rolling12m = (endYear, endMonth) => {
     let total = 0
     for (let i = 0; i < 12; i++) {
@@ -187,40 +188,64 @@ export default function App() {
     return total
   }
 
-  const calcHistoricGrowth = () => {
-    // Build a list of rolling-12m totals, stepping back month by month.
-    // We need at least 2 data points 12 months apart to compute a meaningful growth rate.
-    // Use up to 5 years of history (60 data points) for a stable CAGR.
-    const now = new Date()
-    const endYear  = now.getFullYear()
-    const endMonth = now.getMonth() - 1  // last completed month
-
-    // Normalise if endMonth went negative
-    const baseYear  = endMonth < 0 ? endYear - 1 : endYear
-    const baseMonth = endMonth < 0 ? endMonth + 12 : endMonth
-
-    // Latest rolling 12m (ending last completed month)
-    const latest = rolling12m(baseYear, baseMonth)
-
-    // Rolling 12m one year earlier
-    let prevMonth = baseMonth
-    let prevYear  = baseYear - 1
-
-    const earliest = rolling12m(prevYear, prevMonth)
-
-    if (earliest <= 0 || latest <= 0) return 5
-
-    // Simple 1-year growth rate — honest and partial-year-safe
-    const growth = (latest / earliest - 1) * 100
-    return +Math.min(Math.max(growth, 0), 50).toFixed(1)
+  // Kaufwert rolling 12m: Summe aller Käufe in den 12 Monaten bis (endYear, endMonth)
+  const rollingBuyValue12m = (endYear, endMonth) => {
+    if (!buyActs || buyActs.length === 0) return 0
+    const endDate   = new Date(endYear, endMonth + 1, 0) // letzter Tag des Monats
+    const startDate = new Date(endYear, endMonth - 11, 1) // 12 Monate zurück
+    let total = 0
+    for (const a of buyActs) {
+      const d = new Date(a.datetime)
+      if (d >= startDate && d <= endDate) {
+        total += Math.abs(a.amount ?? a.amountNet ?? 0)
+      }
+    }
+    return total
   }
+
+  const calcBothCagrs = () => {
+    const now = new Date()
+    let baseMonth = now.getMonth() - 1
+    let baseYear  = now.getFullYear()
+    if (baseMonth < 0) { baseMonth += 12; baseYear -= 1 }
+
+    const latestDiv  = rolling12m(baseYear, baseMonth)
+    const earliestDiv = rolling12m(baseYear - 1, baseMonth)
+
+    // CAGR total (inkl. Investitionen)
+    let cagrTotal = 5
+    if (earliestDiv > 0 && latestDiv > 0) {
+      const growth = (latestDiv / earliestDiv - 1) * 100
+      cagrTotal = +Math.min(Math.max(growth, 0), 200).toFixed(1)
+    }
+
+    // CAGR organisch: Dividende pro investiertem Euro jetzt vs. vor 12M
+    // = (div_jetzt / kaufwert_jetzt) / (div_vor12m / kaufwert_vor12m) - 1
+    const buyValueNow  = rollingBuyValue12m(baseYear, baseMonth)
+    const buyValuePrev = rollingBuyValue12m(baseYear - 1, baseMonth)
+
+    let cagrOrganic = 5
+    if (buyValueNow > 0 && buyValuePrev > 0 && latestDiv > 0 && earliestDiv > 0) {
+      const yieldNow  = latestDiv  / buyValueNow
+      const yieldPrev = earliestDiv / buyValuePrev
+      if (yieldPrev > 0) {
+        const growth = (yieldNow / yieldPrev - 1) * 100
+        cagrOrganic = +Math.min(Math.max(growth, -50), 100).toFixed(1)
+      }
+    }
+
+    return { cagrTotal, cagrOrganic }
+  }
+
+  const { cagrTotal, cagrOrganic } = calcBothCagrs()
 
   const portfolioData = {
     currentValue,
-    totalDividendsNet: calcForecastNext12mNet(),
-    dividendYield:     ((dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0) + 0.01) / 100,
+    totalDividendsNet:     calcForecastNext12mNet(),
+    dividendYield:         ((dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0) + 0.01) / 100,
     forecastDividendYield: currentValue > 0 ? calcForecastNext12mNet() / currentValue : 0,
-    historicGrowth: calcHistoricGrowth(),
+    cagrTotal,
+    cagrOrganic,
   }
 
   return (

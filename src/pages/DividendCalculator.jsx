@@ -110,7 +110,6 @@ function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
 
     return (
         <div style={{ position: 'relative' }}>
-            {/* Ziel-Linie */}
             <div style={{
                 position:  'absolute',
                 left:      0, right: 0,
@@ -123,7 +122,6 @@ function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
         </span>
             </div>
 
-            {/* Balken */}
             <div style={{
                 display:    'flex',
                 alignItems: 'flex-end',
@@ -170,7 +168,6 @@ function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
                 })}
             </div>
 
-            {/* Legende */}
             <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#556070' }}>
                     <div style={{ width: 12, height: 12, borderRadius: 2, background: 'linear-gradient(180deg, #3b5bdb, #1e3a5f)' }} />
@@ -191,11 +188,12 @@ export default function DividendCalculator({ portfolioData }) {
         totalDividendsNet     = 0,
         dividendYield         = 0,
         forecastDividendYield = 0,
-        historicGrowth        = 5,
+        cagrTotal             = 5,
+        cagrOrganic           = 5,
     } = portfolioData ?? {}
 
     const [targetMonthly,    setTargetMonthly]    = useState(500)
-    const [growthRate,       setGrowthRate]       = useState(historicGrowth)
+    const [growthRate,       setGrowthRate]       = useState(cagrOrganic)
     const [useForecastYield, setUseForecastYield] = useState(false)
     const [projectionView,   setProjectionView]   = useState('table')
 
@@ -252,11 +250,44 @@ export default function DividendCalculator({ portfolioData }) {
                         unit=" %"
                         color="#6366f1"
                     />
+
+                    {/* CAGR Info Box */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 8,
+                        marginBottom: 4,
+                    }}>
+                        <div style={{
+                            background: '#0f1420',
+                            border: '1px solid #1e2a3a',
+                            borderRadius: 8,
+                            padding: '8px 12px',
+                            fontSize: 12,
+                        }}>
+                            <div style={{ color: '#3d5266', marginBottom: 2 }}>CAGR inkl. Käufe</div>
+                            <div style={{ color: '#60a5fa', fontWeight: 700, fontSize: 15 }}>{cagrTotal} %</div>
+                            <div style={{ color: '#3d5266', fontSize: 10, marginTop: 2 }}>Tatsächl. Wachstum (durch Käufe + Unternehmen)</div>
+                        </div>
+                        <div style={{
+                            background: '#0f1420',
+                            border: '1px solid #1e2a3a',
+                            borderRadius: 8,
+                            padding: '8px 12px',
+                            fontSize: 12,
+                        }}>
+                            <div style={{ color: '#3d5266', marginBottom: 2 }}>CAGR organisch</div>
+                            <div style={{ color: '#a78bfa', fontWeight: 700, fontSize: 15 }}>{cagrOrganic} %</div>
+                            <div style={{ color: '#3d5266', fontSize: 10, marginTop: 2 }}>Nur Dividendenwachstum der Unternehmen</div>
+                        </div>
+                    </div>
+
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {[
-                            { label: 'Konservativ', value: 3,              color: '#556070' },
-                            { label: 'Markt Ø',     value: 5.5,            color: '#34d399' },
-                            { label: 'Dein CAGR',   value: historicGrowth, color: '#6366f1' },
+                            { label: 'Konservativ',  value: 3,           color: '#556070' },
+                            { label: 'Markt Ø',      value: 5.5,         color: '#34d399' },
+                            { label: 'Organisch',    value: cagrOrganic, color: '#a78bfa' },
+                            { label: 'Inkl. Käufe',  value: cagrTotal,   color: '#60a5fa' },
                         ].map(p => (
                             <button
                                 key={p.label}
@@ -314,6 +345,12 @@ export default function DividendCalculator({ portfolioData }) {
             </div>
 
             {/* Ergebnis-Cards */}
+            {/* Hinweis: Alle Geldbeträge beziehen sich auf heutige Kaufkraft (nominale Werte) */}
+            <div style={{
+                fontSize: 12, color: '#3d5266', marginBottom: 10, paddingLeft: 2,
+            }}>
+                💡 Alle Kapitalangaben beziehen sich auf den heutigen Zeitpunkt (nominale Werte, keine Inflationsbereinigung)
+            </div>
             <div style={{
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                 gap: 12, marginBottom: 24,
