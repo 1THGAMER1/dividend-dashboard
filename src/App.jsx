@@ -176,7 +176,12 @@ export default function App() {
   const k = calcKpi()
 
   const calcHistoricGrowth = () => {
-    const years = Object.keys(monthly).map(Number).sort()
+    const currentYear = new Date().getFullYear()
+    // Exclude the current (partial) year to avoid distorting the CAGR
+    const years = Object.keys(monthly)
+      .map(Number)
+      .filter(y => y < currentYear)
+      .sort()
     if (years.length < 2) return 5
     const totals = years.map(y =>
       Object.values(monthly[y] || {}).reduce((s, v) => s + v, 0)
@@ -186,7 +191,7 @@ export default function App() {
     const n     = years.length - 1
     if (first <= 0) return 5
     const cagr = (Math.pow(last / first, 1 / n) - 1) * 100
-    return +Math.min(Math.max(cagr, 0), 30).toFixed(1)
+    return +Math.min(Math.max(cagr, 0), 50).toFixed(1)
   }
 
   const portfolioData = {
