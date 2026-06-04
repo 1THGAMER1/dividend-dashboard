@@ -96,12 +96,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
     }
   }
 
-  /**
-   * Gibt den geschätzten DPS für (isin, month) zurück.
-   * WICHTIG: Nur wenn in mindestens einem Referenzjahr wirklich in
-   * genau diesem Monat gezahlt wurde – sonst 0.
-   * Kein Quarterly-Fallback mehr (der hat Phantomzahlungen erzeugt).
-   */
   function estimateDps(isin, month) {
     const yearData = byIsin[isin] || {}
     const refYears = [cy - 1, cy - 2]
@@ -112,7 +106,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
       return (e && e.shares > 0) ? e.amount / e.shares : null
     })
 
-    // Mindestens ein Referenzjahr muss diesen Monat wirklich gezahlt haben
     if (points.every(p => p === null)) return 0
 
     let weightedSum = 0, weightTotal = 0
@@ -128,10 +121,8 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
       if (actual && actual.amount > 0) {
-        // Bereits geflossen – Ist-Wert
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
       } else {
-        // Prognose nur wenn Vorjahre diesen Monat wirklich gezeigt haben
         const dps    = estimateDps(isin, m)
         const shares = currentShares(isin)
         forecastByHolding[isin][m] = +(dps * shares).toFixed(4)
@@ -183,9 +174,10 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
 export function heatColor(value, max) {
   if (!value || value === 0) return '#1a2233'
   const intensity = Math.min(value / max, 1)
-  const from = [26, 34, 51]
-  const to   = [34, 197, 94]
-  const rgb  = from.map((f, i) => Math.round(f + (to[i] - f) * Math.pow(intensity, 0.5)))
+  // Dunkel-Grün bei niedrig, sattes Grün bei hoch – besserer Kontrast
+  const from = [20, 83, 45]   // #145328 — dunkles Grün
+  const to   = [21, 180, 90]  // #15b45a — helles Grün
+  const rgb  = from.map((f, i) => Math.round(f + (to[i] - f) * Math.pow(intensity, 0.45)))
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
 }
 

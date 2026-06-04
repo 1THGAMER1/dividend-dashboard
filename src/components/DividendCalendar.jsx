@@ -2,14 +2,13 @@ import { useState } from 'react'
 
 // Cents nur bei Beträgen < 1000€, sonst ganzzahlig
 const fmtAmt = n => {
-  if (n >= 1000) return Math.round(n).toLocaleString('de-DE') + ' €'
-  return (+n).toFixed(2).replace('.', ',') + ' €'
+  if (n >= 1000) return Math.round(n).toLocaleString('de-DE') + ' €'
+  return (+n).toFixed(2).replace('.', ',') + ' €'
 }
-// Kleine Balken-Beschriftung (kompakter)
 const fmtSm = n => {
-  if (n >= 1000) return Math.round(n) + ' €'
-  if (n >= 100)  return Math.round(n) + ' €'
-  return (+n).toFixed(2).replace('.', ',') + ' €'
+  if (n >= 1000) return Math.round(n) + ' €'
+  if (n >= 100)  return Math.round(n) + ' €'
+  return (+n).toFixed(2).replace('.', ',') + ' €'
 }
 
 const MONTHS     = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
@@ -25,36 +24,29 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
     const isCurrent = m === cm
     const isFuture  = m > cm
 
-    // Ist-Wert dieses Monats (nur wenn wirklich schon Geld eingegangen ist)
     const actual = monthly?.[cy]?.[m] ?? 0
 
     let amount
     let isPrognose
 
     if (isPast) {
-      // Vergangener Monat → immer nur Ist-Wert, NIE Prognose
       amount     = actual
       isPrognose = false
     } else if (isCurrent) {
-      // Laufender Monat → Ist + ggf. noch ausstehende Prognose (bereits in forecastByHolding kombiniert)
       const forecast = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
       amount     = forecast > 0 ? forecast : actual
-      isPrognose = true // laufender Monat ist immer "noch nicht abgeschlossen"
+      isPrognose = true
     } else {
-      // Zukünftiger Monat → reine Prognose
       amount     = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
       isPrognose = true
     }
 
-    // Detail-Positionen für die Monats-Detailansicht
     const positions = Object.entries(forecastByHolding)
       .map(([isin, mMap]) => {
         let posAmount
         if (isPast) {
-          // Vergangener Monat: nur was wirklich geflossen ist
           posAmount = byHolding[isin]?.monthly?.[cy]?.[m] ?? 0
         } else {
-          // Aktuell / Zukunft: aus forecastByHolding (kombiniert Ist + Prognose)
           posAmount = mMap[m] ?? 0
         }
         return {
@@ -130,15 +122,17 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
               </div>
 
               <div style={{
-                fontSize:   9,
-                fontWeight: 600,
-                color:      isActive ? '#5bcec2' : hasPayment ? '#556070' : '#2a3a50',
-                marginTop:  3,
+                fontSize:    9,
+                fontWeight:  600,
+                color:       isActive ? '#5bcec2' : hasPayment ? '#556070' : '#2a3a50',
+                marginTop:   3,
+                whiteSpace:  'nowrap',
+                overflow:    'hidden',
+                textOverflow:'ellipsis',
               }}>
                 {hasPayment ? fmtSm(amount) : '–'}
               </div>
 
-              {/* Prognose-Punkt nur bei zukünftigen Monaten */}
               {isPrognose && !isCurrent && hasPayment && (
                 <div style={{ position:'absolute', top:3, right:4, fontSize:7, color:'#6366f1' }}>●</div>
               )}
@@ -166,13 +160,13 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
         borderRadius: 10,
         padding:      '14px 16px',
       }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, gap:8 }}>
           <span style={{ fontSize:14, fontWeight:600, color:'#c8d4e0' }}>
             {MONTH_FULL[active.m]} {cy}
             {active.isCurrent && <span style={{ fontSize:11, color:'#22c55e', marginLeft:8 }}>Aktuell</span>}
             {active.isFuture  && <span style={{ fontSize:11, color:'#6366f1', marginLeft:8 }}>Prognose</span>}
           </span>
-          <span style={{ fontSize:15, fontWeight:700, color:'#22c55e' }}>
+          <span style={{ fontSize:15, fontWeight:700, color:'#22c55e', whiteSpace:'nowrap', flexShrink:0 }}>
             {active.amount > 0 ? fmtAmt(active.amount) : '–'}
           </span>
         </div>
@@ -182,9 +176,9 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
             {active.positions.map(p => (
-              <div key={p.name} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderBottom:'1px solid #1a2233' }}>
-                <span style={{ fontSize:13, color:'#7a8ba0' }}>{p.name}</span>
-                <span style={{ fontSize:13, fontWeight:600, color:'#5bcec2' }}>{fmtAmt(p.amount)}</span>
+              <div key={p.name} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, padding:'5px 0', borderBottom:'1px solid #1a2233' }}>
+                <span style={{ fontSize:13, color:'#7a8ba0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0, flex:1 }}>{p.name}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:'#5bcec2', whiteSpace:'nowrap', flexShrink:0 }}>{fmtAmt(p.amount)}</span>
               </div>
             ))}
           </div>

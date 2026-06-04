@@ -75,6 +75,20 @@ body {
   min-width: 480px;
 }
 
+/* --- Rechner: CAGR-Info-Grid --- */
+.calc-cagr-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 480px) {
+  .calc-cagr-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* --- Scrollbars --- */
 ::-webkit-scrollbar        { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track  { background: #0f1420; }
