@@ -66,7 +66,7 @@ function GrowthTable({ currentDividends, targetNet, growthRate, yearsToGoal }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 320 }}>
                 <thead>
                 <tr style={{ borderBottom: '1px solid #1e2a3a' }}>
-                    {['Jahr', 'Netto\u00a0/ Jahr', 'Netto\u00a0/ Monat', 'Ziel'].map(h => (
+                    {['Jahr', 'Netto/ Jahr', 'Netto/ Monat', 'Ziel'].map(h => (
                         <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#556070', fontWeight: 500, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                 </tr>
@@ -78,8 +78,8 @@ function GrowthTable({ currentDividends, targetNet, growthRate, yearsToGoal }) {
                         background:   r.reached ? 'rgba(0,153,145,0.07)' : 'transparent',
                     }}>
                         <td style={{ padding: '7px 10px', color: '#7a8ba0', whiteSpace: 'nowrap' }}>{r.year}</td>
-                        <td style={{ padding: '7px 10px', color: '#c8d4e0', whiteSpace: 'nowrap' }}>€\u00a0{CURRENCY_FMT(r.netto)}</td>
-                        <td style={{ padding: '7px 10px', color: '#c8d4e0', whiteSpace: 'nowrap' }}>€\u00a0{CURRENCY_FMT(r.netto / 12)}</td>
+                        <td style={{ padding: '7px 10px', color: '#c8d4e0', whiteSpace: 'nowrap' }}>€{CURRENCY_FMT(r.netto)}</td>
+                        <td style={{ padding: '7px 10px', color: '#c8d4e0', whiteSpace: 'nowrap' }}>€{CURRENCY_FMT(r.netto / 12)}</td>
                         <td style={{ padding: '7px 10px' }}>
                             {r.reached
                                 ? <span style={{ color: '#5bcec2', fontWeight: 600, whiteSpace: 'nowrap' }}>✓ Erreicht</span>
@@ -138,7 +138,7 @@ function GrowthChart({ currentDividends, targetNet, growthRate, yearsToGoal }) {
                         borderRadius: 3,
                         whiteSpace:   'nowrap',
                     }}>
-                        Ziel\u00a0\u00b7\u00a0{CURRENCY_FMT(targetNet / 12)}\u00a0€/Mo
+                        Ziel {CURRENCY_FMT(targetNet / 12)}\€/Mo
                     </span>
                 </div>
 
@@ -230,13 +230,13 @@ export default function DividendCalculator({ portfolioData }) {
 
     const yearsToGoal = yearsToGoalByGrowth(totalDividendsNet, targetAnnual, growthRate)
 
-    const fmtCagrBtn = val => val === null ? '\u2013' : val + '\u00a0%'
+    const fmtCagrBtn = val => val === null ? '' : val + '%'
 
     const presets = [
         { label: 'Konservativ',         value: 3,           color: '#556070', disabled: false },
-        { label: 'Markt\u00a0\u00d8',   value: 5.5,         color: '#34d399', disabled: false },
+        { label: 'Markt',   value: 5.5,         color: '#34d399', disabled: false },
         { label: 'Organisch',           value: cagrOrganic, color: '#a78bfa', disabled: cagrOrganic === null },
-        { label: 'Inkl.\u00a0K\u00e4ufe', value: cagrTotal, color: '#60a5fa', disabled: cagrTotal === null },
+        { label: 'Inkl. Käufe', value: cagrTotal, color: '#60a5fa', disabled: cagrTotal === null },
     ]
 
     return (
@@ -245,7 +245,7 @@ export default function DividendCalculator({ portfolioData }) {
             <div style={{ marginBottom:24 }}>
                 <h1 style={{ fontSize:20, fontWeight:700, margin:0 }}>🧮 Dividenden-Rechner</h1>
                 <p style={{ color:'#556070', fontSize:14, marginTop:6 }}>
-                    Rendite: <strong style={{ color:'#5bcec2' }}>{yieldPct}\u00a0%</strong>
+                    Rendite: <strong style={{ color:'#5bcec2' }}>{yieldPct}%</strong>
                     <span style={{ color:'#3d5266', marginLeft:8, fontSize:12 }}>({useForecastYield ? 'Prognose' : 'Aktuell'})</span>
                 </p>
             </div>
@@ -253,24 +253,24 @@ export default function DividendCalculator({ portfolioData }) {
             <div style={{ background:'#161b27', border:'1px solid #1e2a3a', borderRadius:14, padding:'20px 16px', marginBottom:20, display:'flex', flexDirection:'column', gap:20 }}>
 
                 <Slider label="Ziel-Dividende pro Monat (Netto)" min={100} max={5000} step={50}
-                    value={targetMonthly} onChange={setTargetMonthly} unit="\u00a0€" />
+                    value={targetMonthly} onChange={setTargetMonthly} unit="€" />
 
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    <Slider label="J\u00e4hrl. Dividendenwachstum" min={0} max={30} step={0.5}
-                        value={growthRate} onChange={setGrowthRate} unit="\u00a0%" color="#6366f1" />
+                    <Slider label="Jährl. Dividendenwachstum" min={0} max={30} step={0.5}
+                        value={growthRate} onChange={setGrowthRate} unit="%" color="#6366f1" />
 
                     <div className="calc-cagr-grid">
                         <div style={{ background:'#0f1420', border:'1px solid #1e2a3a', borderRadius:8, padding:'8px 12px', fontSize:12 }}>
-                            <div style={{ color:'#3d5266', marginBottom:2 }}>CAGR inkl. K\u00e4ufe</div>
+                            <div style={{ color:'#3d5266', marginBottom:2 }}>CAGR inkl. Käufe</div>
                             <div style={{ color: cagrTotal === null ? '#3d5266' : '#60a5fa', fontWeight:700, fontSize:15 }}>
-                                {cagrTotal === null ? '\u2013 Nicht gen\u00fcgend Daten' : cagrTotal + '\u00a0%'}
+                                {cagrTotal === null ? 'Nicht genügend Daten' : cagrTotal + '%'}
                             </div>
-                            <div style={{ color:'#3d5266', fontSize:10, marginTop:2 }}>Tats\u00e4chl. Wachstum (K\u00e4ufe + Unternehmen)</div>
+                            <div style={{ color:'#3d5266', fontSize:10, marginTop:2 }}>Tatsächl. Wachstum (Käufe + Unternehmen)</div>
                         </div>
                         <div style={{ background:'#0f1420', border:'1px solid #1e2a3a', borderRadius:8, padding:'8px 12px', fontSize:12 }}>
                             <div style={{ color:'#3d5266', marginBottom:2 }}>CAGR organisch</div>
                             <div style={{ color: cagrOrganic === null ? '#3d5266' : '#a78bfa', fontWeight:700, fontSize:15 }}>
-                                {cagrOrganic === null ? '\u2013 Nicht gen\u00fcgend Daten' : cagrOrganic + '\u00a0%'}
+                                {cagrOrganic === null ? ' Nicht genügend Daten' : cagrOrganic + '%'}
                             </div>
                             <div style={{ color:'#3d5266', fontSize:10, marginTop:2 }}>Nur Dividendenwachstum der Unternehmen</div>
                         </div>
@@ -307,8 +307,8 @@ export default function DividendCalculator({ portfolioData }) {
                     <span style={{ fontSize:13, color:'#7a8ba0' }}>Rendite-Basis</span>
                     <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                         {[
-                            { val: false, label: `Aktuell\u00a0\u00b7\u00a0${(dividendYield * 100).toFixed(2)}\u00a0%` },
-                            { val: true,  label: `Prognose\u00a0\u00b7\u00a0${(forecastDividendYield * 100).toFixed(2)}\u00a0%` },
+                            { val: false, label: `Aktuell${(dividendYield * 100).toFixed(2)}%` },
+                            { val: true,  label: `Prognose${(forecastDividendYield * 100).toFixed(2)}%` },
                         ].map(({ val, label }) => (
                             <button key={String(val)} onClick={() => setUseForecastYield(val)} style={{
                                 padding:'5px 14px', borderRadius:20, fontSize:12, cursor:'pointer',
@@ -323,7 +323,7 @@ export default function DividendCalculator({ portfolioData }) {
                 </div>
 
                 <div style={{ fontSize:12, color:'#3d5266', padding:'8px 12px', background:'#0f1420', borderRadius:8, border:'1px solid #1e2a3a', lineHeight:1.5 }}>
-                    ℹ️ Steuern (inkl. Teilfreistellung f\u00fcr ETFs) bereits in der Prognose eingerechnet
+                    ℹ️ Steuern (inkl. Teilfreistellung für ETFs) bereits in der Prognose eingerechnet
                 </div>
             </div>
 
@@ -332,19 +332,19 @@ export default function DividendCalculator({ portfolioData }) {
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10, marginBottom:20 }}>
-                <ResultCard label="Ben\u00f6tigtes Kapital" value={`€\u00a0${CURRENCY_FMT(requiredCapital)}`} sub={`f\u00fcr ${targetMonthly}\u00a0€/Monat netto`} accent />
+                <ResultCard label="Ben\u00f6tigtes Kapital" value={`€{CURRENCY_FMT(requiredCapital)}`} sub={`f ${targetMonthly}€/Monat netto`} accent />
                 <ResultCard label="Noch fehlendes Kapital"
-                    value={additionalCapital > 0 ? `€\u00a0${CURRENCY_FMT(additionalCapital)}` : '\u2713 Ziel erreicht!'}
-                    sub={additionalCapital > 0 ? `aktuell: €\u00a0${CURRENCY_FMT(currentValue)}` : undefined} />
+                    value={additionalCapital > 0 ? `€{CURRENCY_FMT(additionalCapital)}` : ' Ziel erreicht!'}
+                    sub={additionalCapital > 0 ? `aktuell: €{CURRENCY_FMT(currentValue)}` : undefined} />
                 <ResultCard label="Aktuelle Netto-Dividenden"
-                    value={`€\u00a0${CURRENCY_FMT(currentNetMonthly)}\u00a0/ Mo`}
-                    sub={`€\u00a0${CURRENCY_FMT(currentNetAnnual)}\u00a0/ Jahr`} />
+                    value={`€{CURRENCY_FMT(currentNetMonthly)}/ Mo`}
+                    sub={`€${CURRENCY_FMT(currentNetAnnual)}/ Jahr`} />
             </div>
 
             <div style={{ background:'#161b27', border:'1px solid #1e2a3a', borderRadius:12, padding:'14px 16px', marginBottom:20 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:10 }}>
                     <span style={{ color:'#7a8ba0' }}>Fortschritt zum Ziel</span>
-                    <span style={{ color:'#5bcec2', fontWeight:600, whiteSpace:'nowrap', marginLeft:8 }}>{progressPct.toFixed(1)}\u00a0%</span>
+                    <span style={{ color:'#5bcec2', fontWeight:600, whiteSpace:'nowrap', marginLeft:8 }}>{progressPct.toFixed(1)}</span>
                 </div>
                 <div style={{ height:8, background:'#1e2a3a', borderRadius:4, overflow:'hidden' }}>
                     <div style={{
@@ -355,8 +355,8 @@ export default function DividendCalculator({ portfolioData }) {
                 </div>
                 <div style={{ fontSize:12, color:'#3d5266', marginTop:8, lineHeight:1.5 }}>
                     {progressPct < 100
-                        ? `Noch €\u00a0${CURRENCY_FMT((targetAnnual - currentNetAnnual) / 12)}\u00a0/ Monat bis zum Ziel`
-                        : '\ud83c\udf89 Dein Portfolio erreicht bereits das Ziel!'}
+                        ? `Noch €{CURRENCY_FMT((targetAnnual - currentNetAnnual) / 12)}/ Monat bis zum Ziel`
+                        : 'Dein Portfolio erreicht bereits das Ziel!'}
                 </div>
             </div>
 
@@ -367,8 +367,8 @@ export default function DividendCalculator({ portfolioData }) {
                             <h2 style={{ fontSize:15, fontWeight:600, margin:0 }}>📈 Wachstums-Projektion</h2>
                             <p style={{ color:'#556070', fontSize:13, marginTop:4, lineHeight:1.5 }}>
                                 {yearsToGoal
-                                    ? `Bei ${growthRate}\u00a0% erreichst du dein Ziel in ~${yearsToGoal}\u00a0Jahren (${new Date().getFullYear() + yearsToGoal})`
-                                    : `Mit ${growthRate}\u00a0% Wachstum wird das Ziel allein durch Dividendenwachstum nicht erreicht. Die n\u00e4chsten 20 Jahre:`}
+                                    ? `Bei ${growthRate}% erreichst du dein Ziel in ~${yearsToGoal} Jahren (${new Date().getFullYear() + yearsToGoal})`
+                                    : `Mit ${growthRate}% Wachstum wird das Ziel allein durch Dividendenwachstum nicht erreicht. Die nächsten 20 Jahre:`}
                             </p>
                         </div>
                         <div style={{ display:'flex', gap:4, flexShrink:0 }}>
