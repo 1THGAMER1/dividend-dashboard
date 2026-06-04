@@ -15,7 +15,7 @@ body {
   overflow-x: hidden;
 }
 
-/* --- KPI grid: flex on desktop (original), 2-col grid only on mobile --- */
+/* --- KPI grid: flex on desktop (original), 2-col grid on mobile --- */
 .kpi-grid {
   display: flex;
   flex-wrap: wrap;
@@ -30,6 +30,20 @@ body {
     gap: 10px;
     margin-bottom: 14px;
   }
+
+  /* Ungerade letzte Card -> volle Breite */
+  .kpi-grid > *:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  /* KpiCard detail + sub untereinander statt gequetscht nebeneinander */
+  .kpi-card-footer {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+  }
+
+  .kpi-card-dot { display: none !important; }
 }
 
 /* --- Nav labels: hide full text on small screens --- */
