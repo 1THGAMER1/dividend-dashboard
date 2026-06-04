@@ -15,19 +15,35 @@ body {
   overflow-x: hidden;
 }
 
-/* --- KPI grid: 2 cols on mobile, auto on larger screens --- */
+/* --- KPI grid: flex on desktop (original), 2-col grid on mobile --- */
 .kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
-@media (min-width: 640px) {
+@media (max-width: 639px) {
   .kpi-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 14px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
   }
+
+  /* Ungerade letzte Card -> volle Breite */
+  .kpi-grid > *:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  /* KpiCard detail + sub untereinander statt gequetscht nebeneinander */
+  .kpi-card-footer {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+  }
+
+  .kpi-card-dot { display: none !important; }
 }
 
 /* --- Nav labels: hide full text on small screens --- */

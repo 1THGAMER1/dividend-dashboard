@@ -16,7 +16,7 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
             minHeight:      110,
             cursor:         onClick ? 'pointer' : 'default',
         }}>
-            {/* Label – immer oben */}
+            {/* Label */}
             <div style={{
                 fontSize:      10,
                 color:         '#556070',
@@ -34,15 +34,21 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
                 lineHeight: isLong ? 1.35 : 1,
                 wordBreak:  'break-word',
                 margin:     '8px 0 4px 0',
+                whiteSpace: 'nowrap',
+                overflow:   'hidden',
+                textOverflow: 'ellipsis',
             }}>
                 {value}
             </div>
 
-            {/* Detail links · Sub rechts */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            {/* Detail + Sub */}
+            <div
+                className="kpi-card-footer"
+                style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap: 6, flexWrap:'wrap' }}
+            >
                 {detail && (
-                    <div style={{ fontSize:13, color:'#6a7f94', display:'flex', alignItems:'center', gap:6 }}>
-                        <span>{detail.label}</span>
+                    <div style={{ fontSize:13, color:'#6a7f94', display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                        <span style={{ whiteSpace:'nowrap' }}>{detail.label}</span>
                         <span style={{
                             color:        detail.color || '#7c9db5',
                             fontWeight:   700,
@@ -50,26 +56,23 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
                             borderRadius: 4,
                             padding:      '2px 7px',
                             fontSize:     13,
+                            whiteSpace:   'nowrap',
                         }}>
                             {detail.value}
                         </span>
                     </div>
                 )}
                 {detail && sub && (
-                    <div style={{
-                        width:           4,
-                        height:          4,
-                        borderRadius:    '50%',
-                        background:      '#2e3f52',
-                        flexShrink:      0,
-                    }} />
+                    <div
+                        className="kpi-card-dot"
+                        style={{ width:4, height:4, borderRadius:'50%', background:'#2e3f52', flexShrink:0 }}
+                    />
                 )}
                 {sub && (
                     <div style={{
                         fontSize:   subHighlight ? 13 : 11,
                         color:      subHighlight ? '#94a3b8' : '#3d5266',
                         fontWeight: subHighlight ? 600 : 400,
-
                     }}>
                         {sub}
                     </div>
