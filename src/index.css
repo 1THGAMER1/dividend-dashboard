@@ -1,2 +1,66 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0f1117; color: #e0e6f0; font-family: "Segoe UI", sans-serif; }
+/* --- Reset & base --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f1420;
+  color: #c8d4e0;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+/* --- KPI grid: 2 cols on mobile, auto on larger screens --- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+}
+
+/* --- Nav labels: hide full text on small screens --- */
+.nav-full-label  { display: inline; }
+.nav-short-label { display: none; }
+
+@media (max-width: 480px) {
+  .nav-full-label  { display: none; }
+  .nav-short-label { display: inline; }
+  .nav-status      { display: none !important; }
+}
+
+/* --- Positions table / card toggle --- */
+.positions-mobile  { display: none; }
+.positions-desktop { display: block; }
+
+@media (max-width: 700px) {
+  .positions-mobile  { display: block; }
+  .positions-desktop { display: none; }
+}
+
+/* --- Charts & heatmap: horizontal scroll on mobile --- */
+.chart-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.heatmap-inner {
+  min-width: 480px;
+}
+
+/* --- Scrollbars --- */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: #0f1420; }
+::-webkit-scrollbar-thumb  { background: #2a3a50; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3b5268; }

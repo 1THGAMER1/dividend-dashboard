@@ -25,7 +25,7 @@ const typeColor = label => {
 const YEAR_COLORS = ['#009991','#3b82f6','#a78bfa','#f472b6','#fb923c','#facc15']
 
 function DividendHistoryPanel({ holding }) {
-    const { monthly, gross, name } = holding
+    const { monthly } = holding
     if (!monthly || Object.keys(monthly).length === 0) {
         return <div style={{ color:'#556070', fontSize:13, padding:'16px 0' }}>Keine Verlaufsdaten vorhanden.</div>
     }
@@ -33,7 +33,6 @@ function DividendHistoryPanel({ holding }) {
     const years = Object.keys(monthly).map(Number).sort((a, b) => a - b)
     const currentYear = new Date().getFullYear()
 
-    // Für jedes Jahr: Netto pro Monat
     const yearData = years.map((y, idx) => ({
         year: y,
         color: YEAR_COLORS[idx % YEAR_COLORS.length],
@@ -42,104 +41,101 @@ function DividendHistoryPanel({ holding }) {
 
     const allValues = yearData.flatMap(yd => yd.months)
     const maxVal    = Math.max(...allValues, 0.01)
-    const totalNet  = allValues.reduce((s, v) => s + v, 0)
+    const CHART_H   = 100
 
-    // Jahreszusammenfassung
     const yearSums = yearData.map(yd => ({
         year:  yd.year,
         color: yd.color,
         net:   yd.months.reduce((s, v) => s + v, 0),
     }))
 
-    const CHART_H = 120
-
     return (
-        <div style={{ padding:'20px 10px 10px', display:'flex', flexDirection:'column', gap:20 }}>
+        <div style={{ padding:'16px 4px 8px', display:'flex', flexDirection:'column', gap:14 }}>
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                {yearData.map(yd => (
+                    <div key={yd.year} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11 }}>
+                        <div style={{ width:10, height:10, borderRadius:2, background: yd.color }} />
+                        <span style={{ color: yd.year === currentYear ? '#e0e6f0' : '#7a8ba0', fontWeight: yd.year === currentYear ? 600 : 400 }}>{yd.year}</span>
+                    </div>
+                ))}
+            </div>
 
-            {/* Monatlicher Verlauf */}
-            <div>
-                <div style={{ fontSize:12, color:'#556070', marginBottom:12, letterSpacing:'0.05em', textTransform:'uppercase' }}>
-                    Monatlicher Dividendenverlauf
-                </div>
-
-                {/* Legende */}
-                <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:12 }}>
-                    {yearData.map(yd => (
-                        <div key={yd.year} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11 }}>
-                            <div style={{ width:10, height:10, borderRadius:2, background: yd.color }} />
-                            <span style={{ color: yd.year === currentYear ? '#e0e6f0' : '#7a8ba0', fontWeight: yd.year === currentYear ? 600 : 400 }}>
-                                {yd.year}
-                            </span>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Chart: gruppierte Balken pro Monat */}
-                <div style={{ display:'flex', alignItems:'flex-end', gap:4 }}>
+            <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+                <div style={{ display:'flex', alignItems:'flex-end', gap:3, minWidth:320 }}>
                     {MONTHS_SHORT.map((mon, mIdx) => {
                         const hasAny = yearData.some(yd => yd.months[mIdx] > 0)
                         return (
                             <div key={mon} style={{ flex:'1 0 auto', display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                                {/* Balken */}
                                 <div style={{ display:'flex', alignItems:'flex-end', gap:1, height:CHART_H }}>
                                     {yearData.map(yd => {
                                         const val = yd.months[mIdx]
                                         const h   = Math.max(val > 0 ? 3 : 0, (val / maxVal) * CHART_H)
                                         return (
-                                            <div
-                                                key={yd.year}
-                                                title={`${mon} ${yd.year}: ${fmt(val)}`}
-                                                style={{
-                                                    width:         Math.max(6, Math.floor(24 / yearData.length)),
-                                                    height:        h,
-                                                    borderRadius:  '3px 3px 0 0',
-                                                    background:    val > 0 ? yd.color : 'transparent',
-                                                    opacity:       yd.year === currentYear ? 1 : 0.65,
-                                                    transition:    'opacity 0.2s',
-                                                    cursor:        val > 0 ? 'default' : 'default',
-                                                    alignSelf:     'flex-end',
-                                                }}
-                                            />
+                                            <div key={yd.year} title={`${mon} ${yd.year}: ${fmt(val)}`} style={{
+                                                width: Math.max(6, Math.floor(24 / yearData.length)),
+                                                height: h, borderRadius:'3px 3px 0 0',
+                                                background: val > 0 ? yd.color : 'transparent',
+                                                opacity: yd.year === currentYear ? 1 : 0.65,
+                                                alignSelf: 'flex-end',
+                                            }} />
                                         )
                                     })}
                                 </div>
-                                {/* Monats-Label */}
-                                <span style={{ fontSize:9, color: hasAny ? '#556070' : '#2a3a50', marginTop:4 }}>{mon}</span>
+                                <span style={{ fontSize:9, color: hasAny ? '#556070' : '#2a3a50', marginTop:3 }}>{mon}</span>
                             </div>
                         )
                     })}
                 </div>
             </div>
 
-            {/* Jahreszusammenfassung */}
-            <div>
-                <div style={{ fontSize:12, color:'#556070', marginBottom:10, letterSpacing:'0.05em', textTransform:'uppercase' }}>
-                    Jährliche Summe
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {yearSums.map(ys => (
+                    <div key={ys.year} style={{
+                        background:'#0f1420', border:`1px solid ${ys.year === currentYear ? ys.color + '60' : '#1e2a3a'}`,
+                        borderRadius:8, padding:'8px 12px', minWidth:68,
+                    }}>
+                        <div style={{ fontSize:11, color: ys.year === currentYear ? ys.color : '#3d5266', marginBottom:3, fontWeight: ys.year === currentYear ? 600 : 400 }}>{ys.year}</div>
+                        <div style={{ fontSize:13, fontWeight:700, color: ys.net > 0 ? '#c8d4e0' : '#3d5266' }}>{ys.net > 0 ? fmt(ys.net) : '–'}</div>
+                        {ys.net > 0 && <div style={{ fontSize:10, color:'#3d5266', marginTop:2 }}>≈ {fmt(ys.net / 12)} / Mo</div>}
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+/* Mobile card view */
+function PositionCard({ p, isOpen, onToggle }) {
+    const label = typeLabel(p.type, p.name)
+    const { bg, color } = typeColor(label)
+    return (
+        <div style={{ background: isOpen ? '#1a2540' : '#161b27', border:'1px solid #222d3d', borderRadius:10, marginBottom:8, overflow:'hidden' }}>
+            <div onClick={onToggle} style={{ padding:'12px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:10, color:'#3d5266', transform: isOpen ? 'rotate(90deg)' : 'none', transition:'transform 0.2s', display:'inline-block', userSelect:'none', flexShrink:0 }}>▶</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ color:'#c8d4e0', fontSize:13, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {p.ticker
+                            ? <a href={`https://etfchecker.netlify.app/?ticker=${p.ticker}`} target="_blank" rel="noopener noreferrer" style={{ color:'#60a5fa', textDecoration:'none' }} onClick={e => e.stopPropagation()}>{p.name}</a>
+                            : p.name
+                        }
+                    </div>
+                    <div style={{ display:'flex', gap:6, marginTop:4, flexWrap:'wrap', alignItems:'center' }}>
+                        <span style={{ display:'inline-block', padding:'1px 7px', borderRadius:10, fontSize:10, background:bg, color }}>{label}</span>
+                        {p.yield != null && <span style={{ fontSize:11, color:'#facc15' }}>Pers. {fmtYield(p.yield)}</span>}
+                        {p.assetYield != null && <span style={{ fontSize:11, color:'#38bdf8' }}>Yield {fmtYield(p.assetYield)}</span>}
+                    </div>
                 </div>
-                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {yearSums.map(ys => (
-                        <div key={ys.year} style={{
-                            background:   '#0f1420',
-                            border:       `1px solid ${ys.year === currentYear ? ys.color + '60' : '#1e2a3a'}`,
-                            borderRadius: 8,
-                            padding:      '8px 14px',
-                            minWidth:     80,
-                        }}>
-                            <div style={{ fontSize:11, color: ys.year === currentYear ? ys.color : '#3d5266', marginBottom:3, fontWeight: ys.year === currentYear ? 600 : 400 }}>
-                                {ys.year}
-                            </div>
-                            <div style={{ fontSize:14, fontWeight:700, color: ys.net > 0 ? '#c8d4e0' : '#3d5266' }}>
-                                {ys.net > 0 ? fmt(ys.net) : '–'}
-                            </div>
-                            {ys.net > 0 && (
-                                <div style={{ fontSize:10, color:'#3d5266', marginTop:2 }}>
-                                    ≈ {fmt(ys.net / 12)} / Mo
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div style={{ color:'#22c55e', fontWeight:700, fontSize:14 }}>{fmt(p.net)}</div>
+                    <div style={{ fontSize:11, color:'#7a8ba0', marginTop:2 }}>{fmt(p.gross)}</div>
+                    {p.tax > 0 && <div style={{ fontSize:10, color:'#fb923c' }}>-{fmt(p.tax)}</div>}
                 </div>
             </div>
+            {isOpen && (
+                <div style={{ borderTop:'1px solid #222d3d', background:'#1a2540', padding:'0 6px 12px' }}>
+                    <DividendHistoryPanel holding={p.holding} />
+                </div>
+            )}
         </div>
     )
 }
@@ -150,7 +146,6 @@ export default function PositionsTable({ byHolding = {}, kpiRange = 'all' }) {
 
     const positions = Object.entries(byHolding).map(([isin, h]) => {
         let net = 0, gross = 0, tax = 0
-
         for (const [year, months] of Object.entries(h.monthly || {})) {
             for (let m = 0; m < 12; m++) {
                 const date = new Date(+year, m, 1)
@@ -162,126 +157,80 @@ export default function PositionsTable({ byHolding = {}, kpiRange = 'all' }) {
                 tax   += h.tax?.[year]?.[m]   || 0
             }
         }
-
         tax = gross - net
-
-        return {
-            isin,
-            holding:    h,
-            name:       h.name       || isin,
-            type:       h.type       || 'security',
-            ticker:     h.ticker     || null,
-            yield:      h.yield      ?? null,
-            assetYield: h.assetYield ?? null,
-            net, gross, tax,
-        }
+        return { isin, holding:h, name:h.name||isin, type:h.type||'security', ticker:h.ticker||null, yield:h.yield??null, assetYield:h.assetYield??null, net, gross, tax }
     })
         .filter(p => p.net > 0)
         .sort((a, b) => b.net - a.net)
 
-    const COLS = 6
+    const toggle = isin => setExpandedRow(prev => prev === isin ? null : isin)
 
     return (
-        <div style={{ background:'#161b27', borderRadius:12, padding:20, border:'1px solid #222d3d', marginBottom:20 }}>
-            <h2 style={{ fontSize:15, fontWeight:600, color:'#c8d4e0', marginBottom:16 }}>Dividenden nach Positionen</h2>
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                <thead>
-                <tr>
-                    {['Holding','Typ','Pers. Rendite','Div. Yield','Netto','Brutto'].map((h, i) => (
-                        <th key={h} style={{
-                            color:'#7a8ba0', fontWeight:500, padding:'6px 10px',
-                            borderBottom:'1px solid #222d3d', fontSize:12,
-                            textAlign: i < 2 ? 'left' : 'right'
-                        }}>{h}</th>
-                    ))}
-                </tr>
-                </thead>
-                <tbody>
-                {positions.map(p => {
-                    const label    = typeLabel(p.type, p.name)
-                    const { bg, color } = typeColor(label)
-                    const isOpen   = expandedRow === p.isin
-                    const toggle   = () => setExpandedRow(isOpen ? null : p.isin)
+        <div style={{ marginBottom:20 }}>
+            <h2 style={{ fontSize:15, fontWeight:600, color:'#c8d4e0', marginBottom:14 }}>Dividenden nach Positionen</h2>
 
-                    return (
-                        <>
-                            {/* Hauptzeile */}
-                            <tr
-                                key={p.isin}
-                                onClick={toggle}
-                                style={{
-                                    cursor:     'pointer',
-                                    background: isOpen ? '#1a2540' : 'transparent',
-                                    transition: 'background 0.15s',
-                                }}
-                                onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = '#111827' }}
-                                onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = 'transparent' }}
-                            >
-                                <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233' }}>
-                                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                                        {/* Expand-Pfeil */}
-                                        <span style={{
-                                            fontSize:     10,
-                                            color:        '#3d5266',
-                                            transform:    isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-                                            transition:   'transform 0.2s',
-                                            display:      'inline-block',
-                                            lineHeight:   1,
-                                            userSelect:   'none',
-                                        }}>▶</span>
-                                        {p.ticker
-                                            ? <a
-                                                href={`https://etfchecker.netlify.app/?ticker=${p.ticker}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                style={{ color:'#60a5fa', textDecoration:'none' }}
-                                                onClick={e => e.stopPropagation()}
-                                                onMouseOver={e => e.currentTarget.style.textDecoration='underline'}
-                                                onMouseOut={e  => e.currentTarget.style.textDecoration='none'}
-                                            >
-                                                {p.name}
-                                            </a>
-                                            : <span style={{ color:'#c8d4e0' }}>{p.name}</span>
-                                        }
-                                    </div>
-                                </td>
-                                <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233' }}>
-                                    <span style={{ display:'inline-block', padding:'2px 8px', borderRadius:10, fontSize:11, background:bg, color }}>
-                                        {label}
-                                    </span>
-                                </td>
-                                <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233', textAlign:'right', color: p.yield != null ? '#facc15' : '#7a8ba0', fontWeight:600 }}>
-                                    {fmtYield(p.yield)}
-                                </td>
-                                <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233', textAlign:'right', color: p.assetYield != null ? '#38bdf8' : '#7a8ba0', fontWeight:600 }}>
-                                    {fmtYield(p.assetYield)}
-                                </td>
-                                <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233', textAlign:'right', color:'#22c55e', fontWeight:600 }}>
-                                    {fmt(p.net)}
-                                </td>
-                                <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233', textAlign:'right' }}>
-                                    <div>{fmt(p.gross)}</div>
-                                    <div style={{ fontSize:11, color:'#fb923c', marginTop:2 }}>-{fmt(p.tax)} Steuern</div>
-                                </td>
-                            </tr>
+            {/* Mobile: cards */}
+            <div className="positions-mobile">
+                {positions.map(p => (
+                    <PositionCard key={p.isin} p={p} isOpen={expandedRow === p.isin} onToggle={() => toggle(p.isin)} />
+                ))}
+            </div>
 
-                            {/* Expanded Detail-Panel */}
-                            {isOpen && (
-                                <tr key={p.isin + '_detail'}>
-                                    <td colSpan={COLS} style={{
-                                        padding:      '0 10px 16px',
-                                        borderBottom: '1px solid #222d3d',
-                                        background:   '#1a2540',
-                                    }}>
-                                        <DividendHistoryPanel holding={p.holding} />
+            {/* Desktop: table */}
+            <div className="positions-desktop" style={{ background:'#161b27', borderRadius:12, padding:20, border:'1px solid #222d3d' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                    <thead>
+                    <tr>
+                        {['Holding','Typ','Pers. Rendite','Div. Yield','Netto','Brutto'].map((h, i) => (
+                            <th key={h} style={{ color:'#7a8ba0', fontWeight:500, padding:'6px 10px', borderBottom:'1px solid #222d3d', fontSize:12, textAlign: i < 2 ? 'left' : 'right' }}>{h}</th>
+                        ))}
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {positions.map(p => {
+                        const label = typeLabel(p.type, p.name)
+                        const { bg, color } = typeColor(label)
+                        const isOpen = expandedRow === p.isin
+                        return (
+                            <>
+                                <tr key={p.isin} onClick={() => toggle(p.isin)}
+                                    style={{ cursor:'pointer', background: isOpen ? '#1a2540' : 'transparent', transition:'background 0.15s' }}
+                                    onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = '#111827' }}
+                                    onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = 'transparent' }}
+                                >
+                                    <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233' }}>
+                                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                                            <span style={{ fontSize:10, color:'#3d5266', transform: isOpen ? 'rotate(90deg)' : 'none', transition:'transform 0.2s', display:'inline-block', userSelect:'none' }}>▶</span>
+                                            {p.ticker
+                                                ? <a href={`https://etfchecker.netlify.app/?ticker=${p.ticker}`} target="_blank" rel="noopener noreferrer" style={{ color:'#60a5fa', textDecoration:'none' }} onClick={e => e.stopPropagation()} onMouseOver={e => e.currentTarget.style.textDecoration='underline'} onMouseOut={e => e.currentTarget.style.textDecoration='none'}>{p.name}</a>
+                                                : <span style={{ color:'#c8d4e0' }}>{p.name}</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233' }}>
+                                        <span style={{ display:'inline-block', padding:'2px 8px', borderRadius:10, fontSize:11, background:bg, color }}>{label}</span>
+                                    </td>
+                                    <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233', textAlign:'right', color: p.yield != null ? '#facc15' : '#7a8ba0', fontWeight:600 }}>{fmtYield(p.yield)}</td>
+                                    <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233', textAlign:'right', color: p.assetYield != null ? '#38bdf8' : '#7a8ba0', fontWeight:600 }}>{fmtYield(p.assetYield)}</td>
+                                    <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233', textAlign:'right', color:'#22c55e', fontWeight:600 }}>{fmt(p.net)}</td>
+                                    <td style={{ padding:'8px 10px', borderBottom: isOpen ? 'none' : '1px solid #1a2233', textAlign:'right' }}>
+                                        <div>{fmt(p.gross)}</div>
+                                        <div style={{ fontSize:11, color:'#fb923c', marginTop:2 }}>-{fmt(p.tax)} Steuern</div>
                                     </td>
                                 </tr>
-                            )}
-                        </>
-                    )
-                })}
-                </tbody>
-            </table>
+                                {isOpen && (
+                                    <tr key={p.isin + '_detail'}>
+                                        <td colSpan={6} style={{ padding:'0 10px 16px', borderBottom:'1px solid #222d3d', background:'#1a2540' }}>
+                                            <DividendHistoryPanel holding={p.holding} />
+                                        </td>
+                                    </tr>
+                                )}
+                            </>
+                        )
+                    })}
+                    </tbody>
+                </table>
+            </div>
         </div>
     )
 }

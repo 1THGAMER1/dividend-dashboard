@@ -24,16 +24,16 @@ const KPI_RANGES = [
 ]
 
 const NAV_TABS = [
-  { id: 'dashboard',  label: '📊 Dashboard'  },
-  { id: 'calendar',   label: '🗓 Kalender'   },
-  { id: 'calculator', label: '🧮 Rechner'    },
+  { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
+  { id: 'calendar',   emoji: '🗓',  label: 'Kalender'   },
+  { id: 'calculator', emoji: '🧮', label: 'Rechner'    },
 ]
 
 const STATUS_INFO = {
-  live:  { color: '#22c55e', text: '● Live',      tooltip: 'Frische Daten direkt von Parqet — gerade eben geladen.' },
-  cache: { color: '#60a5fa', text: '● Cache',     tooltip: 'Gespeicherte Daten aus der Datenbank. Klicke „Aktualisieren“ für neue Daten.' },
-  stale: { color: '#fb923c', text: '◑ Veraltet',  tooltip: 'Die Daten sind älter als 24 Stunden. Klicke „Aktualisieren“, um sie zu erneuern.' },
-  error: { color: '#fb923c', text: '○ Fehler',    tooltip: 'Daten konnten nicht geladen werden. Bitte Aktualisieren versuchen.' },
+  live:  { color: '#22c55e', text: '● Live',     tooltip: 'Frische Daten direkt von Parqet.' },
+  cache: { color: '#60a5fa', text: '● Cache',    tooltip: 'Gespeicherte Daten. Klicke Aktualisieren.' },
+  stale: { color: '#fb923c', text: '◑ Veraltet', tooltip: 'Älter als 24h. Bitte aktualisieren.' },
+  error: { color: '#fb923c', text: '○ Fehler',   tooltip: 'Laden fehlgeschlagen.' },
 }
 
 function getStatusIndicator(dataSource) {
@@ -196,49 +196,54 @@ export default function App() {
 
   const yoy      = calcYoY()
   const trueCagr = calcTrueCagr()
-  const cagrTotal   = yoy
-  const cagrOrganic = null
 
   const portfolioData = {
     currentValue,
     totalDividendsNet:     calcForecastNext12mNet(),
     dividendYield:         ((dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0) + 0.01) / 100,
     forecastDividendYield: currentValue > 0 ? calcForecastNext12mNet() / currentValue : 0,
-    cagrTotal,
-    cagrOrganic,
+    cagrTotal:   yoy,
+    cagrOrganic: null,
   }
 
   const statusIndicator = getStatusIndicator(dataSource)
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f1420' }}>
+
+      {/* ── NAV ── */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#161b27', borderBottom: '1px solid #1e2a3a',
-        padding: '10px 24px', position: 'sticky', top: 0, zIndex: 100,
+        padding: '0 10px', height: 52,
+        position: 'sticky', top: 0, zIndex: 100,
       }}>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 4 }}>
           {NAV_TABS.map(tab => (
             <button key={tab.id} onClick={() => setPage(tab.id)} style={{
               background: page === tab.id ? '#009991' : 'transparent',
               color: page === tab.id ? 'white' : '#556070',
-              border: 'none', borderRadius: 8, padding: '6px 18px',
-              cursor: 'pointer', fontWeight: 600, fontSize: 13, transition: 'all 0.2s',
+              border: 'none', borderRadius: 8,
+              padding: '6px 10px',
+              cursor: 'pointer', fontWeight: 600, fontSize: 13,
+              transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 5,
             }}>
-              {tab.label}
+              <span>{tab.emoji}</span>
+              <span className="nav-full-label">{tab.label}</span>
             </button>
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {lastUpdated && (
             <div
+              className="nav-status"
               style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
               onMouseEnter={() => setTooltipVisible(true)}
               onMouseLeave={() => setTooltipVisible(false)}
             >
-              <span style={{ color: statusIndicator.color, fontSize: 12, cursor: 'default', userSelect: 'none' }}>
-                {statusIndicator.text} · {lastUpdated.toLocaleTimeString('de-DE')}
+              <span style={{ color: statusIndicator.color, fontSize: 12, cursor: 'default', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                {statusIndicator.text} · {lastUpdated.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
               </span>
               {tooltipVisible && (
                 <div style={{
@@ -260,16 +265,19 @@ export default function App() {
           <button onClick={loadData} disabled={loading} style={{
             background: loading ? '#1a2233' : '#1e3a5f',
             border: '1px solid #3b82f6', color: '#93c5fd',
-            padding: '7px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+            padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
+            whiteSpace: 'nowrap',
           }}>
-            {loading ? '⟳ Lade…' : '↻ Aktualisieren'}
+            <span>{loading ? '⟳' : '↻'}</span>
+            <span className="nav-full-label" style={{ marginLeft: 4 }}>{loading ? 'Lade…' : 'Aktualisieren'}</span>
           </button>
           <button onClick={logout} style={{
             background: 'transparent', border: '1px solid #2a3a50',
-            color: '#7a8ba0', padding: '7px 14px', borderRadius: 8,
-            cursor: 'pointer', fontSize: 13,
+            color: '#7a8ba0', padding: '6px 10px', borderRadius: 8,
+            cursor: 'pointer', fontSize: 12,
           }}>
-            Abmelden
+            <span className="nav-full-label">Abmelden</span>
+            <span className="nav-short-label">✕</span>
           </button>
         </div>
       </nav>
@@ -277,9 +285,9 @@ export default function App() {
       {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
 
       {page === 'calendar' && (
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 20px' }}>
-          <div style={{ marginBottom: 24 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
+          <div style={{ marginBottom: 20 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
             <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
           </div>
           <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
@@ -288,12 +296,10 @@ export default function App() {
       )}
 
       {page === 'dashboard' && (
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 20px' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 }}>
-            <div>
-              <h1 style={{ fontSize:22, fontWeight:700, color:'#e0e6f0' }}>📈 Dividenden Dashboard</h1>
-              <p style={{ color:'#7a8ba0', fontSize:13, marginTop:4 }}>Portfolio-Übersicht · Nettowerte</p>
-            </div>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
+          <div style={{ marginBottom: 16 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
+            <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Portfolio-Übersicht · Nettowerte</p>
           </div>
 
           {error && (
@@ -311,7 +317,7 @@ export default function App() {
 
           {Object.keys(monthly).length > 0 && (
             <>
-              <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+              <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
                 {KPI_RANGES.map(({ key, label }) => (
                   <button key={key} onClick={() => setKpiRange(key)} style={{
                     padding:'5px 16px', borderRadius:20, fontSize:12, cursor:'pointer',
@@ -324,7 +330,7 @@ export default function App() {
                 ))}
               </div>
 
-              <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:20 }}>
+              <div className="kpi-grid">
                 <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
                          detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
                 <KpiCard label="Brutto" value={k.gross} color="#60a5fa"
@@ -340,7 +346,7 @@ export default function App() {
                   value={
                     yoy === null
                       ? '–'
-                      : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'
+                      : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'
                   }
                   color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
                   sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
@@ -348,10 +354,10 @@ export default function App() {
               </div>
 
               {trueCagr !== null && (
-                <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:20 }}>
+                <div className="kpi-grid">
                   <KpiCard
                     label={`CAGR (${trueCagr.years}J)`}
-                    value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
+                    value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
                     color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
                     sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
                   />
@@ -361,7 +367,7 @@ export default function App() {
               <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
                 Prognose · Nächste 12 Monate
               </p>
-              <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:24 }}>
+              <div className="kpi-grid">
                 <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6"
                          detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }}
                          sub="Prognose basierend auf Vorjahren" />
