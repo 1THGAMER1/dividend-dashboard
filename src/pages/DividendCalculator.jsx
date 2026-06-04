@@ -245,7 +245,7 @@ export default function DividendCalculator({ portfolioData }) {
             <div style={{ marginBottom:24 }}>
                 <h1 style={{ fontSize:20, fontWeight:700, margin:0 }}>🧮 Dividenden-Rechner</h1>
                 <p style={{ color:'#556070', fontSize:14, marginTop:6 }}>
-                    Rendite: <strong style={{ color:'#5bcec2' }}>{yieldPct}%</strong>
+                    Rendite: <strong style={{ color:'#5bcec2' }}>{yieldPct}% </strong>
                     <span style={{ color:'#3d5266', marginLeft:8, fontSize:12 }}>({useForecastYield ? 'Prognose' : 'Aktuell'})</span>
                 </p>
             </div>
@@ -332,7 +332,7 @@ export default function DividendCalculator({ portfolioData }) {
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10, marginBottom:20 }}>
-                <ResultCard label="Ben\u00f6tigtes Kapital" value={`€{CURRENCY_FMT(requiredCapital)}`} sub={`f ${targetMonthly}€/Monat netto`} accent />
+                <ResultCard label="Benötigtes Kapital" value={`€{CURRENCY_FMT(requiredCapital)}`} sub={`f ${targetMonthly}€/Monat netto`} accent />
                 <ResultCard label="Noch fehlendes Kapital"
                     value={additionalCapital > 0 ? `€{CURRENCY_FMT(additionalCapital)}` : ' Ziel erreicht!'}
                     sub={additionalCapital > 0 ? `aktuell: €{CURRENCY_FMT(currentValue)}` : undefined} />
