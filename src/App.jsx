@@ -24,16 +24,16 @@ const KPI_RANGES = [
 ]
 
 const NAV_TABS = [
-  { id: 'dashboard',  emoji: '\ud83d\udcca', label: 'Dashboard'  },
-  { id: 'calendar',   emoji: '\ud83d\uddd3',  label: 'Kalender'   },
-  { id: 'calculator', emoji: '\ud83e\uddee', label: 'Rechner'    },
+  { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
+  { id: 'calendar',   emoji: '🗓',  label: 'Kalender'   },
+  { id: 'calculator', emoji: '🧮', label: 'Rechner'    },
 ]
 
 const STATUS_INFO = {
-  live:  { color: '#22c55e', text: '\u25cf Live',     tooltip: 'Frische Daten direkt von Parqet.' },
-  cache: { color: '#60a5fa', text: '\u25cf Cache',    tooltip: 'Gespeicherte Daten. Klicke Aktualisieren.' },
-  stale: { color: '#25d0', text: '\u25d1 Veraltet', tooltip: 'Älter als 24h. Bitte aktualisieren.' },
-  error: { color: '#fb923c', text: '\u25cb Fehler',   tooltip: 'Laden fehlgeschlagen.' },
+  live:  { color: '#22c55e', text: '● Live',     tooltip: 'Frische Daten direkt von Parqet.' },
+  cache: { color: '#60a5fa', text: '● Cache',    tooltip: 'Gespeicherte Daten. Klicke Aktualisieren.' },
+  stale: { color: '#fb923c', text: '◑ Veraltet', tooltip: 'Älter als 24h. Bitte aktualisieren.' },
+  error: { color: '#fb923c', text: '○ Fehler',   tooltip: 'Laden fehlgeschlagen.' },
 }
 
 function getStatusIndicator(dataSource) {
@@ -197,15 +197,6 @@ export default function App() {
   const yoy      = calcYoY()
   const trueCagr = calcTrueCagr()
 
-  // Basis für Wachstumsprojektion: letztes volles Kalenderjahr (oder rolling 12M als Fallback)
-  const calcActualNet12m = () => {
-    const lastFullYear = cy - 1
-    const lastYearTotal = yearTotal(monthly, lastFullYear)
-    if (lastYearTotal > 0) return lastYearTotal
-    // Fallback: rolling 12M bis heute
-    return rolling12m(monthly, cy, cm)
-  }
-
   // cagrTotal für den Rechner: YoY nur wenn plausibel (<= 100%), sonst trueCagr, sonst null
   const calcReasonableCagr = () => {
     if (yoy !== null && yoy <= 100) return yoy
@@ -215,7 +206,7 @@ export default function App() {
 
   const portfolioData = {
     currentValue,
-    totalDividendsNet:     calcActualNet12m(),
+    totalDividendsNet:     calcForecastNext12mNet(),
     dividendYield:         ((dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0) + 0.01) / 100,
     forecastDividendYield: currentValue > 0 ? calcForecastNext12mNet() / currentValue : 0,
     cagrTotal:   calcReasonableCagr(),
