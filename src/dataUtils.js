@@ -1,4 +1,4 @@
-import { resolveIsin } from './isinMerge'
+import { buildIsinMergeMap, makeResolver } from './isinMerge'
 
 export const MONTHS = ['Jan','Feb','Mrz','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
 
@@ -29,15 +29,18 @@ export function toCumulative(monthly) {
   return result
 }
 
-export function buildForecast(cum, activities, buyActivities = []) {
+export function buildForecast(cum, activities, buyActivities = [], names = {}) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
   const ny = cy + 1
 
+  // Auto-Merge: gleicher Name = gleiche Position
+  const mergeMap = buildIsinMergeMap(activities, names)
+  const resolve  = makeResolver(mergeMap)
+
   const byIsin = {}
   for (const a of activities) {
-    // ISIN normalisieren (Merge-Map anwenden)
-    const isin = resolveIsin(a.asset?.isin || a.asset?.symbol || 'unknown')
+    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
     const d    = new Date(a.datetime)
     const y    = d.getFullYear()
     const m    = d.getMonth()
@@ -50,7 +53,7 @@ export function buildForecast(cum, activities, buyActivities = []) {
 
   const currentSharesFromBuys = {}
   for (const a of buyActivities) {
-    const isin = resolveIsin(a.asset?.isin || a.asset?.symbol || 'unknown')
+    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
     currentSharesFromBuys[isin] = (currentSharesFromBuys[isin] || 0) + (a.shares ?? 0)
   }
 
@@ -98,12 +101,10 @@ export function buildForecast(cum, activities, buyActivities = []) {
     const yearData = byIsin[isin] || {}
     const refYears = [cy - 1, cy - 2]
     const weights  = [0.7, 0.3]
-
     const points = refYears.map(y => {
       const e = yearData[y]?.[month]
       return e && e.shares > 0 ? e.amount / e.shares : null
     })
-
     const validPoints = points.filter(v => v !== null)
     if (validPoints.length === 0) {
       const qStart  = Math.floor(month / 3) * 3
@@ -113,13 +114,10 @@ export function buildForecast(cum, activities, buyActivities = []) {
           const e = yearData[y]?.[qm]
           return e && e.shares > 0 ? e.amount / e.shares : null
         }).filter(v => v !== null)
-        if (qPoints.length > 0) {
-          return qPoints.reduce((a, b) => a + b, 0) / qPoints.length
-        }
+        if (qPoints.length > 0) return qPoints.reduce((a, b) => a + b, 0) / qPoints.length
       }
       return 0
     }
-
     let weightedSum = 0, weightTotal = 0
     points.forEach((v, i) => {
       if (v !== null) { weightedSum += v * weights[i]; weightTotal += weights[i] }
@@ -134,10 +132,6 @@ export function buildForecast(cum, activities, buyActivities = []) {
       const actual = byIsin[isin][cy]?.[m]
       if (actual && actual.amount > 0) {
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
-      } else if (m === cm) {
-        const dps    = estimateDps(isin, m)
-        const shares = currentShares(isin)
-        forecastByHolding[isin][m] = +(dps * shares).toFixed(4)
       } else {
         const dps    = estimateDps(isin, m)
         const shares = currentShares(isin)
@@ -174,17 +168,11 @@ export function buildForecast(cum, activities, buyActivities = []) {
 
   const cumCy = Array(12).fill(null)
   let proj = 0
-  for (let m = 0; m < 12; m++) {
-    proj += monthlyCy[m]
-    cumCy[m] = +proj.toFixed(4)
-  }
+  for (let m = 0; m < 12; m++) { proj += monthlyCy[m]; cumCy[m] = +proj.toFixed(4) }
 
   const cumNy = Array(12).fill(null)
   let projNy = 0
-  for (let m = 0; m < 12; m++) {
-    projNy += monthlyNy[m]
-    cumNy[m] = +projNy.toFixed(4)
-  }
+  for (let m = 0; m < 12; m++) { projNy += monthlyNy[m]; cumNy[m] = +projNy.toFixed(4) }
 
   return {
     cum:              { [cy]: cumCy,     [ny]: cumNy     },
@@ -203,6 +191,10 @@ export function heatColor(value, max) {
 }
 
 export function groupByHolding(activities, names = {}, types = {}, purchaseValues = {}, tickers = {}) {
+  // Auto-Merge: gleicher Name = gleiche Position
+  const mergeMap = buildIsinMergeMap(activities, names)
+  const resolve  = makeResolver(mergeMap)
+
   const palette = [
     '#60a5fa','#a78bfa','#f472b6','#34d399','#fb923c',
     '#facc15','#38bdf8','#f87171','#4ade80','#c084fc',
@@ -210,13 +202,12 @@ export function groupByHolding(activities, names = {}, types = {}, purchaseValue
   ]
   const map = {}
   for (const a of activities) {
-    // ISIN normalisieren (Merge-Map anwenden)
-    const isin   = resolveIsin(a.asset?.isin || a.asset?.symbol || 'unknown')
-    // Namen: zuerst aktuelle ISIN prüfen, dann Original-ISIN, dann Activity-Felder
-    const origIsin = a.asset?.isin || a.asset?.symbol || 'unknown'
-    const name   = names[isin] || names[origIsin] || a.asset?.name || a.asset?.symbol || isin
-    const type   = types[isin] || types[origIsin] || a.holdingAssetType || 'security'
-    const ticker = tickers[isin] || tickers[origIsin] || null
+    const rawIsin = a.asset?.isin || a.asset?.symbol || 'unknown'
+    const isin    = resolve(rawIsin)
+    // Namen: kanonische ISIN zuerst, dann Original, dann Activity
+    const name   = names[isin] || names[rawIsin] || a.asset?.name || a.asset?.symbol || isin
+    const type   = types[isin] || types[rawIsin] || a.holdingAssetType || 'security'
+    const ticker = tickers[isin] || tickers[rawIsin] || null
     const d      = new Date(a.datetime)
     const year   = d.getFullYear()
     const month  = d.getMonth()
@@ -237,11 +228,9 @@ export function groupByHolding(activities, names = {}, types = {}, purchaseValue
   const now = new Date()
   Object.keys(map).forEach((isin, idx) => {
     map[isin].color = palette[idx % palette.length]
-
     const pv       = purchaseValues[isin] ?? 0
     const totalNet = Object.values(map[isin].monthly).flatMap(m => m).reduce((s, v) => s + v, 0)
     map[isin].yield = pv > 0 ? +((totalNet / pv) * 100).toFixed(2) : null
-
     let last12m = 0
     for (const [year, months] of Object.entries(map[isin].monthly)) {
       for (let m = 0; m < 12; m++) {
