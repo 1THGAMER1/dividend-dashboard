@@ -33,7 +33,6 @@ function getStatusIndicator(dataSource) {
   return { color: '#fb923c', text: '○ Fehler' }
 }
 
-// Zählt wie viele Monate im rolling-12m-Fenster tatsächlich Dividenden > 0 hatten
 function countActiveDivMonths(monthly, endYear, endMonth) {
   let count = 0
   for (let i = 0; i < 12; i++) {
@@ -217,9 +216,7 @@ export default function App() {
     const latestDiv   = rolling12m(baseYear, baseMonth)
     const earliestDiv = rolling12m(baseYear - 1, baseMonth)
 
-    // Prüfung 1: Beide Perioden müssen mind. 10€ Dividenden haben
-    const MIN_DIV = 10
-    // Prüfung 2: Mind. 3 aktive Monate in beiden Fenstern
+    const MIN_DIV    = 10
     const MIN_MONTHS = 3
     const activeNow  = countActiveDivMonths(monthly, baseYear, baseMonth)
     const activePrev = countActiveDivMonths(monthly, baseYear - 1, baseMonth)
@@ -229,11 +226,9 @@ export default function App() {
 
     if (!hasEnoughData) return { cagrTotal: null, cagrOrganic: null }
 
-    // CAGR Total
     const growthTotal = (latestDiv / earliestDiv - 1) * 100
     const cagrTotal   = +growthTotal.toFixed(1)
 
-    // CAGR Organisch
     const buyValueNow  = rollingBuyValue12m(baseYear, baseMonth)
     const buyValuePrev = rollingBuyValue12m(baseYear - 1, baseMonth)
 
@@ -242,8 +237,7 @@ export default function App() {
       const yieldNow  = latestDiv  / buyValueNow
       const yieldPrev = earliestDiv / buyValuePrev
       if (yieldPrev > 0) {
-        const growth = (yieldNow / yieldPrev - 1) * 100
-        cagrOrganic = +growth.toFixed(1)
+        cagrOrganic = +((yieldNow / yieldPrev - 1) * 100).toFixed(1)
       }
     }
 
@@ -257,13 +251,11 @@ export default function App() {
     totalDividendsNet:     calcForecastNext12mNet(),
     dividendYield:         ((dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0) + 0.01) / 100,
     forecastDividendYield: currentValue > 0 ? calcForecastNext12mNet() / currentValue : 0,
-    cagrTotal:   cagrTotal   ?? 5,
-    cagrOrganic: cagrOrganic ?? 5,
+    cagrTotal,    // kann null sein
+    cagrOrganic,  // kann null sein
   }
 
   const statusIndicator = getStatusIndicator(dataSource)
-
-  const fmtCagr = val => val === null ? '–' : (val >= 0 ? '+' : '') + String(val).replace('.', ',') + ' %'
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f1420' }}>
@@ -349,6 +341,7 @@ export default function App() {
                 ))}
               </div>
 
+              {/* Zeile 1: 4 Karten */}
               <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginBottom:20 }}>
                 <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
                          detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
@@ -360,16 +353,16 @@ export default function App() {
                   color="#34d399"
                   sub="auf den Einstandskurs"
                 />
-                {topHolder && (
-                  <KpiCard label="Größter Dividendengeber" value={topHolder.name} color="#facc15"
-                           detail={{ label:'Anteil', value:topHolder.share, color:'#facc15' }}
-                           sub={topHolder.value} subHighlight
-                           onClick={() => {
-                             const el = document.getElementById('dividends-table')
-                             window.scrollTo({ top: el.offsetTop - 20, behavior: 'smooth' })
-                           }}
-                  />
-                )}
+                <KpiCard
+                  label="Dividendenwachstum (12M)"
+                  value={
+                    cagrTotal === null
+                      ? '–'
+                      : (cagrTotal >= 0 ? '+' : '') + String(cagrTotal).replace('.', ',') + ' %'
+                  }
+                  color={cagrTotal === null ? '#556070' : cagrTotal >= 0 ? '#22c55e' : '#ef4444'}
+                  sub={cagrTotal === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr'}
+                />
               </div>
 
               <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
@@ -407,18 +400,6 @@ export default function App() {
                   })()}
                   color="#5bcec2"
                   sub="Prognose nächste 12M / Marktwert"
-                />
-                <KpiCard
-                  label="Dividendenwachstum (12M)"
-                  value={fmtCagr(cagrTotal)}
-                  color={cagrTotal === null ? '#7a8ba0' : cagrTotal >= 0 ? '#22c55e' : '#ef4444'}
-                  sub={cagrTotal === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr'}
-                />
-                <KpiCard
-                  label="Organisches Wachstum"
-                  value={fmtCagr(cagrOrganic)}
-                  color={cagrOrganic === null ? '#7a8ba0' : cagrOrganic >= 0 ? '#34d399' : '#ef4444'}
-                  sub={cagrOrganic === null ? 'Nicht genügend Verlaufsdaten' : 'Bereinigt um Neuinvestitionen'}
                 />
               </div>
 
