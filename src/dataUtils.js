@@ -45,7 +45,6 @@ export function buildForecast(cum, activities, buyActivities = []) {
     byIsin[isin][y][m].shares += a.shares ?? 0
   }
 
-  // Aktuelle Anteile aus Buy-Aktivitäten berechnen
   const currentSharesFromBuys = {}
   for (const a of buyActivities) {
     const isin = a.asset?.isin || a.asset?.symbol || 'unknown'
@@ -92,10 +91,8 @@ export function buildForecast(cum, activities, buyActivities = []) {
     }
   }
 
-  // ─── Verbesserte DPS-Schätzung pro Monat ───────────────────────────────────
-  // Gewichtung: letztes Jahr 70%, vorletztes Jahr 30%
-  // Mindestens 2 echte Datenpunkte über alle Jahre nötig
-  // Quarterly-Stabilisierung: wenn Monat 0, aber Nachbarmonat im gleichen Quartal zahlte → Quartalsbetrag / 3 aufteilen
+  // Gewichtete DPS-Schätzung: letztes Jahr 70%, vorletztes 30%
+  // Quarterly-Stabilisierung für Nullmonate
   function estimateDps(isin, month) {
     const yearData = byIsin[isin] || {}
     const refYears = [cy - 1, cy - 2]
@@ -106,11 +103,9 @@ export function buildForecast(cum, activities, buyActivities = []) {
       return e && e.shares > 0 ? e.amount / e.shares : null
     })
 
-    // Mindestens 1 echter Datenpunkt nötig
     const validPoints = points.filter(v => v !== null)
     if (validPoints.length === 0) {
-      // Quarterly-Stabilisierung: schaue ob ein Nachbarmonat im Quartal Daten hat
-      const qStart = Math.floor(month / 3) * 3
+      const qStart  = Math.floor(month / 3) * 3
       const qMonths = [qStart, qStart + 1, qStart + 2].filter(m => m !== month)
       for (const qm of qMonths) {
         const qPoints = refYears.map(y => {
@@ -118,34 +113,38 @@ export function buildForecast(cum, activities, buyActivities = []) {
           return e && e.shares > 0 ? e.amount / e.shares : null
         }).filter(v => v !== null)
         if (qPoints.length > 0) {
-          // Quartalszahlung in diesem Monat vermutet → Betrag direkt verwenden (nicht /3, da quartalsweise)
-          const qAvg = qPoints.reduce((a, b) => a + b, 0) / qPoints.length
-          return qAvg
+          return qPoints.reduce((a, b) => a + b, 0) / qPoints.length
         }
       }
       return 0
     }
 
-    // Gewichteter Durchschnitt (nur verfügbare Jahre)
     let weightedSum = 0, weightTotal = 0
     points.forEach((v, i) => {
-      if (v !== null) {
-        weightedSum  += v * weights[i]
-        weightTotal  += weights[i]
-      }
+      if (v !== null) { weightedSum += v * weights[i]; weightTotal += weights[i] }
     })
     return weightTotal > 0 ? weightedSum / weightTotal : 0
   }
 
+  // forecastByHolding: für jeden ISIN + Monat den erwarteten Betrag
+  // Bereits gezahlte Monate → Ist-Wert
+  // Aktueller Monat → Ist-Wert bereits erhaltener + Prognose für noch nicht gezahlte ISINs
+  // Zukünftige Monate → reine Prognose
   const forecastByHolding = {}
   for (const isin of isins) {
     forecastByHolding[isin] = {}
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
       if (actual && actual.amount > 0) {
-        // Bereits tatsächlich gezahlt → direkt übernehmen
+        // Bereits gezahlt (vergangene Monate ODER bereits im laufenden Monat eingegangen)
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
+      } else if (m === cm) {
+        // Laufender Monat: noch nichts erhalten → Prognose hinzufügen
+        const dps    = estimateDps(isin, m)
+        const shares = currentShares(isin)
+        forecastByHolding[isin][m] = +(dps * shares).toFixed(4)
       } else {
+        // Zukünftiger Monat
         const dps    = estimateDps(isin, m)
         const shares = currentShares(isin)
         forecastByHolding[isin][m] = +(dps * shares).toFixed(4)
@@ -154,12 +153,25 @@ export function buildForecast(cum, activities, buyActivities = []) {
   }
 
   const monthlyCy = Array(12).fill(0)
-  for (let m = 0; m < cm; m++) {
-    monthlyCy[m] = +curYearActuals[m].toFixed(4)
-  }
-  for (let m = cm; m < 12; m++) {
-    const total = isins.reduce((s, isin) => s + (forecastByHolding[isin][m] || 0), 0)
-    monthlyCy[m] = +total.toFixed(4)
+  for (let m = 0; m < 12; m++) {
+    if (m < cm) {
+      // Vergangene Monate: nur Ist-Daten
+      monthlyCy[m] = +curYearActuals[m].toFixed(4)
+    } else if (m === cm) {
+      // Laufender Monat: bereits erhaltene Ist-Daten + Prognose für noch ausstehende Positionen
+      const alreadyReceived = curYearActuals[cm]
+      const stillExpected   = isins.reduce((s, isin) => {
+        const actual = byIsin[isin][cy]?.[cm]
+        // Nur ISINs mitzählen die diesen Monat noch NICHT gezahlt haben
+        if (actual && actual.amount > 0) return s
+        return s + (forecastByHolding[isin][cm] || 0)
+      }, 0)
+      monthlyCy[m] = +(alreadyReceived + stillExpected).toFixed(4)
+    } else {
+      // Zukünftige Monate: reine Prognose
+      const total = isins.reduce((s, isin) => s + (forecastByHolding[isin][m] || 0), 0)
+      monthlyCy[m] = +total.toFixed(4)
+    }
   }
 
   const avgGrowth = (() => {
