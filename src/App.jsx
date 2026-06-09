@@ -14,6 +14,7 @@ import DividendCalculator from './pages/DividendCalculator'
 import UpcomingDividends  from './components/UpcomingDividends'
 import DividendCalendar   from './components/DividendCalendar'
 import SkeletonDashboard  from './components/SkeletonDashboard'
+import EmptyState         from './components/EmptyState'
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -58,7 +59,6 @@ function rolling12m(monthly, endYear, endMonth) {
   return total
 }
 
-// Zentrierter Fullscreen-Spinner für Auth-Schritte (kein Dashboard-Kontext)
 function CenteredSpinner({ text }) {
   return (
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
@@ -122,17 +122,11 @@ export default function App() {
     return () => { active = false }
   }, [appUser])
 
-  // Auth-Vorbereitung: Spinner (kein Dashboard-Kontext vorhanden)
-  if (appUser === undefined || profileLoading) {
-    return <CenteredSpinner text="App wird vorbereitet…" />
-  }
-
-  if (!appUser) return <AppLogin />
-  if (!clientIdReady) return <ParqetSetup onDone={() => setClientIdReady(true)} />
-
-  if (authLoading) return <CenteredSpinner text="Authentifizierung läuft…" />
-
-  if (!loggedIn) return <LoginScreen onLogin={startOAuthFlow} loading={authLoading} error={error} />
+  if (appUser === undefined || profileLoading) return <CenteredSpinner text="App wird vorbereitet…" />
+  if (!appUser)        return <AppLogin />
+  if (!clientIdReady)  return <ParqetSetup onDone={() => setClientIdReady(true)} />
+  if (authLoading)     return <CenteredSpinner text="Authentifizierung läuft…" />
+  if (!loggedIn)       return <LoginScreen onLogin={startOAuthFlow} loading={authLoading} error={error} />
 
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
@@ -210,14 +204,14 @@ export default function App() {
 
   const statusIndicator = getStatusIndicator(dataSource)
 
-  // Daten werden geladen und es gibt noch keine gecachten Daten:
-  // Zeige das vollständige Dashboard-Skeleton statt des Spinners
-  const showSkeleton = loading && Object.keys(monthly).length === 0
+  const hasData      = Object.keys(monthly).length > 0
+  const showSkeleton = loading && !hasData
+  const showEmpty    = !loading && !hasData
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f1420' }}>
 
-      {/* ── NAV ── */}
+      {/* NAV */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#161b27', borderBottom: '1px solid #1e2a3a',
@@ -288,6 +282,7 @@ export default function App() {
         </div>
       </nav>
 
+      {/* PAGES */}
       {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
 
       {page === 'calendar' && (
@@ -296,18 +291,28 @@ export default function App() {
             <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
             <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
           </div>
-          <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
-          <DividendCalendar  forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
+          {showEmpty
+            ? <EmptyState onRefresh={loadData} loading={loading} error={error} />
+            : (
+              <>
+                <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
+                <DividendCalendar  forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
+              </>
+            )
+          }
         </div>
       )}
 
       {page === 'dashboard' && (
         <>
-          {/* Skeleton: ersetzt den alten Spinner beim ersten Laden */}
+          {/* 1. Skeleton: erstes Laden, noch keine Daten */}
           {showSkeleton && <SkeletonDashboard />}
 
-          {/* Echter Inhalt: wird angezeigt sobald Daten vorhanden */}
-          {!showSkeleton && (
+          {/* 2. Empty State: Laden fertig, aber keine Daten */}
+          {showEmpty && <EmptyState onRefresh={loadData} loading={loading} error={error} />}
+
+          {/* 3. Echter Inhalt */}
+          {!showSkeleton && !showEmpty && (
             <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
               <div style={{ marginBottom: 16 }}>
                 <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
@@ -320,102 +325,98 @@ export default function App() {
                 </div>
               )}
 
-              {Object.keys(monthly).length > 0 && (
-                <>
-                  <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
-                    {KPI_RANGES.map(({ key, label }) => (
-                      <button key={key} onClick={() => setKpiRange(key)} style={{
-                        padding:'5px 16px', borderRadius:20, fontSize:12, cursor:'pointer',
-                        border:'1px solid #2a3a50',
-                        background: kpiRange === key ? '#1e3a5f' : 'transparent',
-                        color: kpiRange === key ? '#93c5fd' : '#7a8ba0',
-                      }}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+              <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+                {KPI_RANGES.map(({ key, label }) => (
+                  <button key={key} onClick={() => setKpiRange(key)} style={{
+                    padding:'5px 16px', borderRadius:20, fontSize:12, cursor:'pointer',
+                    border:'1px solid #2a3a50',
+                    background: kpiRange === key ? '#1e3a5f' : 'transparent',
+                    color: kpiRange === key ? '#93c5fd' : '#7a8ba0',
+                  }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-                  <div className="kpi-grid">
-                    <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
-                             detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
-                    <KpiCard label="Brutto" value={k.gross} color="#60a5fa"
-                             detail={{ label:'davon Steuern', value:k.tax, color:'#fb923c' }} />
-                    <KpiCard
-                      label="Dividendenrendite"
-                      value={fmtPct((dividendYield[kpiRange] ?? 0) + 0.01)}
-                      color="#34d399"
-                      sub="auf den Einstandskurs"
-                    />
-                    <KpiCard
-                      label="YoY-Wachstum"
-                      value={
-                        yoy === null
-                          ? '–'
-                          : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'
-                      }
-                      color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
-                      sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
-                    />
-                  </div>
+              <div className="kpi-grid">
+                <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
+                         detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
+                <KpiCard label="Brutto" value={k.gross} color="#60a5fa"
+                         detail={{ label:'davon Steuern', value:k.tax, color:'#fb923c' }} />
+                <KpiCard
+                  label="Dividendenrendite"
+                  value={fmtPct((dividendYield[kpiRange] ?? 0) + 0.01)}
+                  color="#34d399"
+                  sub="auf den Einstandskurs"
+                />
+                <KpiCard
+                  label="YoY-Wachstum"
+                  value={
+                    yoy === null
+                      ? '–'
+                      : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'
+                  }
+                  color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
+                  sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
+                />
+              </div>
 
-                  {trueCagr !== null && (
-                    <div className="kpi-grid">
-                      <KpiCard
-                        label={`CAGR (${trueCagr.years}J)`}
-                        value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
-                        color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
-                        sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
-                      />
-                    </div>
-                  )}
-
-                  <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
-                    Prognose · Nächste 12 Monate
-                  </p>
-                  <div className="kpi-grid">
-                    <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6"
-                             detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }}
-                             sub="Prognose basierend auf Vorjahren" />
-                    <KpiCard
-                      label={`Wachstum ${cy} vs. ${cy - 1}`}
-                      value={(() => {
-                        const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
-                        const actualLastYear = yearTotal(monthly, cy - 1)
-                        if (actualLastYear === 0) return '–'
-                        const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100
-                        return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %'
-                      })()}
-                      color={(() => {
-                        const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
-                        const actualLastYear = yearTotal(monthly, cy - 1)
-                        if (actualLastYear === 0) return '#7a8ba0'
-                        return ((forecastCurrentYear - actualLastYear) / actualLastYear) >= 0 ? '#22c55e' : '#ef4444'
-                      })()}
-                      sub="Prognose Gesamtjahr"
-                    />
-                    <KpiCard
-                      label="Progn. Dividendenrendite"
-                      value={(() => {
-                        const forecastNet = calcForecastNext12mNet()
-                        if (!currentValue || currentValue === 0) return '–'
-                        return fmtPct((forecastNet / currentValue) * 100)
-                      })()}
-                      color="#5bcec2"
-                      sub="Prognose nächste 12M / Marktwert"
-                    />
-                  </div>
-
-                  <DividendChart
-                    monthly={monthly} cum={cum}
-                    forecastCum={forecastCum} forecastMonthly={forecastMonthly}
-                    byHolding={byHolding} forecastByHolding={forecastByHolding}
+              {trueCagr !== null && (
+                <div className="kpi-grid">
+                  <KpiCard
+                    label={`CAGR (${trueCagr.years}J)`}
+                    value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
+                    color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
+                    sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
                   />
-                  <DividendHeatmap monthly={monthly} />
-                  <div id="dividends-table">
-                    <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
-                  </div>
-                </>
+                </div>
               )}
+
+              <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
+                Prognose · Nächste 12 Monate
+              </p>
+              <div className="kpi-grid">
+                <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6"
+                         detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }}
+                         sub="Prognose basierend auf Vorjahren" />
+                <KpiCard
+                  label={`Wachstum ${cy} vs. ${cy - 1}`}
+                  value={(() => {
+                    const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
+                    const actualLastYear = yearTotal(monthly, cy - 1)
+                    if (actualLastYear === 0) return '–'
+                    const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100
+                    return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %'
+                  })()}
+                  color={(() => {
+                    const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
+                    const actualLastYear = yearTotal(monthly, cy - 1)
+                    if (actualLastYear === 0) return '#7a8ba0'
+                    return ((forecastCurrentYear - actualLastYear) / actualLastYear) >= 0 ? '#22c55e' : '#ef4444'
+                  })()}
+                  sub="Prognose Gesamtjahr"
+                />
+                <KpiCard
+                  label="Progn. Dividendenrendite"
+                  value={(() => {
+                    const forecastNet = calcForecastNext12mNet()
+                    if (!currentValue || currentValue === 0) return '–'
+                    return fmtPct((forecastNet / currentValue) * 100)
+                  })()}
+                  color="#5bcec2"
+                  sub="Prognose nächste 12M / Marktwert"
+                />
+              </div>
+
+              <DividendChart
+                monthly={monthly} cum={cum}
+                forecastCum={forecastCum} forecastMonthly={forecastMonthly}
+                byHolding={byHolding} forecastByHolding={forecastByHolding}
+              />
+              <DividendHeatmap monthly={monthly} />
+              <div id="dividends-table">
+                <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
+              </div>
             </div>
           )}
         </>
