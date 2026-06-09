@@ -6,6 +6,13 @@ const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
 const TOKEN_URL    = '/oauth/token'
 const SCOPE        = 'portfolio:read'
 
+// —————————————————————————————————————————————————————————————————
+// Token-Storage:
+//   access_token  → sessionStorage  (kurzlebig, XSS-Angriffe haben nach Tab-Schließen keinen Zugriff mehr)
+//   refresh_token → localStorage    (längerfristig, nötig für automatischen Refresh)
+//   expires_at    → sessionStorage  (gehört logisch zum Access Token)
+// —————————————————————————————————————————————————————————————————
+
 export async function getClientId() {
   if (CLIENT_ID) return CLIENT_ID
 
@@ -94,9 +101,14 @@ export async function handleCallback() {
   const tokens    = await res.json()
   const expiresAt = Date.now() + (tokens.expires_in || 3600) * 1000
 
-  localStorage.setItem('parqet_access_token',  tokens.access_token)
-  localStorage.setItem('parqet_refresh_token', tokens.refresh_token || '')
-  localStorage.setItem('parqet_expires_at',    String(expiresAt))
+  // Access Token → sessionStorage (kurzlebig, sicherer gegen XSS-Diebstahl über Tabs)
+  sessionStorage.setItem('parqet_access_token', tokens.access_token)
+  sessionStorage.setItem('parqet_expires_at',   String(expiresAt))
+
+  // Refresh Token → localStorage (muss Tab-Neustarts überleben)
+  if (tokens.refresh_token) {
+    localStorage.setItem('parqet_refresh_token', tokens.refresh_token)
+  }
 
   sessionStorage.removeItem('pkce_verifier')
   sessionStorage.removeItem('oauth_state')
@@ -105,13 +117,17 @@ export async function handleCallback() {
 }
 
 export async function getAccessToken() {
-  const token        = localStorage.getItem('parqet_access_token')
-  const expiresAt    = Number(localStorage.getItem('parqet_expires_at') || 0)
+  const token        = sessionStorage.getItem('parqet_access_token')
+  const expiresAt    = Number(sessionStorage.getItem('parqet_expires_at') || 0)
   const refreshToken = localStorage.getItem('parqet_refresh_token')
   const clientId     = await getClientId()
 
-  if (!token) return null
-  if (Date.now() < expiresAt - 60_000) return token
+  if (!token && !refreshToken) return null
+
+  // Token noch gültig?
+  if (token && Date.now() < expiresAt - 60_000) return token
+
+  // Token abgelaufen – Refresh versuchen
   if (!refreshToken || !clientId) { logout(); return null }
 
   try {
@@ -127,9 +143,11 @@ export async function getAccessToken() {
     })
     if (!res.ok) throw new Error('Refresh failed')
     const tokens = await res.json()
-    localStorage.setItem('parqet_access_token', tokens.access_token)
-    localStorage.setItem('parqet_expires_at',   String(Date.now() + (tokens.expires_in || 3600) * 1000))
+
+    sessionStorage.setItem('parqet_access_token', tokens.access_token)
+    sessionStorage.setItem('parqet_expires_at',   String(Date.now() + (tokens.expires_in || 3600) * 1000))
     if (tokens.refresh_token) localStorage.setItem('parqet_refresh_token', tokens.refresh_token)
+
     return tokens.access_token
   } catch {
     logout()
@@ -138,14 +156,22 @@ export async function getAccessToken() {
 }
 
 export async function logout() {
-  localStorage.removeItem('parqet_access_token')
+  // Access Token aus sessionStorage entfernen
+  sessionStorage.removeItem('parqet_access_token')
+  sessionStorage.removeItem('parqet_expires_at')
+  // Refresh Token aus localStorage entfernen
   localStorage.removeItem('parqet_refresh_token')
+  // Rückwärtskompatibilität: alten localStorage-Access-Token auch löschen (falls noch vorhanden)
+  localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_expires_at')
+
   await supabase.auth.signOut()
   clearCachedClientId()
   window.location.href = '/'
 }
 
 export function isLoggedIn() {
-  return !!localStorage.getItem('parqet_access_token')
+  // Gültig, wenn Access Token in sessionStorage ODER Refresh Token in localStorage vorhanden
+  return !!sessionStorage.getItem('parqet_access_token') ||
+         !!localStorage.getItem('parqet_refresh_token')
 }
