@@ -13,6 +13,8 @@ import PositionsTable     from './components/PositionsTable'
 import DividendCalculator from './pages/DividendCalculator'
 import UpcomingDividends  from './components/UpcomingDividends'
 import DividendCalendar   from './components/DividendCalendar'
+import SkeletonDashboard  from './components/SkeletonDashboard'
+import EmptyState         from './components/EmptyState'
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -26,7 +28,7 @@ const KPI_RANGES = [
 const NAV_TABS = [
   { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
   { id: 'calendar',   emoji: '🗓',  label: 'Kalender'   },
-  { id: 'calculator', emoji: '🧮', label: 'Rechner'    },
+  { id: 'calculator', emoji: '🧭', label: 'Rechner'    },
 ]
 
 const STATUS_INFO = {
@@ -55,6 +57,15 @@ function rolling12m(monthly, endYear, endMonth) {
     total += monthly?.[y]?.[m] ?? 0
   }
   return total
+}
+
+function CenteredSpinner({ text }) {
+  return (
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
+      <div style={{ fontSize:32 }}>⟳</div>
+      <p style={{ color:'#7a8ba0' }}>{text}</p>
+    </div>
+  )
 }
 
 export default function App() {
@@ -111,26 +122,11 @@ export default function App() {
     return () => { active = false }
   }, [appUser])
 
-  if (appUser === undefined || profileLoading) {
-    return (
-      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
-        <div style={{ fontSize:32 }}>⟳</div>
-        <p style={{ color:'#7a8ba0' }}>App wird vorbereitet…</p>
-      </div>
-    )
-  }
-
-  if (!appUser) return <AppLogin />
-  if (!clientIdReady) return <ParqetSetup onDone={() => setClientIdReady(true)} />
-
-  if (authLoading) return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
-      <div style={{ fontSize:32 }}>⟳</div>
-      <p style={{ color:'#7a8ba0' }}>Authentifizierung läuft…</p>
-    </div>
-  )
-
-  if (!loggedIn) return <LoginScreen onLogin={startOAuthFlow} loading={authLoading} error={error} />
+  if (appUser === undefined || profileLoading) return <CenteredSpinner text="App wird vorbereitet…" />
+  if (!appUser)        return <AppLogin />
+  if (!clientIdReady)  return <ParqetSetup onDone={() => setClientIdReady(true)} />
+  if (authLoading)     return <CenteredSpinner text="Authentifizierung läuft…" />
+  if (!loggedIn)       return <LoginScreen onLogin={startOAuthFlow} loading={authLoading} error={error} />
 
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
@@ -208,10 +204,14 @@ export default function App() {
 
   const statusIndicator = getStatusIndicator(dataSource)
 
+  const hasData      = Object.keys(monthly).length > 0
+  const showSkeleton = loading && !hasData
+  const showEmpty    = !loading && !hasData
+
   return (
     <div style={{ minHeight: '100vh', background: '#0f1420' }}>
 
-      {/* ── NAV ── */}
+      {/* NAV */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#161b27', borderBottom: '1px solid #1e2a3a',
@@ -282,6 +282,7 @@ export default function App() {
         </div>
       </nav>
 
+      {/* PAGES */}
       {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
 
       {page === 'calendar' && (
@@ -290,33 +291,40 @@ export default function App() {
             <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
             <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
           </div>
-          <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
-          <DividendCalendar  forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
+          {showEmpty
+            ? <EmptyState onRefresh={loadData} loading={loading} error={error} />
+            : (
+              <>
+                <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
+                <DividendCalendar  forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
+              </>
+            )
+          }
         </div>
       )}
 
       {page === 'dashboard' && (
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
-          <div style={{ marginBottom: 16 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
-            <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Portfolio-Übersicht · Nettowerte</p>
-          </div>
+        <>
+          {/* 1. Skeleton: erstes Laden, noch keine Daten */}
+          {showSkeleton && <SkeletonDashboard />}
 
-          {error && (
-            <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'12px 16px', borderRadius:10, marginBottom:16, fontSize:13 }}>
-              ⚠ {error}
-            </div>
-          )}
+          {/* 2. Empty State: Laden fertig, aber keine Daten */}
+          {showEmpty && <EmptyState onRefresh={loadData} loading={loading} error={error} />}
 
-          {loading && Object.keys(monthly).length === 0 && (
-            <div style={{ textAlign:'center', padding:'60px 0', color:'#7a8ba0' }}>
-              <div style={{ fontSize:32, marginBottom:12 }}>⟳</div>
-              <p>Dividenden werden geladen…</p>
-            </div>
-          )}
+          {/* 3. Echter Inhalt */}
+          {!showSkeleton && !showEmpty && (
+            <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
+              <div style={{ marginBottom: 16 }}>
+                <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
+                <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Portfolio-Übersicht · Nettowerte</p>
+              </div>
 
-          {Object.keys(monthly).length > 0 && (
-            <>
+              {error && (
+                <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'12px 16px', borderRadius:10, marginBottom:16, fontSize:13 }}>
+                  ⚠ {error}
+                </div>
+              )}
+
               <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
                 {KPI_RANGES.map(({ key, label }) => (
                   <button key={key} onClick={() => setKpiRange(key)} style={{
@@ -409,9 +417,9 @@ export default function App() {
               <div id="dividends-table">
                 <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
               </div>
-            </>
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   )

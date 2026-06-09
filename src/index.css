@@ -15,6 +15,30 @@ body {
   overflow-x: hidden;
 }
 
+/* --- Skeleton Loader --- */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #1a2233 25%,
+    #243044 50%,
+    #1a2233 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: #1a2233;
+  }
+}
+
 /* --- KPI grid: flex on desktop (original), 2-col grid on mobile --- */
 .kpi-grid {
   display: flex;
