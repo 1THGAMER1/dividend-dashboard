@@ -11,6 +11,7 @@ import DividendChart      from './components/DividendChart'
 import DividendHeatmap    from './components/DividendHeatmap'
 import PositionsTable     from './components/PositionsTable'
 import DividendCalculator from './pages/DividendCalculator'
+import DripSimulator      from './pages/DripSimulator'
 import UpcomingDividends  from './components/UpcomingDividends'
 import DividendCalendar   from './components/DividendCalendar'
 import SkeletonDashboard  from './components/SkeletonDashboard'
@@ -29,6 +30,7 @@ const NAV_TABS = [
   { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
   { id: 'calendar',   emoji: '🗓',  label: 'Kalender'   },
   { id: 'calculator', emoji: '🧭', label: 'Rechner'    },
+  { id: 'drip',       emoji: '♻️', label: 'DRIP'       },
 ]
 
 const STATUS_INFO = {
@@ -284,6 +286,7 @@ export default function App() {
 
       {/* PAGES */}
       {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
+      {page === 'drip'       && <DripSimulator      portfolioData={portfolioData} />}
 
       {page === 'calendar' && (
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
@@ -305,13 +308,9 @@ export default function App() {
 
       {page === 'dashboard' && (
         <>
-          {/* 1. Skeleton: erstes Laden, noch keine Daten */}
           {showSkeleton && <SkeletonDashboard />}
+          {showEmpty    && <EmptyState onRefresh={loadData} loading={loading} error={error} />}
 
-          {/* 2. Empty State: Laden fertig, aber keine Daten */}
-          {showEmpty && <EmptyState onRefresh={loadData} loading={loading} error={error} />}
-
-          {/* 3. Echter Inhalt */}
           {!showSkeleton && !showEmpty && (
             <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
               <div style={{ marginBottom: 16 }}>
