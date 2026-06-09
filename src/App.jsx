@@ -195,11 +195,22 @@ export default function App() {
   const yoy      = calcYoY()
   const trueCagr = calcTrueCagr()
 
+  // dividendYield aus useDividendData ist ein plain Prozentwert (z.B. 3.4 für 3,4 %).
+  // DividendCalculator erwartet exakt diesen Wert als Dezimalzahl (0–100-Skala als
+  // Dezimal-Fraction: 0.034)  — er multipliziert intern mit 100 für die Anzeige.
+  // => Wir übergeben also den Rohwert geteilt durch 100 damit beide Seiten identisch rechnen.
+  const rawYield    = dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0   // z.B. 3.4
+  // Prognoserendite: Forecast-Dividenden / Marktwert (als Dezimalbruch, z.B. 0.038)
+  const forecastYield = currentValue > 0
+    ? calcForecastNext12mNet() / currentValue   // bereits als Dezimalbruch
+    : rawYield / 100
+
   const portfolioData = {
     currentValue,
-    totalDividendsNet:     calcForecastNext12mNet(),
-    dividendYield:         ((dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0) + 0.01) / 100,
-    forecastDividendYield: currentValue > 0 ? calcForecastNext12mNet() / currentValue : 0,
+    totalDividendsNet:     kpi?.['all']?.net ?? kpi?.['12m']?.net ?? calcForecastNext12mNet(),
+    // dividendYield als Dezimalbruch (0.034) — identisch für Rechner + DRIP
+    dividendYield:         rawYield / 100,
+    forecastDividendYield: forecastYield,
     cagrTotal:   yoy,
     cagrOrganic: null,
   }
