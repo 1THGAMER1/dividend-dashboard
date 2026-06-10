@@ -266,14 +266,11 @@ export default function App() {
         padding: '0 12px', height: 52,
         position: 'sticky', top: 0, zIndex: 100,
       }}>
-
-        {/* LEFT: Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <DashLogo size={28} />
           <span className="nav-brand-text">Dividend Dashboard</span>
         </div>
 
-        {/* CENTER: Nav Tabs */}
         <div style={{ display: 'flex', gap: 4 }}>
           {NAV_TABS.map(tab => (
             <button key={tab.id} onClick={() => setPage(tab.id)} style={{
@@ -290,7 +287,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* RIGHT: Status + Actions */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {lastUpdated && (
             <div
@@ -394,6 +390,7 @@ export default function App() {
                   ))}
                 </div>
 
+                {/* Zeile 1: Netto, Brutto, Dividendenrendite */}
                 <div className="kpi-grid">
                   <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
                            detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
@@ -405,6 +402,18 @@ export default function App() {
                     color="#34d399"
                     sub="auf den Einstandskurs"
                   />
+                </div>
+
+                {/* Zeile 2: CAGR + YoY (immer angezeigt) */}
+                <div className="kpi-grid">
+                  {trueCagr !== null && (
+                    <KpiCard
+                      label={`CAGR (${trueCagr.years}J)`}
+                      value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
+                      color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
+                      sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
+                    />
+                  )}
                   <KpiCard
                     label="YoY-Wachstum"
                     value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'}
@@ -412,17 +421,6 @@ export default function App() {
                     sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
                   />
                 </div>
-
-                {trueCagr !== null && (
-                  <div className="kpi-grid">
-                    <KpiCard
-                      label={`CAGR (${trueCagr.years}J)`}
-                      value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
-                      color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
-                      sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
-                    />
-                  </div>
-                )}
 
                 <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
                   Prognose · Nächste 12 Monate
