@@ -50,7 +50,6 @@ const ROADMAP = [
     items: [
       { text: 'Steuer-Export (CSV / PDF)',                                          done: false },
       { text: 'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)', done: true  },
-      { text: 'Benchmark-Vergleich (ETF vs. Portfolio)',                            done: false },
       { text: 'Inflationsbereingte Renditeansicht',                                 done: false },
     ],
   },
@@ -227,7 +226,7 @@ export default function RoadmapPage() {
                             {doneCount} von {totalCount} abgeschlossen
                           </span>
                           <span style={{ fontSize: 11, fontWeight: 600, color: doneCount === totalCount ? '#22c55e' : '#38bdf8' }}>
-                            {progressPct} %
+                            {progressPct} %
                           </span>
                         </div>
                         <div style={{ height: 4, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden' }}>
@@ -252,7 +251,6 @@ export default function RoadmapPage() {
 
                         return (
                           <li key={itemIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            {/* Checkbox */}
                             <span style={{
                               flexShrink: 0, marginTop: 2,
                               width: 16, height: 16,
@@ -272,8 +270,6 @@ export default function RoadmapPage() {
                                 </svg>
                               )}
                             </span>
-
-                            {/* Text */}
                             <span style={{
                               fontSize: 13.5, flex: 1,
                               color: isChecked
