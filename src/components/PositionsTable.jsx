@@ -26,7 +26,7 @@ const YEAR_COLORS = ['#009991','#3b82f6','#a78bfa','#f472b6','#fb923c','#facc15'
 
 function DividendHistoryPanel({ holding }) {
     const { monthly } = holding
-    const [mode, setMode] = useState('monthly') // 'monthly' | 'cumulative' | 'performance'
+    const [mode, setMode] = useState('monthly')
 
     if (!monthly || Object.keys(monthly).length === 0) {
         return <div style={{ color:'#556070', fontSize:13, padding:'16px 0' }}>Keine Verlaufsdaten vorhanden.</div>
@@ -41,13 +41,11 @@ function DividendHistoryPanel({ holding }) {
         months: Array.from({ length: 12 }, (_, m) => monthly[y]?.[m] ?? 0),
     }))
 
-    // Akkumuliert pro Jahr (laufend innerhalb des Jahres)
     const yearDataCum = yearData.map(yd => {
         let running = 0
         return { ...yd, months: yd.months.map(v => { running += v; return running }) }
     })
 
-    // All-time Performance: ein einziger Datenstrom über alle Monate aller Jahre
     const allTimePoints = []
     let runningTotal = 0
     years.forEach(y => {
@@ -56,7 +54,6 @@ function DividendHistoryPanel({ holding }) {
             allTimePoints.push({ year: y, month: m, value: runningTotal, raw: v })
         })
     })
-    // nur bis letztem Monat mit Zahlung schneiden
     const lastPayIdx = allTimePoints.reduce((last, pt, i) => pt.raw > 0 ? i : last, -1)
     const perfPoints = lastPayIdx >= 0 ? allTimePoints.slice(0, lastPayIdx + 1) : allTimePoints
 
@@ -74,18 +71,14 @@ function DividendHistoryPanel({ holding }) {
         net:   yd.months.reduce((s, v) => s + v, 0),
     }))
 
-    // SVG-Dimensionen für Performance-Chart
-    const W = 360, H = 116, PAD_L = 4, PAD_R = 4, PAD_T = 8, PAD_B = 16
+    // Performance chart dimensions
+    const W = 360, H = 100, PAD_L = 8, PAD_R = 8, PAD_T = 8, PAD_B = 18
     const chartW = W - PAD_L - PAD_R
     const chartH = H - PAD_T - PAD_B
     const n = perfPoints.length
     const toX = i => PAD_L + (i / Math.max(n - 1, 1)) * chartW
     const toY = v => PAD_T + chartH - (v / maxVal) * chartH
-
-    // Polyline-Punkte
     const linePoints = perfPoints.map((p, i) => `${toX(i)},${toY(p.value)}`).join(' ')
-
-    // Bereich für Jahrstrennlinien und Labels im Performance-Chart
     const yearBoundaries = []
     years.forEach(y => {
         const firstIdx = perfPoints.findIndex(p => p.year === y)
@@ -112,25 +105,17 @@ function DividendHistoryPanel({ holding }) {
                         <span style={{ fontSize:11, color:'#7a8ba0' }}>Gesamtperformance seit {years[0]}</span>
                     </div>
                 )}
-
-                {/* Ansicht-Toggle */}
                 <div style={{ display:'flex', background:'#0f1420', borderRadius:20, padding:2, border:'1px solid #1e2a3a', gap:2 }}>
                     {[['monthly','Monatlich'],['cumulative','Akkumuliert'],['performance','Performance']].map(([val, label]) => (
-                        <button
-                            key={val}
-                            onClick={() => setMode(val)}
-                            style={{
-                                background: mode === val ? (val === 'performance' ? '#1a3a1a' : '#1e3a5f') : 'transparent',
-                                border: 'none',
-                                color: mode === val ? (val === 'performance' ? '#4ade80' : '#93c5fd') : '#556070',
-                                borderRadius: 16, padding: '3px 10px',
-                                fontSize: 11, cursor: 'pointer',
-                                fontWeight: mode === val ? 600 : 400,
-                                transition: 'all 0.15s',
-                            }}
-                        >
-                            {label}
-                        </button>
+                        <button key={val} onClick={() => setMode(val)} style={{
+                            background: mode === val ? (val === 'performance' ? '#1a3a1a' : '#1e3a5f') : 'transparent',
+                            border: 'none',
+                            color: mode === val ? (val === 'performance' ? '#4ade80' : '#93c5fd') : '#556070',
+                            borderRadius: 16, padding: '3px 10px',
+                            fontSize: 11, cursor: 'pointer',
+                            fontWeight: mode === val ? 600 : 400,
+                            transition: 'all 0.15s',
+                        }}>{label}</button>
                     ))}
                 </div>
             </div>
@@ -138,6 +123,7 @@ function DividendHistoryPanel({ holding }) {
             {/* Charts */}
             <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
 
+                {/* Chart 1: Monthly bars — unverändert */}
                 {mode === 'monthly' && (
                     <div style={{ display:'flex', alignItems:'flex-end', gap:3, minWidth:320 }}>
                         {MONTHS_SHORT.map((mon, mIdx) => {
@@ -166,17 +152,28 @@ function DividendHistoryPanel({ holding }) {
                     </div>
                 )}
 
+                {/* Chart 2: Cumulative — angepasst */}
                 {mode === 'cumulative' && (
-                    <div style={{ minWidth:320 }}>
-                        <svg width="100%" viewBox="0 0 360 116" preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+                    <div style={{ minWidth:320, background:'#0f1420', borderRadius:10, padding:'10px 8px 4px', border:'1px solid #1e2a3a' }}>
+                        <svg width="100%" viewBox="0 0 360 108" preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+                            {/* Horizontale Gitterlinien */}
+                            {[0.25, 0.5, 0.75, 1].map(f => {
+                                const y = 8 + (1 - f) * 80
+                                return <line key={f} x1="10" y1={y} x2="350" y2={y} stroke="#1e2a3a" strokeWidth="0.5" />
+                            })}
                             {yearDataCum.map((yd) => {
                                 const pts = yd.months.map((v, i) => {
                                     const x = (i / 11) * 340 + 10
-                                    const y = 100 - (v / maxVal) * 90 + 8
+                                    const y = 88 - (v / maxVal) * 80
                                     return `${x},${y}`
                                 }).join(' ')
+                                // Fläche
+                                const firstX = 10, lastX = (11 / 11) * 340 + 10
+                                const areaPts = `${firstX},88 ${pts} ${lastX},88`
                                 return (
                                     <g key={yd.year}>
+                                        <polygon points={areaPts} fill={yd.color}
+                                            opacity={yd.year === currentYear ? 0.12 : 0.05} />
                                         <polyline points={pts} fill="none" stroke={yd.color}
                                             strokeWidth={yd.year === currentYear ? 2.5 : 1.5}
                                             strokeLinejoin="round" strokeLinecap="round"
@@ -184,9 +181,10 @@ function DividendHistoryPanel({ holding }) {
                                         {yd.months.map((v, i) => {
                                             if (v === 0) return null
                                             const x = (i / 11) * 340 + 10
-                                            const y = 100 - (v / maxVal) * 90 + 8
+                                            const y = 88 - (v / maxVal) * 80
                                             return <circle key={i} cx={x} cy={y} r={yd.year === currentYear ? 3 : 2}
-                                                fill={yd.color} opacity={yd.year === currentYear ? 1 : 0.5}>
+                                                fill={yd.color} opacity={yd.year === currentYear ? 1 : 0.5}
+                                                stroke="#0f1420" strokeWidth="1">
                                                 <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
                                             </circle>
                                         })}
@@ -194,26 +192,40 @@ function DividendHistoryPanel({ holding }) {
                                 )
                             })}
                             {MONTHS_SHORT.map((mon, i) => (
-                                <text key={mon} x={(i / 11) * 340 + 10} y="114"
+                                <text key={mon} x={(i / 11) * 340 + 10} y="104"
                                     textAnchor="middle" fontSize="8" fill="#3d5266">{mon}</text>
                             ))}
                         </svg>
                     </div>
                 )}
 
+                {/* Chart 3: Performance — angepasst */}
                 {mode === 'performance' && (
-                    <div style={{ minWidth:320 }}>
-                        <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+                    <div style={{ minWidth:320, background:'#0f1420', borderRadius:10, padding:'10px 8px 4px', border:'1px solid #1e2a3a' }}>
+                        <svg width="100%" viewBox={`0 0 ${W} ${H + 18}`} preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+                            <defs>
+                                <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.6" />
+                                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                                </linearGradient>
+                            </defs>
+
+                            {/* Horizontale Gitterlinien */}
+                            {[0.25, 0.5, 0.75, 1].map(f => {
+                                const y = PAD_T + chartH - f * chartH
+                                return <line key={f} x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#1e2a3a" strokeWidth="0.5" />
+                            })}
+
                             {/* Jahrstrennlinien */}
                             {yearBoundaries.map(({ x, year }) => (
                                 <g key={year}>
                                     <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + chartH}
-                                        stroke="#1e2a3a" strokeWidth="1" strokeDasharray="3 3" />
+                                        stroke="#2a3a50" strokeWidth="1" strokeDasharray="3 3" />
                                     <text x={x + 3} y={PAD_T + 9} fontSize="8" fill="#3d5266">{year}</text>
                                 </g>
                             ))}
 
-                            {/* Fläche unter der Linie */}
+                            {/* Fläche */}
                             {perfPoints.length > 1 && (
                                 <polygon
                                     points={[
@@ -222,17 +234,8 @@ function DividendHistoryPanel({ holding }) {
                                         `${toX(perfPoints.length - 1)},${PAD_T + chartH}`,
                                     ].join(' ')}
                                     fill="url(#perfGrad)"
-                                    opacity="0.25"
                                 />
                             )}
-
-                            {/* Gradient-Definition */}
-                            <defs>
-                                <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.8" />
-                                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
 
                             {/* Hauptlinie */}
                             {perfPoints.length > 1 && (
@@ -240,7 +243,7 @@ function DividendHistoryPanel({ holding }) {
                                     strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
                             )}
 
-                            {/* Punkte nur an Zahlungsmonaten */}
+                            {/* Punkte an Zahlungsmonaten */}
                             {perfPoints.map((p, i) => {
                                 if (p.raw === 0) return null
                                 return (
@@ -266,8 +269,8 @@ function DividendHistoryPanel({ holding }) {
                                 )
                             })()}
 
-                            {/* X-Achse: Jahres-Labels beim ersten Jahr */}
-                            <text x={toX(0)} y={H - 2} textAnchor="middle" fontSize="8" fill="#3d5266">{years[0]}</text>
+                            {/* X-Achse erstes Jahr */}
+                            <text x={toX(0)} y={H + 14} textAnchor="middle" fontSize="8" fill="#3d5266">{years[0]}</text>
                         </svg>
                     </div>
                 )}
@@ -285,7 +288,6 @@ function DividendHistoryPanel({ holding }) {
                         {ys.net > 0 && <div style={{ fontSize:10, color:'#3d5266', marginTop:2 }}>≈ {fmt(ys.net / 12)} / Mo</div>}
                     </div>
                 ))}
-                {/* Gesamtsumme extra */}
                 {mode === 'performance' && (() => {
                     const total = yearSums.reduce((s, ys) => s + ys.net, 0)
                     return total > 0 ? (
