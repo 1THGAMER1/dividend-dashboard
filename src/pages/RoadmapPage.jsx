@@ -1,8 +1,7 @@
 /**
  * RoadmapPage.jsx — Elegante, moderne Roadmap-Seite
- * Einzelne Items können als erledigt markiert werden (localStorage)
+ * Items können einzeln als done markiert werden direkt in den Daten.
  */
-import { useState, useEffect } from 'react'
 
 const ROADMAP = [
   {
@@ -11,11 +10,11 @@ const ROADMAP = [
     title: 'Foundation',
     period: 'Q2 2026',
     items: [
-      'Parqet OAuth2 PKCE Integration',
-      'Dividenden-Dashboard mit KPI-Karten',
-      'Jahres- & Monatsübersicht (Chart)',
-      'Heatmap der Dividendenhistorie',
-      'Positions-Tabelle mit Prognosen',
+      { text: 'Parqet OAuth2 PKCE Integration',              done: true },
+      { text: 'Dividenden-Dashboard mit KPI-Karten',         done: true },
+      { text: 'Jahres- & Monatsübersicht (Chart)',           done: true },
+      { text: 'Heatmap der Dividendenhistorie',              done: true },
+      { text: 'Positions-Tabelle mit Prognosen',             done: true },
     ],
   },
   {
@@ -24,10 +23,10 @@ const ROADMAP = [
     title: 'Planning Tools',
     period: 'Q2 2026',
     items: [
-      'Dividenden-Rechner (Zielplanung)',
-      'DRIP-Simulator (Reinvestitionsrechner)',
-      'Kalender-Ansicht für Zahlungstermine',
-      'Upcoming Dividends (90-Tage-Preview)',
+      { text: 'Dividenden-Rechner (Zielplanung)',            done: true },
+      { text: 'DRIP-Simulator (Reinvestitionsrechner)',      done: true },
+      { text: 'Kalender-Ansicht für Zahlungstermine',       done: true },
+      { text: 'Upcoming Dividends (90-Tage-Preview)',        done: true },
     ],
   },
   {
@@ -36,11 +35,11 @@ const ROADMAP = [
     title: 'Sicherheit & Zuverlässigkeit',
     period: 'Q2 2026',
     items: [
-      'AES-256-GCM Verschlüsselung der Client ID',
-      'JWK Key Caching (kein Re-Login nach Reload)',
-      'CORS-Einschränkung & Bearer-Auth am Proxy',
-      'Access Token in sessionStorage (XSS-Schutz)',
-      'Weitere kleine QoL Verbesserungen'
+      { text: 'AES-256-GCM Verschlüsselung der Client ID',  done: true },
+      { text: 'JWK Key Caching (kein Re-Login nach Reload)', done: true },
+      { text: 'CORS-Einschränkung & Bearer-Auth am Proxy',  done: true },
+      { text: 'Access Token in sessionStorage (XSS-Schutz)', done: true },
+      { text: 'Weitere kleine QoL Verbesserungen',           done: true },
     ],
   },
   {
@@ -49,10 +48,10 @@ const ROADMAP = [
     title: 'Portfolio Intelligence',
     period: 'Q2–Q3 2026',
     items: [
-      'Steuer-Export (CSV / PDF)',
-      'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)',
-      'Benchmark-Vergleich (ETF vs. Portfolio)',
-      'Inflationsbereingte Renditeansicht',
+      { text: 'Steuer-Export (CSV / PDF)',                                          done: false },
+      { text: 'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)', done: true  },
+      { text: 'Benchmark-Vergleich (ETF vs. Portfolio)',                            done: false },
+      { text: 'Inflationsbereingte Renditeansicht',                                 done: false },
     ],
   },
   {
@@ -61,11 +60,11 @@ const ROADMAP = [
     title: 'Benachrichtigungen & Automatisierung',
     period: 'Q3–Q4 2026',
     items: [
-      'E-Mail-Benachrichtigung bei Dividendenzahlungen',
-      'Wöchentlicher Portfolio-Report per Mail',
-      'Multi-Portfolio-Unterstützung',
-      'Browser Push-Notifications',
-      'Automatischer Daten-Refresh (Cron)',
+      { text: 'E-Mail-Benachrichtigung bei Dividendenzahlungen', done: false },
+      { text: 'Wöchentlicher Portfolio-Report per Mail',         done: false },
+      { text: 'Multi-Portfolio-Unterstützung',                  done: false },
+      { text: 'Browser Push-Notifications',                      done: false },
+      { text: 'Automatischer Daten-Refresh (Cron)',              done: false },
     ],
   },
   {
@@ -74,9 +73,9 @@ const ROADMAP = [
     title: 'Social & Sharing',
     period: '2027',
     items: [
-      'Portfolio-Snapshot teilen (anonymisiert)',
-      'Community-Vergleich (anonymisiertes Ranking)',
-      'Öffentliches Dividenden-Tagebuch (opt-in)',
+      { text: 'Portfolio-Snapshot teilen (anonymisiert)',          done: false },
+      { text: 'Community-Vergleich (anonymisiertes Ranking)',      done: false },
+      { text: 'Öffentliches Dividenden-Tagebuch (opt-in)',         done: false },
     ],
   },
 ]
@@ -87,33 +86,7 @@ const STATUS_CONFIG = {
   planned: { label: 'Geplant',       color: '#94a3b8', bg: 'rgba(148,163,184,0.06)', border: 'rgba(148,163,184,0.15)', dot: '#475569' },
 }
 
-const STORAGE_KEY = 'roadmap_checked_items'
-
-function itemKey(phaseIdx, itemIdx) {
-  return `${phaseIdx}_${itemIdx}`
-}
-
 export default function RoadmapPage() {
-  const [checked, setChecked] = useState(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      return raw ? new Set(JSON.parse(raw)) : new Set()
-    } catch { return new Set() }
-  })
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...checked]))
-  }, [checked])
-
-  const toggle = (phaseIdx, itemIdx) => {
-    const key = itemKey(phaseIdx, itemIdx)
-    setChecked(prev => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  }
-
   return (
     <div style={{
       minHeight: 'calc(100vh - 52px)',
@@ -189,9 +162,10 @@ export default function RoadmapPage() {
               const isActive = phase.status === 'active'
               const isDone   = phase.status === 'done'
 
-              const manualDone   = phase.items.filter((_, j) => checked.has(itemKey(phaseIdx, j))).length
-              const allManualDone = manualDone === phase.items.length
-              const progressPct  = isDone ? 100 : Math.round((manualDone / phase.items.length) * 100)
+              const doneCount  = phase.items.filter(it => it.done).length
+              const totalCount = phase.items.length
+              const progressPct = Math.round((doneCount / totalCount) * 100)
+              const showProgress = !isDone && doneCount > 0
 
               return (
                 <div key={phaseIdx} style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
@@ -228,7 +202,6 @@ export default function RoadmapPage() {
                     borderRadius: 16,
                     padding: '20px 24px',
                     backdropFilter: 'blur(8px)',
-                    transition: 'all 0.2s',
                   }}>
                     {/* Header */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
@@ -247,14 +220,14 @@ export default function RoadmapPage() {
                       <span style={{ fontSize: 12, color: '#3d5266', fontWeight: 500 }}>{phase.period}</span>
                     </div>
 
-                    {/* Fortschrittsbalken (nur wenn mind. 1 manuell gecheckt) */}
-                    {!isDone && manualDone > 0 && (
+                    {/* Fortschrittsbalken */}
+                    {showProgress && (
                       <div style={{ marginBottom: 14 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                           <span style={{ fontSize: 11, color: '#3d5266' }}>
-                            {manualDone} von {phase.items.length} abgeschlossen
+                            {doneCount} von {totalCount} abgeschlossen
                           </span>
-                          <span style={{ fontSize: 11, color: allManualDone ? '#22c55e' : '#38bdf8', fontWeight: 600 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: doneCount === totalCount ? '#22c55e' : '#38bdf8' }}>
                             {progressPct} %
                           </span>
                         </div>
@@ -263,7 +236,7 @@ export default function RoadmapPage() {
                             height: '100%',
                             width: `${progressPct}%`,
                             borderRadius: 99,
-                            background: allManualDone
+                            background: doneCount === totalCount
                               ? 'linear-gradient(90deg, #22c55e, #4ade80)'
                               : 'linear-gradient(90deg, #38bdf8, #009991)',
                             transition: 'width 0.4s ease',
@@ -275,40 +248,27 @@ export default function RoadmapPage() {
                     {/* Items */}
                     <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {phase.items.map((item, itemIdx) => {
-                        const key       = itemKey(phaseIdx, itemIdx)
-                        const isChecked = isDone || checked.has(key)
-                        const canToggle = !isDone
+                        const isChecked = item.done
+                        const checkColor = isDone ? '#22c55e' : '#38bdf8'
 
                         return (
-                          <li
-                            key={itemIdx}
-                            onClick={() => canToggle && toggle(phaseIdx, itemIdx)}
-                            style={{
-                              display: 'flex', alignItems: 'flex-start', gap: 10,
-                              cursor: canToggle ? 'pointer' : 'default',
-                              padding: '4px 6px', borderRadius: 8, margin: '0 -6px',
-                              transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={e => { if (canToggle) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                          >
-                            {/* Checkbox-Kreis */}
+                          <li key={itemIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                            {/* Checkbox */}
                             <span style={{
                               flexShrink: 0, marginTop: 2,
                               width: 16, height: 16,
                               borderRadius: '50%',
-                              border: isChecked ? 'none' : `1.5px solid ${canToggle ? '#2a3a50' : cfg.border}`,
+                              border: isChecked ? 'none' : `1.5px solid ${cfg.border}`,
                               background: isChecked
                                 ? isDone ? 'rgba(34,197,94,0.15)' : 'rgba(56,189,248,0.18)'
                                 : 'transparent',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              transition: 'all 0.2s',
                               boxShadow: isChecked && !isDone ? '0 0 6px rgba(56,189,248,0.35)' : 'none',
                             }}>
                               {isChecked && (
                                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                                   <path d="M1.5 4l1.8 1.8L6.5 2"
-                                    stroke={isDone ? '#22c55e' : '#38bdf8'}
+                                    stroke={checkColor}
                                     strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                                 </svg>
                               )}
@@ -323,8 +283,7 @@ export default function RoadmapPage() {
                               lineHeight: 1.5,
                               textDecoration: isChecked && !isDone ? 'line-through' : 'none',
                               textDecorationColor: '#2a4a5a',
-                              transition: 'color 0.2s',
-                            }}>{item}</span>
+                            }}>{item.text}</span>
                           </li>
                         )
                       })}
