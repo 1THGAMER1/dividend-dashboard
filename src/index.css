@@ -39,7 +39,7 @@ body {
   }
 }
 
-/* --- KPI grid: flex on desktop (original), 2-col grid on mobile --- */
+/* --- KPI grid --- */
 .kpi-grid {
   display: flex;
   flex-wrap: wrap;
@@ -54,20 +54,19 @@ body {
     gap: 10px;
     margin-bottom: 14px;
   }
-
-  /* Ungerade letzte Card -> volle Breite */
-  .kpi-grid > *:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-  }
-
-  /* KpiCard detail + sub untereinander statt gequetscht nebeneinander */
-  .kpi-card-footer {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 4px !important;
-  }
-
+  .kpi-grid > *:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .kpi-card-footer { flex-direction: column !important; align-items: flex-start !important; gap: 4px !important; }
   .kpi-card-dot { display: none !important; }
+}
+
+/* --- Nav brand --- */
+.nav-brand-text {
+  display: inline;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c8d4e0;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 
 /* --- Nav labels: hide full text on small screens --- */
@@ -78,6 +77,7 @@ body {
   .nav-full-label  { display: none; }
   .nav-short-label { display: inline; }
   .nav-status      { display: none !important; }
+  .nav-brand-text  { display: none; }
 }
 
 /* --- Positions table / card toggle --- */
@@ -89,15 +89,13 @@ body {
   .positions-desktop { display: none; }
 }
 
-/* --- Charts & heatmap: horizontal scroll on mobile --- */
+/* --- Charts & heatmap --- */
 .chart-scroll-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.heatmap-inner {
-  min-width: 480px;
-}
+.heatmap-inner { min-width: 480px; }
 
 /* --- Rechner: CAGR-Info-Grid --- */
 .calc-cagr-grid {
@@ -108,9 +106,7 @@ body {
 }
 
 @media (max-width: 480px) {
-  .calc-cagr-grid {
-    grid-template-columns: 1fr;
-  }
+  .calc-cagr-grid { grid-template-columns: 1fr; }
 }
 
 /* --- Scrollbars --- */

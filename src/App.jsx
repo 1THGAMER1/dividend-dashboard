@@ -63,10 +63,10 @@ function rolling12m(monthly, endYear, endMonth) {
   return total
 }
 
-// Das Logo als wiederverwendbare Komponente
-function DashLogo({ size = 32 }) {
+// ─── Shared Logo Component
+export function DashLogo({ size = 32 }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size}>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size} aria-label="Dividend Dashboard">
       <rect width="32" height="32" rx="8" fill="#0f1420"/>
       <circle cx="16" cy="16" r="12" fill="none" stroke="#1e3a2a" strokeWidth="2"/>
       <circle cx="16" cy="16" r="12" fill="none" stroke="#22c55e" strokeWidth="2"
@@ -81,21 +81,15 @@ function DashLogo({ size = 32 }) {
 function LoadingScreen({ text }) {
   return (
     <div style={{
-      minHeight: '100vh',
-      background: '#0f1420',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'column',
-      gap: 20,
+      minHeight: '100vh', background: '#0f1420',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 20,
     }}>
       <div style={{ animation: 'logoPulse 1.6s ease-in-out infinite' }}>
         <DashLogo size={64} />
       </div>
       <div style={{ textAlign: 'center' }}>
-        <p style={{ color: '#e0e6f0', fontWeight: 700, fontSize: 16, margin: 0 }}>
-          Dividenden Dashboard
-        </p>
+        <p style={{ color: '#e0e6f0', fontWeight: 700, fontSize: 16, margin: 0 }}>Dividenden Dashboard</p>
         <p style={{ color: '#556070', fontSize: 13, margin: '4px 0 0' }}>{text}</p>
       </div>
       <div style={{ width: 160, height: 3, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden' }}>
@@ -228,10 +222,7 @@ export default function App() {
   }
 
   const calcTrueCagr = () => {
-    const years = Object.keys(monthly)
-      .map(Number)
-      .filter(y => y < cy)
-      .sort()
+    const years = Object.keys(monthly).map(Number).filter(y => y < cy).sort()
     if (years.length < 2) return null
     const firstYear = years[0]
     const lastYear  = years[years.length - 1]
@@ -246,7 +237,7 @@ export default function App() {
   const yoy      = calcYoY()
   const trueCagr = calcTrueCagr()
 
-  const rawYield    = dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0
+  const rawYield      = dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0
   const forecastYield = currentValue > 0
     ? calcForecastNext12mNet() / currentValue
     : rawYield / 100
@@ -261,7 +252,6 @@ export default function App() {
   }
 
   const statusIndicator = getStatusIndicator(dataSource)
-
   const hasData      = Object.keys(monthly).length > 0
   const showSkeleton = loading && !hasData
   const showEmpty    = !loading && !hasData
@@ -273,9 +263,17 @@ export default function App() {
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#161b27', borderBottom: '1px solid #1e2a3a',
-        padding: '0 10px', height: 52,
+        padding: '0 12px', height: 52,
         position: 'sticky', top: 0, zIndex: 100,
       }}>
+
+        {/* LEFT: Brand */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <DashLogo size={28} />
+          <span className="nav-brand-text">Dividend Dashboard</span>
+        </div>
+
+        {/* CENTER: Nav Tabs */}
         <div style={{ display: 'flex', gap: 4 }}>
           {NAV_TABS.map(tab => (
             <button key={tab.id} onClick={() => setPage(tab.id)} style={{
@@ -292,7 +290,8 @@ export default function App() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {/* RIGHT: Status + Actions */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {lastUpdated && (
             <div
               className="nav-status"
@@ -408,11 +407,7 @@ export default function App() {
                   />
                   <KpiCard
                     label="YoY-Wachstum"
-                    value={
-                      yoy === null
-                        ? '–'
-                        : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'
-                    }
+                    value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'}
                     color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
                     sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
                   />
