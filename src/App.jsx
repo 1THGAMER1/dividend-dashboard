@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { startOAuthFlow, logout, getClientId, clearCachedClientId } from './auth'
 import { supabase } from './supabaseClient'
 import useDividendData from './hooks/useDividendData'
@@ -22,6 +22,8 @@ import Footer             from './components/Footer'
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
+
+const AUTO_REFRESH_MS = 30 * 60 * 1000 // 30 Minuten
 
 const KPI_RANGES = [
   { key: 'all', label: 'Gesamt' },
@@ -136,6 +138,8 @@ export default function App() {
   const [profileLoading, setProfileLoading] = useState(true)
   const [tooltipVisible, setTooltipVisible] = useState(false)
 
+  const autoRefreshTimer = useRef(null)
+
   useEffect(() => {
     let mounted = true
     supabase.auth.getSession().then(({ data }) => {
@@ -169,6 +173,35 @@ export default function App() {
     loadProfileState()
     return () => { active = false }
   }, [appUser])
+
+  // ─── Auto-Refresh: alle 30 Min, nur wenn Tab sichtbar und eingeloggt
+  useEffect(() => {
+    if (!loggedIn) return
+
+    function scheduleRefresh() {
+      clearInterval(autoRefreshTimer.current)
+      autoRefreshTimer.current = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          loadData()
+        }
+      }, AUTO_REFRESH_MS)
+    }
+
+    scheduleRefresh()
+
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        loadData()
+        scheduleRefresh()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      clearInterval(autoRefreshTimer.current)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [loggedIn, loadData])
 
   if (appUser === undefined || profileLoading) return <LoadingScreen text="App wird vorbereitet…" />
   if (!appUser)        return <AppLogin />
