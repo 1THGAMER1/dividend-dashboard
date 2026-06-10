@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import { decrypt, encrypt, isEncrypted } from './crypto'
+import { decrypt, encrypt, isEncrypted, clearCachedKey } from './crypto'
 import { getPassword } from './passwordStore'
 
 let CLIENT_ID = null
@@ -13,6 +13,8 @@ const SCOPE        = 'portfolio:read'
 //   access_token  → sessionStorage  (kurzlebig, XSS-Angriffe haben nach Tab-Schließen keinen Zugriff mehr)
 //   refresh_token → localStorage    (längerfristig, nötig für automatischen Refresh)
 //   expires_at    → sessionStorage  (gehört logisch zum Access Token)
+//   AES key (JWK) → sessionStorage  (überlebt Reload, stirbt mit Tab-Schließen)
+//   Passwort      → nur RAM          (nie persistiert)
 // —————————————————————————————————————————————————————————————————
 
 export async function getClientId() {
@@ -32,43 +34,35 @@ export async function getClientId() {
   const raw = data?.parqet_client_id || null
   if (!raw) return null
 
-  // Auto-migration: if the stored value is still plaintext, encrypt it now.
+  // -------------------------------------------------------------------------
+  // Auto-migration: plaintext → encrypted
+  // -------------------------------------------------------------------------
   if (!isEncrypted(raw)) {
     const password = getPassword()
     if (password) {
       try {
-        const encrypted = await encrypt(raw, password)
+        const encrypted = await encrypt(raw, password)   // also caches the key
         await supabase
           .from('profiles')
           .update({ parqet_client_id: encrypted })
           .eq('id', user.id)
-        CLIENT_ID = raw
-        return CLIENT_ID
       } catch (e) {
         console.warn('Auto-migration of client ID failed:', e)
-        // Fall through — return plaintext so the app keeps working
-        CLIENT_ID = raw
-        return CLIENT_ID
       }
     }
-    // No password in RAM yet (e.g. OAuth callback path): return plaintext as-is.
     CLIENT_ID = raw
     return CLIENT_ID
   }
 
-  // Decrypt using the in-RAM password.
-  const password = getPassword()
-  if (!password) {
-    // Password not available (e.g. page hard-refresh after session restore).
-    // The user will be asked to re-authenticate via the normal Supabase session;
-    // we cannot decrypt without the password so we signal "not ready" here.
-    return null
-  }
-
+  // -------------------------------------------------------------------------
+  // Decrypt — uses cached JWK key if available (survives page reloads),
+  // falls back to password-based derivation on first call after login.
+  // -------------------------------------------------------------------------
   try {
-    CLIENT_ID = await decrypt(raw, password)
+    // Pass password as fallback — decrypt() will prefer the cached key.
+    CLIENT_ID = await decrypt(raw, getPassword())
   } catch {
-    // Wrong password or corrupted data — force re-login.
+    // Cached key missing and no password in RAM — need fresh login.
     CLIENT_ID = null
   }
   return CLIENT_ID
@@ -201,6 +195,7 @@ export async function logout() {
   localStorage.removeItem('parqet_refresh_token')
   localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_expires_at')
+  clearCachedKey()    // remove cached AES key from sessionStorage
 
   await supabase.auth.signOut()
   clearCachedClientId()
