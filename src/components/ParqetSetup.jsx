@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { encrypt } from '../crypto'
+import { getPassword } from '../passwordStore'
 
 const REDIRECT_URI = 'https://dividenddashboard.netlify.app/callback'
 
@@ -16,11 +18,22 @@ export default function ParqetSetup({ onDone }) {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Nicht eingeloggt')
+
+      const trimmed  = clientId.trim()
+      const password = getPassword()
+
+      // Encrypt before storing. If no password is in RAM (edge case), store plaintext —
+      // auth.js will auto-migrate on the next login.
+      const valueToStore = password
+        ? await encrypt(trimmed, password)
+        : trimmed
+
       const { error } = await supabase
         .from('profiles')
-        .upsert({ id: user.id, parqet_client_id: clientId.trim() })
+        .upsert({ id: user.id, parqet_client_id: valueToStore })
       if (error) throw error
-      onDone(clientId.trim())
+
+      onDone(trimmed)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -73,7 +86,6 @@ export default function ParqetSetup({ onDone }) {
           </button>
         </div>
 
-        {/* Leserechte-Hinweis */}
         <div style={{ background: '#1a2a1a', border: '1px solid #14532d', borderRadius: 8, padding: '10px 14px', marginBottom: 20, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 15, lineHeight: 1, flexShrink: 0 }}>💡</span>
           <p style={{ color: '#86efac', fontSize: 12, lineHeight: 1.6, margin: 0 }}>

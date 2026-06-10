@@ -1,4 +1,6 @@
 import { supabase } from './supabaseClient'
+import { decrypt, encrypt, isEncrypted, clearCachedKey } from './crypto'
+import { getPassword } from './passwordStore'
 
 let CLIENT_ID = null
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
@@ -11,6 +13,8 @@ const SCOPE        = 'portfolio:read'
 //   access_token  → sessionStorage  (kurzlebig, XSS-Angriffe haben nach Tab-Schließen keinen Zugriff mehr)
 //   refresh_token → localStorage    (längerfristig, nötig für automatischen Refresh)
 //   expires_at    → sessionStorage  (gehört logisch zum Access Token)
+//   AES key (JWK) → sessionStorage  (überlebt Reload, stirbt mit Tab-Schließen)
+//   Passwort      → nur RAM          (nie persistiert)
 // —————————————————————————————————————————————————————————————————
 
 export async function getClientId() {
@@ -26,7 +30,41 @@ export async function getClientId() {
     .single()
 
   if (error) throw error
-  CLIENT_ID = data?.parqet_client_id || null
+
+  const raw = data?.parqet_client_id || null
+  if (!raw) return null
+
+  // -------------------------------------------------------------------------
+  // Auto-migration: plaintext → encrypted
+  // -------------------------------------------------------------------------
+  if (!isEncrypted(raw)) {
+    const password = getPassword()
+    if (password) {
+      try {
+        const encrypted = await encrypt(raw, password)   // also caches the key
+        await supabase
+          .from('profiles')
+          .update({ parqet_client_id: encrypted })
+          .eq('id', user.id)
+      } catch (e) {
+        console.warn('Auto-migration of client ID failed:', e)
+      }
+    }
+    CLIENT_ID = raw
+    return CLIENT_ID
+  }
+
+  // -------------------------------------------------------------------------
+  // Decrypt — uses cached JWK key if available (survives page reloads),
+  // falls back to password-based derivation on first call after login.
+  // -------------------------------------------------------------------------
+  try {
+    // Pass password as fallback — decrypt() will prefer the cached key.
+    CLIENT_ID = await decrypt(raw, getPassword())
+  } catch {
+    // Cached key missing and no password in RAM — need fresh login.
+    CLIENT_ID = null
+  }
   return CLIENT_ID
 }
 
@@ -101,11 +139,9 @@ export async function handleCallback() {
   const tokens    = await res.json()
   const expiresAt = Date.now() + (tokens.expires_in || 3600) * 1000
 
-  // Access Token → sessionStorage (kurzlebig, sicherer gegen XSS-Diebstahl über Tabs)
   sessionStorage.setItem('parqet_access_token', tokens.access_token)
   sessionStorage.setItem('parqet_expires_at',   String(expiresAt))
 
-  // Refresh Token → localStorage (muss Tab-Neustarts überleben)
   if (tokens.refresh_token) {
     localStorage.setItem('parqet_refresh_token', tokens.refresh_token)
   }
@@ -124,10 +160,8 @@ export async function getAccessToken() {
 
   if (!token && !refreshToken) return null
 
-  // Token noch gültig?
   if (token && Date.now() < expiresAt - 60_000) return token
 
-  // Token abgelaufen – Refresh versuchen
   if (!refreshToken || !clientId) { logout(); return null }
 
   try {
@@ -156,14 +190,12 @@ export async function getAccessToken() {
 }
 
 export async function logout() {
-  // Access Token aus sessionStorage entfernen
   sessionStorage.removeItem('parqet_access_token')
   sessionStorage.removeItem('parqet_expires_at')
-  // Refresh Token aus localStorage entfernen
   localStorage.removeItem('parqet_refresh_token')
-  // Rückwärtskompatibilität: alten localStorage-Access-Token auch löschen (falls noch vorhanden)
   localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_expires_at')
+  clearCachedKey()    // remove cached AES key from sessionStorage
 
   await supabase.auth.signOut()
   clearCachedClientId()
@@ -171,7 +203,6 @@ export async function logout() {
 }
 
 export function isLoggedIn() {
-  // Gültig, wenn Access Token in sessionStorage ODER Refresh Token in localStorage vorhanden
   return !!sessionStorage.getItem('parqet_access_token') ||
          !!localStorage.getItem('parqet_refresh_token')
 }

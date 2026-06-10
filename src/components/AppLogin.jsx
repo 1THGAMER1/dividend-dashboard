@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { storePassword } from '../passwordStore'
 
 export default function AppLogin() {
   const [email,    setEmail]    = useState('')
@@ -18,6 +19,9 @@ export default function AppLogin() {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
+        // Store password in RAM so auth.js can derive the AES key for the Client ID.
+        // Never written to localStorage / sessionStorage / cookies.
+        storePassword(password)
       } else if (mode === 'register') {
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
@@ -109,7 +113,6 @@ export default function AppLogin() {
           </button>
         </form>
 
-        {/* Passwort vergessen - nur im Login-Modus */}
         {mode === 'login' && (
           <p style={{ textAlign: 'right', marginTop: 10, marginBottom: 0 }}>
             {linkBtn(() => { setMode('forgot'); setError(null); setInfo(null) }, 'Passwort vergessen?')}
