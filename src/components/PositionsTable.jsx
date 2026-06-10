@@ -26,6 +26,8 @@ const YEAR_COLORS = ['#009991','#3b82f6','#a78bfa','#f472b6','#fb923c','#facc15'
 
 function DividendHistoryPanel({ holding }) {
     const { monthly } = holding
+    const [mode, setMode] = useState('monthly') // 'monthly' | 'cumulative'
+
     if (!monthly || Object.keys(monthly).length === 0) {
         return <div style={{ color:'#556070', fontSize:13, padding:'16px 0' }}>Keine Verlaufsdaten vorhanden.</div>
     }
@@ -39,9 +41,19 @@ function DividendHistoryPanel({ holding }) {
         months: Array.from({ length: 12 }, (_, m) => monthly[y]?.[m] ?? 0),
     }))
 
-    const allValues = yearData.flatMap(yd => yd.months)
-    const maxVal    = Math.max(...allValues, 0.01)
-    const CHART_H   = 100
+    // Akkumulierte Werte pro Jahr (laufende Summe über Monate)
+    const yearDataCum = yearData.map(yd => {
+        let running = 0
+        return {
+            ...yd,
+            months: yd.months.map(v => { running += v; return running }),
+        }
+    })
+
+    const activeData = mode === 'cumulative' ? yearDataCum : yearData
+    const allValues  = activeData.flatMap(yd => yd.months)
+    const maxVal     = Math.max(...allValues, 0.01)
+    const CHART_H    = 100
 
     const yearSums = yearData.map(yd => ({
         year:  yd.year,
@@ -51,43 +63,118 @@ function DividendHistoryPanel({ holding }) {
 
     return (
         <div style={{ padding:'16px 4px 8px', display:'flex', flexDirection:'column', gap:14 }}>
-            <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-                {yearData.map(yd => (
-                    <div key={yd.year} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11 }}>
-                        <div style={{ width:10, height:10, borderRadius:2, background: yd.color }} />
-                        <span style={{ color: yd.year === currentYear ? '#e0e6f0' : '#7a8ba0', fontWeight: yd.year === currentYear ? 600 : 400 }}>{yd.year}</span>
-                    </div>
-                ))}
-            </div>
 
-            <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
-                <div style={{ display:'flex', alignItems:'flex-end', gap:3, minWidth:320 }}>
-                    {MONTHS_SHORT.map((mon, mIdx) => {
-                        const hasAny = yearData.some(yd => yd.months[mIdx] > 0)
-                        return (
-                            <div key={mon} style={{ flex:'1 0 auto', display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                                <div style={{ display:'flex', alignItems:'flex-end', gap:1, height:CHART_H }}>
-                                    {yearData.map(yd => {
-                                        const val = yd.months[mIdx]
-                                        const h   = Math.max(val > 0 ? 3 : 0, (val / maxVal) * CHART_H)
-                                        return (
-                                            <div key={yd.year} title={`${mon} ${yd.year}: ${fmt(val)}`} style={{
-                                                width: Math.max(6, Math.floor(24 / yearData.length)),
-                                                height: h, borderRadius:'3px 3px 0 0',
-                                                background: val > 0 ? yd.color : 'transparent',
-                                                opacity: yd.year === currentYear ? 1 : 0.65,
-                                                alignSelf: 'flex-end',
-                                            }} />
-                                        )
-                                    })}
-                                </div>
-                                <span style={{ fontSize:9, color: hasAny ? '#556070' : '#2a3a50', marginTop:3 }}>{mon}</span>
-                            </div>
-                        )
-                    })}
+            {/* Legende + Toggle */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+                <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                    {yearData.map(yd => (
+                        <div key={yd.year} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11 }}>
+                            <div style={{ width:10, height:10, borderRadius:2, background: yd.color }} />
+                            <span style={{ color: yd.year === currentYear ? '#e0e6f0' : '#7a8ba0', fontWeight: yd.year === currentYear ? 600 : 400 }}>{yd.year}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Ansicht-Toggle */}
+                <div style={{ display:'flex', background:'#0f1420', borderRadius:20, padding:2, border:'1px solid #1e2a3a', gap:2 }}>
+                    {[['monthly','Monatlich'],['cumulative','Akkumuliert']].map(([val, label]) => (
+                        <button
+                            key={val}
+                            onClick={() => setMode(val)}
+                            style={{
+                                background: mode === val ? '#1e3a5f' : 'transparent',
+                                border: 'none',
+                                color: mode === val ? '#93c5fd' : '#556070',
+                                borderRadius: 16, padding: '3px 10px',
+                                fontSize: 11, cursor: 'pointer',
+                                fontWeight: mode === val ? 600 : 400,
+                                transition: 'all 0.15s',
+                            }}
+                        >
+                            {label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
+            {/* Balken- oder Linien-Chart */}
+            <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+                {mode === 'monthly' ? (
+                    // Balkendiagramm (unverändert)
+                    <div style={{ display:'flex', alignItems:'flex-end', gap:3, minWidth:320 }}>
+                        {MONTHS_SHORT.map((mon, mIdx) => {
+                            const hasAny = yearData.some(yd => yd.months[mIdx] > 0)
+                            return (
+                                <div key={mon} style={{ flex:'1 0 auto', display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+                                    <div style={{ display:'flex', alignItems:'flex-end', gap:1, height:CHART_H }}>
+                                        {yearData.map(yd => {
+                                            const val = yd.months[mIdx]
+                                            const h   = Math.max(val > 0 ? 3 : 0, (val / maxVal) * CHART_H)
+                                            return (
+                                                <div key={yd.year} title={`${mon} ${yd.year}: ${fmt(val)}`} style={{
+                                                    width: Math.max(6, Math.floor(24 / yearData.length)),
+                                                    height: h, borderRadius:'3px 3px 0 0',
+                                                    background: val > 0 ? yd.color : 'transparent',
+                                                    opacity: yd.year === currentYear ? 1 : 0.65,
+                                                    alignSelf: 'flex-end',
+                                                }} />
+                                            )
+                                        })}
+                                    </div>
+                                    <span style={{ fontSize:9, color: hasAny ? '#556070' : '#2a3a50', marginTop:3 }}>{mon}</span>
+                                </div>
+                            )
+                        })}
+                    </div>
+                ) : (
+                    // SVG-Liniendiagramm für akkumulierte Ansicht
+                    <div style={{ minWidth: 320 }}>
+                        <svg width="100%" viewBox="0 0 360 116" preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+                            {yearDataCum.map((yd) => {
+                                const pts = yd.months.map((v, i) => {
+                                    const x = (i / 11) * 340 + 10
+                                    const y = 100 - (v / maxVal) * 90 + 8
+                                    return `${x},${y}`
+                                }).join(' ')
+                                return (
+                                    <g key={yd.year}>
+                                        <polyline
+                                            points={pts}
+                                            fill="none"
+                                            stroke={yd.color}
+                                            strokeWidth={yd.year === currentYear ? 2.5 : 1.5}
+                                            strokeLinejoin="round"
+                                            strokeLinecap="round"
+                                            opacity={yd.year === currentYear ? 1 : 0.5}
+                                        />
+                                        {/* Punkte an jedem Monat */}
+                                        {yd.months.map((v, i) => {
+                                            if (v === 0) return null
+                                            const x = (i / 11) * 340 + 10
+                                            const y = 100 - (v / maxVal) * 90 + 8
+                                            return (
+                                                <circle key={i} cx={x} cy={y} r={yd.year === currentYear ? 3 : 2}
+                                                    fill={yd.color} opacity={yd.year === currentYear ? 1 : 0.5}>
+                                                    <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
+                                                </circle>
+                                            )
+                                        })}
+                                    </g>
+                                )
+                            })}
+                            {/* X-Achse Monatsbeschriftung */}
+                            {MONTHS_SHORT.map((mon, i) => (
+                                <text key={mon} x={(i / 11) * 340 + 10} y="114"
+                                    textAnchor="middle" fontSize="8" fill="#3d5266">
+                                    {mon}
+                                </text>
+                            ))}
+                        </svg>
+                    </div>
+                )}
+            </div>
+
+            {/* Jahres-Summen-Cards */}
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                 {yearSums.map(ys => (
                     <div key={ys.year} style={{
