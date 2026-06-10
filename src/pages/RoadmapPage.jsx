@@ -62,7 +62,7 @@ const ROADMAP = [
     items: [
       'E-Mail-Benachrichtigung bei Dividendenzahlungen',
       'Wöchentlicher Portfolio-Report per Mail',
-      'Multi-Portfolio-Unterstützung'
+      'Multi-Portfolio-Unterstützung',
       'Browser Push-Notifications',
       'Automatischer Daten-Refresh (Cron)',
     ],
