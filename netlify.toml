@@ -39,3 +39,6 @@
     # - font-src 'self'             → nur lokale Fonts
     # - frame-ancestors 'none'      → verstärkt X-Frame-Options
     Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://connect.parqet.com; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+    # Suchmaschinen-Indexierung vollständig sperren (HTTP-Ebene)
+    X-Robots-Tag = "noindex, nofollow, noarchive, nosnippet"

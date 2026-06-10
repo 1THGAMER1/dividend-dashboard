@@ -1,0 +1,3 @@
+# Kein öffentliches Angebot – alle Crawler ausschließen
+User-agent: *
+Disallow: /
