@@ -63,7 +63,21 @@ function rolling12m(monthly, endYear, endMonth) {
   return total
 }
 
-// ─── Branded Loading Screen ───────────────────────────────────────────────────
+// Das Logo als wiederverwendbare Komponente
+function DashLogo({ size = 32 }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size}>
+      <rect width="32" height="32" rx="8" fill="#0f1420"/>
+      <circle cx="16" cy="16" r="12" fill="none" stroke="#1e3a2a" strokeWidth="2"/>
+      <circle cx="16" cy="16" r="12" fill="none" stroke="#22c55e" strokeWidth="2"
+        strokeDasharray="28 48" strokeDashoffset="0" strokeLinecap="round"/>
+      <polyline points="11,19 15,13 17,16 21,10" fill="none" stroke="#4ade80"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+// ─── Branded Loading Screen
 function LoadingScreen({ text }) {
   return (
     <div style={{
@@ -75,35 +89,16 @@ function LoadingScreen({ text }) {
       flexDirection: 'column',
       gap: 20,
     }}>
-      {/* Pulsierendes Logo */}
       <div style={{ animation: 'logoPulse 1.6s ease-in-out infinite' }}>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64">
-          <rect width="32" height="32" rx="6" fill="#111827"/>
-          <rect x="4"  y="22" width="5" height="6"  rx="1" fill="#22c55e"/>
-          <rect x="11" y="16" width="5" height="12" rx="1" fill="#22c55e"/>
-          <rect x="18" y="10" width="5" height="18" rx="1" fill="#22c55e"/>
-          <polyline points="18,10 23,4 28,8" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <DashLogo size={64} />
       </div>
-
-      {/* App-Name */}
       <div style={{ textAlign: 'center' }}>
         <p style={{ color: '#e0e6f0', fontWeight: 700, fontSize: 16, margin: 0 }}>
           Dividenden Dashboard
         </p>
-        <p style={{ color: '#556070', fontSize: 13, margin: '4px 0 0' }}>
-          {text}
-        </p>
+        <p style={{ color: '#556070', fontSize: 13, margin: '4px 0 0' }}>{text}</p>
       </div>
-
-      {/* Ladebalken */}
-      <div style={{
-        width: 160,
-        height: 3,
-        background: '#1e2a3a',
-        borderRadius: 99,
-        overflow: 'hidden',
-      }}>
+      <div style={{ width: 160, height: 3, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden' }}>
         <div style={{
           height: '100%',
           background: 'linear-gradient(90deg, #22c55e, #4ade80)',
@@ -111,7 +106,6 @@ function LoadingScreen({ text }) {
           animation: 'loadBar 1.6s ease-in-out infinite',
         }} />
       </div>
-
       <style>{`
         @keyframes logoPulse {
           0%, 100% { opacity: 1;   transform: scale(1);    }

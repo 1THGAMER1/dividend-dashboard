@@ -1,13 +1,24 @@
 /**
- * Footer.jsx — Globaler Footer für alle Seiten
- * Erweiterbar: Links-Array einfach ergänzen
+ * Footer.jsx — Globaler Footer für alle Seiten
  */
 
 const FOOTER_LINKS = [
   // { label: 'Datenschutz', href: '#' },
   // { label: 'Impressum',   href: '#' },
-  // { label: 'GitHub',      href: 'https://github.com/...', external: true },
 ]
+
+function DashLogo({ size = 20 }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size} aria-label="Dividend Dashboard">
+      <rect width="32" height="32" rx="8" fill="#0f1420"/>
+      <circle cx="16" cy="16" r="12" fill="none" stroke="#1e3a2a" strokeWidth="2"/>
+      <circle cx="16" cy="16" r="12" fill="none" stroke="#22c55e" strokeWidth="2"
+        strokeDasharray="28 48" strokeDashoffset="0" strokeLinecap="round"/>
+      <polyline points="11,19 15,13 17,16 21,10" fill="none" stroke="#4ade80"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
 
 export default function Footer({ onNavigate }) {
   return (
@@ -28,50 +39,27 @@ export default function Footer({ onNavigate }) {
       }}>
         {/* Left: Branding */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-label="Dividend Dashboard" style={{ flexShrink: 0 }}>
-            <rect x="2" y="10" width="3" height="8" rx="1" fill="#009991" opacity="0.7"/>
-            <rect x="7" y="6" width="3" height="12" rx="1" fill="#009991" opacity="0.85"/>
-            <rect x="12" y="3" width="3" height="15" rx="1" fill="#009991"/>
-            <path d="M3.5 9.5 L8.5 5.5 L13.5 2.5" stroke="#22c55e" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          <DashLogo size={20} />
           <span style={{ fontSize: 12, color: '#2d4055', fontWeight: 500 }}>
             Dividend Dashboard
           </span>
         </div>
 
-        {/* Center: Links (leer bis Links hinzugefügt werden) */}
         {FOOTER_LINKS.length > 0 && (
           <nav style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
             {FOOTER_LINKS.map((link, i) => (
               link.external
-                ? (
-                  <a
-                    key={i}
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ fontSize: 12, color: '#3d5266', textDecoration: 'none' }}
-                  >
-                    {link.label}
-                  </a>
-                ) : (
-                  <button
-                    key={i}
-                    onClick={() => onNavigate?.(link.href)}
-                    style={{
-                      background: 'none', border: 'none',
-                      fontSize: 12, color: '#3d5266',
-                      cursor: 'pointer', padding: 0,
-                    }}
-                  >
+                ? <a key={i} href={link.href} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 12, color: '#3d5266', textDecoration: 'none' }}>{link.label}</a>
+                : <button key={i} onClick={() => onNavigate?.(link.href)}
+                    style={{ background: 'none', border: 'none', fontSize: 12, color: '#3d5266', cursor: 'pointer', padding: 0 }}>
                     {link.label}
                   </button>
-                )
             ))}
           </nav>
         )}
 
-        {/* Right: Roadmap link + copyright */}
+        {/* Right: Roadmap + copyright */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <button
             onClick={() => onNavigate?.('roadmap')}
