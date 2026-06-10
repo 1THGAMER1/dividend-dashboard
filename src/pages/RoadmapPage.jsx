@@ -1,6 +1,6 @@
 /**
  * RoadmapPage.jsx — Elegante, moderne Roadmap-Seite
- * Visually distinct vom Rest der App: glassmorphism cards, animated timeline
+ * Items können einzeln als done markiert werden direkt in den Daten.
  */
 
 const ROADMAP = [
@@ -10,11 +10,11 @@ const ROADMAP = [
     title: 'Foundation',
     period: 'Q2 2026',
     items: [
-      'Parqet OAuth2 PKCE Integration',
-      'Dividenden-Dashboard mit KPI-Karten',
-      'Jahres- & Monatsübersicht (Chart)',
-      'Heatmap der Dividendenhistorie',
-      'Positions-Tabelle mit Prognosen',
+      { text: 'Parqet OAuth2 PKCE Integration',              done: true },
+      { text: 'Dividenden-Dashboard mit KPI-Karten',         done: true },
+      { text: 'Jahres- & Monatsübersicht (Chart)',           done: true },
+      { text: 'Heatmap der Dividendenhistorie',              done: true },
+      { text: 'Positions-Tabelle mit Prognosen',             done: true },
     ],
   },
   {
@@ -23,10 +23,10 @@ const ROADMAP = [
     title: 'Planning Tools',
     period: 'Q2 2026',
     items: [
-      'Dividenden-Rechner (Zielplanung)',
-      'DRIP-Simulator (Reinvestitionsrechner)',
-      'Kalender-Ansicht für Zahlungstermine',
-      'Upcoming Dividends (90-Tage-Preview)',
+      { text: 'Dividenden-Rechner (Zielplanung)',            done: true },
+      { text: 'DRIP-Simulator (Reinvestitionsrechner)',      done: true },
+      { text: 'Kalender-Ansicht für Zahlungstermine',       done: true },
+      { text: 'Upcoming Dividends (90-Tage-Preview)',        done: true },
     ],
   },
   {
@@ -35,11 +35,11 @@ const ROADMAP = [
     title: 'Sicherheit & Zuverlässigkeit',
     period: 'Q2 2026',
     items: [
-      'AES-256-GCM Verschlüsselung der Client ID',
-      'JWK Key Caching (kein Re-Login nach Reload)',
-      'CORS-Einschränkung & Bearer-Auth am Proxy',
-      'Access Token in sessionStorage (XSS-Schutz)',
-      'Weitere kleine QoL Verbesserungen'
+      { text: 'AES-256-GCM Verschlüsselung der Client ID',  done: true },
+      { text: 'JWK Key Caching (kein Re-Login nach Reload)', done: true },
+      { text: 'CORS-Einschränkung & Bearer-Auth am Proxy',  done: true },
+      { text: 'Access Token in sessionStorage (XSS-Schutz)', done: true },
+      { text: 'Weitere kleine QoL Verbesserungen',           done: true },
     ],
   },
   {
@@ -48,41 +48,40 @@ const ROADMAP = [
     title: 'Portfolio Intelligence',
     period: 'Q2–Q3 2026',
     items: [
-      'Steuer-Export (CSV / PDF)',
-      'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)',
-      'Benchmark-Vergleich (ETF vs. Portfolio)',
-      'Inflationsbereingte Renditeansicht',
+      { text: 'Steuer-Export (CSV / PDF)',                                          done: false },
+      { text: 'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)', done: true  },
+      { text: 'Benchmark-Vergleich (ETF vs. Portfolio)',                            done: false },
+      { text: 'Inflationsbereingte Renditeansicht',                                 done: false },
     ],
   },
   {
     phase: '04',
     status: 'planned',
     title: 'Benachrichtigungen & Automatisierung',
-    period: 'Q3–Q4 2026',
+    period: 'Q3 2026',
     items: [
-      'E-Mail-Benachrichtigung bei Dividendenzahlungen',
-      'Wöchentlicher Portfolio-Report per Mail',
-      'Multi-Portfolio-Unterstützung',
-      'Browser Push-Notifications',
-      'Automatischer Daten-Refresh (Cron)',
+      { text: 'E-Mail-Benachrichtigung bei Dividendenzahlungen', done: false },
+      { text: 'Monatlicher Portfolio-Report per Mail',         done: false },
+      { text: 'Browser Push-Benachrichtigungen',                      done: false },
+      { text: 'Automatischer Daten-Refresh (Cron)',              done: false },
     ],
   },
   {
     phase: '05',
     status: 'planned',
     title: 'Social & Sharing',
-    period: '2027',
+    period: 'Q3-Q4',
     items: [
-      'Portfolio-Snapshot teilen (anonymisiert)',
-      'Community-Vergleich (anonymisiertes Ranking)',
-      'Öffentliches Dividenden-Tagebuch (opt-in)',
+      { text: 'Portfolio-Snapshot teilen (anonymisiert)',          done: false },
+      { text: 'Community-Vergleich (anonymisiertes Ranking)',      done: false },
+      { text: 'Öffentliches Dividenden-Tagebuch (opt-in)',         done: false },
     ],
   },
 ]
 
 const STATUS_CONFIG = {
-  done:    { label: 'Abgeschlossen', color: '#22c55e', bg: 'rgba(34,197,94,0.1)',  border: 'rgba(34,197,94,0.25)',  dot: '#22c55e' },
-  active:  { label: 'In Arbeit',     color: '#38bdf8', bg: 'rgba(56,189,248,0.1)', border: 'rgba(56,189,248,0.3)',  dot: '#38bdf8' },
+  done:    { label: 'Abgeschlossen', color: '#22c55e', bg: 'rgba(34,197,94,0.1)',    border: 'rgba(34,197,94,0.25)',    dot: '#22c55e' },
+  active:  { label: 'In Arbeit',     color: '#38bdf8', bg: 'rgba(56,189,248,0.1)',   border: 'rgba(56,189,248,0.3)',    dot: '#38bdf8' },
   planned: { label: 'Geplant',       color: '#94a3b8', bg: 'rgba(148,163,184,0.06)', border: 'rgba(148,163,184,0.15)', dot: '#475569' },
 }
 
@@ -101,7 +100,6 @@ export default function RoadmapPage() {
         textAlign: 'center',
         borderBottom: '1px solid #1a2333',
       }}>
-        {/* Decorative glow — subtle, not the "AI blob" anti-pattern */}
         <div style={{
           position: 'absolute', top: -60, left: '50%', transform: 'translateX(-50%)',
           width: 480, height: 220,
@@ -129,7 +127,6 @@ export default function RoadmapPage() {
           Transparenz über den Entwicklungsfortschritt und die geplanten Features des Dividend Dashboards.
         </p>
 
-        {/* Status Legend */}
         <div style={{
           display: 'flex', gap: 20, justifyContent: 'center',
           marginTop: 32, flexWrap: 'wrap',
@@ -151,7 +148,6 @@ export default function RoadmapPage() {
       {/* Timeline */}
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '48px 20px 0' }}>
         <div style={{ position: 'relative' }}>
-          {/* Vertical line */}
           <div style={{
             position: 'absolute',
             left: 32, top: 0, bottom: 0,
@@ -160,20 +156,27 @@ export default function RoadmapPage() {
           }} />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
-            {ROADMAP.map((phase, i) => {
-              const cfg = STATUS_CONFIG[phase.status]
+            {ROADMAP.map((phase, phaseIdx) => {
+              const cfg      = STATUS_CONFIG[phase.status]
               const isActive = phase.status === 'active'
-              return (
-                <div key={i} style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
+              const isDone   = phase.status === 'done'
 
-                  {/* Phase dot + number */}
+              const doneCount  = phase.items.filter(it => it.done).length
+              const totalCount = phase.items.length
+              const progressPct = Math.round((doneCount / totalCount) * 100)
+              const showProgress = !isDone && doneCount > 0
+
+              return (
+                <div key={phaseIdx} style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
+
+                  {/* Phase bubble */}
                   <div style={{ position: 'relative', zIndex: 1, flexShrink: 0 }}>
                     <div style={{
                       width: 64, height: 64,
                       borderRadius: '50%',
                       background: isActive
                         ? 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(0,153,145,0.12))'
-                        : phase.status === 'done'
+                        : isDone
                           ? 'rgba(34,197,94,0.08)'
                           : 'rgba(30,42,60,0.6)',
                       border: `1.5px solid ${cfg.border}`,
@@ -191,21 +194,18 @@ export default function RoadmapPage() {
                     flex: 1,
                     background: isActive
                       ? 'linear-gradient(135deg, rgba(56,189,248,0.06), rgba(0,153,145,0.04))'
-                      : phase.status === 'done'
+                      : isDone
                         ? 'rgba(22,27,39,0.8)'
                         : 'rgba(16,20,30,0.6)',
                     border: `1px solid ${cfg.border}`,
                     borderRadius: 16,
                     padding: '20px 24px',
                     backdropFilter: 'blur(8px)',
-                    transition: 'all 0.2s',
                   }}>
-                    {/* Card header */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#d0dae8', margin: 0 }}>
-                          {phase.title}
-                        </h2>
+                        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#d0dae8', margin: 0 }}>{phase.title}</h2>
                         <span style={{
                           fontSize: 10, fontWeight: 700, padding: '2px 8px',
                           borderRadius: 20, background: cfg.bg,
@@ -219,35 +219,73 @@ export default function RoadmapPage() {
                       <span style={{ fontSize: 12, color: '#3d5266', fontWeight: 500 }}>{phase.period}</span>
                     </div>
 
+                    {/* Fortschrittsbalken */}
+                    {showProgress && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                          <span style={{ fontSize: 11, color: '#3d5266' }}>
+                            {doneCount} von {totalCount} abgeschlossen
+                          </span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: doneCount === totalCount ? '#22c55e' : '#38bdf8' }}>
+                            {progressPct} %
+                          </span>
+                        </div>
+                        <div style={{ height: 4, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%',
+                            width: `${progressPct}%`,
+                            borderRadius: 99,
+                            background: doneCount === totalCount
+                              ? 'linear-gradient(90deg, #22c55e, #4ade80)'
+                              : 'linear-gradient(90deg, #38bdf8, #009991)',
+                            transition: 'width 0.4s ease',
+                          }} />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Items */}
                     <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {phase.items.map((item, j) => (
-                        <li key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                          <span style={{
-                            flexShrink: 0, marginTop: 2,
-                            width: 14, height: 14,
-                            borderRadius: '50%',
-                            border: phase.status === 'done'
-                              ? 'none'
-                              : `1.5px solid ${cfg.border}`,
-                            background: phase.status === 'done'
-                              ? 'rgba(34,197,94,0.15)'
-                              : 'transparent',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                            {phase.status === 'done' && (
-                              <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                                <path d="M1.5 4l1.8 1.8L6.5 2" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
-                            )}
-                          </span>
-                          <span style={{
-                            fontSize: 13.5,
-                            color: phase.status === 'done' ? '#7a8fa8' : phase.status === 'active' ? '#9ab3c8' : '#4a5e72',
-                            lineHeight: 1.5,
-                          }}>{item}</span>
-                        </li>
-                      ))}
+                      {phase.items.map((item, itemIdx) => {
+                        const isChecked = item.done
+                        const checkColor = isDone ? '#22c55e' : '#38bdf8'
+
+                        return (
+                          <li key={itemIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                            {/* Checkbox */}
+                            <span style={{
+                              flexShrink: 0, marginTop: 2,
+                              width: 16, height: 16,
+                              borderRadius: '50%',
+                              border: isChecked ? 'none' : `1.5px solid ${cfg.border}`,
+                              background: isChecked
+                                ? isDone ? 'rgba(34,197,94,0.15)' : 'rgba(56,189,248,0.18)'
+                                : 'transparent',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              boxShadow: isChecked && !isDone ? '0 0 6px rgba(56,189,248,0.35)' : 'none',
+                            }}>
+                              {isChecked && (
+                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                                  <path d="M1.5 4l1.8 1.8L6.5 2"
+                                    stroke={checkColor}
+                                    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </span>
+
+                            {/* Text */}
+                            <span style={{
+                              fontSize: 13.5, flex: 1,
+                              color: isChecked
+                                ? isDone ? '#7a8fa8' : '#4a7a8a'
+                                : phase.status === 'active' ? '#9ab3c8' : '#4a5e72',
+                              lineHeight: 1.5,
+                              textDecoration: isChecked && !isDone ? 'line-through' : 'none',
+                              textDecorationColor: '#2a4a5a',
+                            }}>{item.text}</span>
+                          </li>
+                        )
+                      })}
                     </ul>
                   </div>
                 </div>
@@ -256,7 +294,6 @@ export default function RoadmapPage() {
           </div>
         </div>
 
-        {/* Bottom note */}
         <p style={{
           textAlign: 'center', marginTop: 56,
           fontSize: 12, color: '#2d3f52',
