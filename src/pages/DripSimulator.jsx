@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 
-const EUR  = v => v.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €'
-const EUR2 = v => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
+const EUR  = v => v.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €'
+const EUR2 = v => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
 
 function Slider({ label, min, max, step, value, onChange, unit, color = '#009991', hint }) {
   return (
@@ -63,7 +63,6 @@ function simulate({ startCapital, annualDivNet, divYieldPct, priceGrowthPct, div
   return rows
 }
 
-// Formatiert einen Eurobetrag kurz: 1.234.567 -> "1,2 Mio" / 12345 -> "12.345"
 function fmtShort(v) {
   if (v >= 1_000_000) return (v / 1_000_000).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + '\u00a0Mio\u00a0€'
   if (v >= 10_000)    return Math.round(v / 1000).toLocaleString('de-DE') + '\u00a0T€'
@@ -71,7 +70,7 @@ function fmtShort(v) {
 }
 
 const BAR_H    = 180
-const Y_LABELS = 4   // Anzahl Y-Achsen-Beschriftungen
+const Y_LABELS = 4
 
 function YAxis({ maxVal, height, formatter }) {
   const steps = Array.from({ length: Y_LABELS + 1 }, (_, i) => (Y_LABELS - i) / Y_LABELS)
@@ -92,29 +91,19 @@ function CompareChart({ dripRows, noDripRows, years }) {
   const maxCap = Math.max(...dripRows.map(r => r.capital), ...noDripRows.map(r => r.capital))
   const step   = years > 20 ? 5 : years > 10 ? 2 : 1
   const shown  = dripRows.filter((_, i) => (i + 1) % step === 0 || i === 0 || i === dripRows.length - 1)
-
-  // Horizontale Hilfslinien
   const gridLines = Array.from({ length: Y_LABELS }, (_, i) => ((i + 1) / Y_LABELS) * BAR_H)
 
   return (
     <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
       <div style={{ minWidth: Math.max(320, shown.length * 52 + 60), paddingBottom:4 }}>
-        {/* Chart-Bereich mit Y-Achse */}
         <div style={{ position:'relative', paddingLeft:60 }}>
-
           <YAxis maxVal={maxCap} height={BAR_H} formatter={fmtShort} />
-
-          {/* Hilfslinien */}
           <div style={{ position:'absolute', left:60, right:0, top:0, height:BAR_H, pointerEvents:'none' }}>
             {gridLines.map((y, i) => (
-              <div key={i} style={{
-                position:'absolute', left:0, right:0,
-                bottom: y, borderTop:'1px solid rgba(255,255,255,0.04)',
-              }} />
+              <div key={i} style={{ position:'absolute', left:0, right:0,
+                bottom: y, borderTop:'1px solid rgba(255,255,255,0.04)' }} />
             ))}
           </div>
-
-          {/* Balken */}
           <div style={{ display:'flex', alignItems:'flex-end', gap:4, height:BAR_H }}>
             {shown.map((dr) => {
               const nd  = noDripRows.find(r => r.year === dr.year)
@@ -133,8 +122,6 @@ function CompareChart({ dripRows, noDripRows, years }) {
             })}
           </div>
         </div>
-
-        {/* Jahreslabels */}
         <div style={{ display:'flex', gap:4, marginTop:4, paddingLeft:60 }}>
           {shown.map(dr => (
             <div key={dr.year} style={{ flex:1, textAlign:'center',
@@ -143,8 +130,6 @@ function CompareChart({ dripRows, noDripRows, years }) {
             </div>
           ))}
         </div>
-
-        {/* Legende */}
         <div style={{ display:'flex', gap:20, marginTop:12, paddingLeft:60, flexWrap:'wrap' }}>
           {[
             { color:'linear-gradient(180deg,#3b5bdb,#1e3a5f)', label:'Ohne DRIP' },
@@ -171,17 +156,13 @@ function DivChart({ dripRows, noDripRows }) {
     <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
       <div style={{ minWidth: Math.max(320, dripRows.length * 28 + 60), paddingBottom:4 }}>
         <div style={{ position:'relative', paddingLeft:60 }}>
-
           <YAxis maxVal={maxDiv} height={DIV_H} formatter={fmtShort} />
-
-          {/* Hilfslinien */}
           <div style={{ position:'absolute', left:60, right:0, top:0, height:DIV_H, pointerEvents:'none' }}>
             {gridLines.map((y, i) => (
               <div key={i} style={{ position:'absolute', left:0, right:0,
                 bottom:y, borderTop:'1px solid rgba(255,255,255,0.04)' }} />
             ))}
           </div>
-
           <div style={{ display:'flex', alignItems:'flex-end', gap:2, height:DIV_H }}>
             {dripRows.map((dr, i) => {
               const nd  = noDripRows[i]
@@ -200,8 +181,6 @@ function DivChart({ dripRows, noDripRows }) {
             })}
           </div>
         </div>
-
-        {/* Jahreslabels */}
         <div style={{ display:'flex', gap:2, marginTop:4, paddingLeft:60 }}>
           {dripRows.map((dr, i) => (
             (i % Math.ceil(dripRows.length / 8) === 0 || i === dripRows.length - 1)
@@ -210,8 +189,6 @@ function DivChart({ dripRows, noDripRows }) {
               : <div key={dr.year} style={{ flex:1 }} />
           ))}
         </div>
-
-        {/* Legende */}
         <div style={{ display:'flex', gap:20, marginTop:12, paddingLeft:60, flexWrap:'wrap' }}>
           {[
             { color:'linear-gradient(180deg,#3b5bdb,#1e3a5f)', label:'Ohne DRIP' },
@@ -232,19 +209,17 @@ export default function DripSimulator({ portfolioData }) {
   const {
     currentValue          = 0,
     totalDividendsNet     = 0,
-    dividendYield         = 0,   // Dezimalbruch z.B. 0.034  (aktuell)
-    forecastDividendYield = 0,   // Dezimalbruch z.B. 0.038  (Prognose)
+    dividendYield         = 0,
+    forecastDividendYield = 0,
     cagrTotal             = null,
     cagrOrganic           = null,
   } = portfolioData ?? {}
 
-  // ---- identisch zum Rechner ----
   const defaultGrowth      = cagrOrganic ?? cagrTotal ?? 5
   const [useForecastYield, setUseForecastYield] = useState(false)
 
   const activeYield    = useForecastYield ? forecastDividendYield : dividendYield
   const divYieldPct    = +(activeYield * 100).toFixed(2) || 3.5
-  // --------------------------------
 
   const [years,        setYears]        = useState(20)
   const [priceGrowth,  setPriceGrowth]  = useState(4)
@@ -276,13 +251,29 @@ export default function DripSimulator({ portfolioData }) {
 
   const noData = !currentValue && !totalDividendsNet
 
-  // CAGR-Presets wie im Rechner
   const presets = [
     { label: 'Konservativ', value: 3,           color: '#556070', disabled: false },
     { label: 'Markt',       value: 5.5,         color: '#34d399', disabled: false },
     { label: 'Organisch',   value: cagrOrganic, color: '#a78bfa', disabled: cagrOrganic === null },
     { label: 'Inkl. Käufe', value: cagrTotal,   color: '#60a5fa', disabled: cagrTotal   === null },
   ]
+
+  // Pill-Button-Stil identisch zum Rechner
+  const pillBase = {
+    display: 'flex', alignItems: 'center', gap: 6,
+    padding: '6px 14px', borderRadius: 9999, fontSize: 13,
+    cursor: 'pointer', border: '1px solid #1e2a3a',
+    background: 'transparent', color: '#556070',
+    transition: 'all 0.15s',
+    whiteSpace: 'nowrap',
+  }
+  const pillActive = {
+    ...pillBase,
+    border: '1px solid #009991',
+    background: 'rgba(0,153,145,0.12)',
+    color: '#5bcec2',
+    fontWeight: 600,
+  }
 
   return (
     <div style={{ maxWidth:800, margin:'0 auto', padding:'24px 14px', color:'#e0e6f0' }}>
@@ -291,7 +282,7 @@ export default function DripSimulator({ portfolioData }) {
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontSize:20, fontWeight:700, margin:0 }}>♻️ Reinvestitions-Simulator</h1>
         <p style={{ color:'#556070', fontSize:13, marginTop:6, lineHeight:1.5 }}>
-          Rendite: <strong style={{ color:'#5bcec2' }}>{divYieldPct} %</strong>
+          Rendite: <strong style={{ color:'#5bcec2' }}>{divYieldPct} %</strong>
           <span style={{ color:'#3d5266', marginLeft:8, fontSize:12 }}>({useForecastYield ? 'Prognose' : 'Aktuell'})</span>
         </p>
       </div>
@@ -299,7 +290,7 @@ export default function DripSimulator({ portfolioData }) {
       {noData && (
         <div style={{ background:'#1a1a0a', border:'1px solid #713f12', color:'#fde68a',
           borderRadius:10, padding:'12px 16px', fontSize:13, marginBottom:20 }}>
-          ⚠️ Keine Portfolio-Daten verfügbar — die Simulation läuft mit Beispielwerten (10.000 € / 3,5 % Rendite).
+          ⚠️ Keine Portfolio-Daten verfügbar — die Simulation läuft mit Beispielwerten (10.000 € / 3,5 % Rendite).
         </div>
       )}
 
@@ -314,7 +305,7 @@ export default function DripSimulator({ portfolioData }) {
           value={priceGrowth} onChange={setPriceGrowth} unit="%" color="#60a5fa"
           hint="S&P 500 hist. ≈10%" />
 
-        {/* Dividendenwachstum + Presets — identisch zum Rechner */}
+        {/* Dividendenwachstum + Presets */}
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           <Slider label="Dividendenwachstum p.a." min={0} max={20} step={0.5}
             value={divGrowth} onChange={setDivGrowth} unit="%" color="#a78bfa" />
@@ -337,28 +328,26 @@ export default function DripSimulator({ portfolioData }) {
           </div>
         </div>
 
-        {/* Dividendenrendite-Toggle — identisch zum Rechner */}
+        {/* Dividendenrendite — Pill-Buttons wie im Rechner */}
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          <div style={{ fontSize:13, color:'#7a8ba0' }}>Dividendenrendite</div>
-          <div style={{ display:'flex', gap:8 }}>
+          <div style={{ fontSize:13, color:'#7a8ba0' }}>Rendite-Basis</div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
             {[
               { id: false, label: 'Aktuell',  value: +(dividendYield * 100).toFixed(2) },
               { id: true,  label: 'Prognose', value: +(forecastDividendYield * 100).toFixed(2) },
             ].map(opt => (
               <button key={String(opt.id)}
                 onClick={() => setUseForecastYield(opt.id)}
-                style={{
-                  flex:1, padding:'10px 12px', borderRadius:10, fontSize:12,
-                  cursor:'pointer', textAlign:'left',
-                  border: useForecastYield === opt.id ? '1px solid #009991' : '1px solid #1e2a3a',
-                  background: useForecastYield === opt.id
-                    ? 'linear-gradient(135deg,#003d3a,#001a18)' : '#0f1420',
+                style={useForecastYield === opt.id ? pillActive : pillBase}>
+                <span style={{ color: useForecastYield === opt.id ? '#5bcec2' : '#7a8ba0' }}>
+                  {opt.label}
+                </span>
+                <span style={{
+                  color: useForecastYield === opt.id ? '#5bcec2' : '#e0e6f0',
+                  fontWeight: 700,
                 }}>
-                <div style={{ color:'#556070', marginBottom:3, fontSize:11 }}>{opt.label}</div>
-                <div style={{ color: useForecastYield === opt.id ? '#5bcec2' : '#e0e6f0',
-                  fontWeight:700, fontSize:16 }}>
-                  {opt.value.toFixed(2)} %
-                </div>
+                  · {opt.value.toFixed(2)}%
+                </span>
               </button>
             ))}
           </div>
@@ -366,7 +355,7 @@ export default function DripSimulator({ portfolioData }) {
 
         {/* Sparrate bis 5000 € */}
         <Slider label="Zusätzliche Einzahlungen / Monat" min={0} max={5000} step={50}
-          value={extraMonthly} onChange={setExtraMonthly} unit=" €" color="#f472b6"
+          value={extraMonthly} onChange={setExtraMonthly} unit=" €" color="#f472b6"
           hint="Sparrate" />
 
         {/* Info-Box */}
@@ -374,7 +363,7 @@ export default function DripSimulator({ portfolioData }) {
           background:'#0f1420', borderRadius:8, border:'1px solid #1e2a3a', lineHeight:1.5 }}>
           ℹ️ Startkapital: <strong style={{ color:'#556070' }}>{EUR(commonParams.startCapital)}</strong>
           {' · '}
-          Div.-Rendite: <strong style={{ color:'#556070' }}>{divYieldPct.toFixed(2)} %</strong>
+          Div.-Rendite: <strong style={{ color:'#556070' }}>{divYieldPct.toFixed(2)} %</strong>
           {' · '}
           Netto-Dividenden heute: <strong style={{ color:'#556070' }}>{EUR2(commonParams.annualDivNet)}/Jahr</strong>
         </div>
@@ -392,7 +381,7 @@ export default function DripSimulator({ portfolioData }) {
           color="#60a5fa" />
         <KpiBox label="DRIP-Mehrwert (Kapital)"
           value={`+${EUR(capitalDiff)}`}
-          sub={`+${capitalBoost} % mehr Kapital`}
+          sub={`+${capitalBoost} % mehr Kapital`}
           color="#22c55e" />
         <KpiBox label="DRIP-Mehrwert (Dividenden)"
           value={`+${EUR2(divDiff)}/Jahr`}
