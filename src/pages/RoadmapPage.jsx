@@ -8,7 +8,7 @@ const ROADMAP = [
     phase: '01',
     status: 'done',
     title: 'Foundation',
-    period: 'Q1 2025',
+    period: 'Q2 2026',
     items: [
       'Parqet OAuth2 PKCE Integration',
       'Dividenden-Dashboard mit KPI-Karten',
@@ -21,7 +21,7 @@ const ROADMAP = [
     phase: '02',
     status: 'done',
     title: 'Planning Tools',
-    period: 'Q2 2025',
+    period: 'Q2 2026',
     items: [
       'Dividenden-Rechner (Zielplanung)',
       'DRIP-Simulator (Reinvestitionsrechner)',
@@ -30,43 +30,45 @@ const ROADMAP = [
     ],
   },
   {
-    phase: '03',
+    phase: '02b',
     status: 'done',
-    title: 'Security & Reliability',
-    period: 'Q1 2026',
+    title: 'Sicherheit & Zuverlässigkeit',
+    period: 'Q2 2026',
     items: [
       'AES-256-GCM Verschlüsselung der Client ID',
       'JWK Key Caching (kein Re-Login nach Reload)',
       'CORS-Einschränkung & Bearer-Auth am Proxy',
       'Access Token in sessionStorage (XSS-Schutz)',
+      'Weitere kleine QoL Verbesserungen'
     ],
   },
   {
-    phase: '04',
+    phase: '03',
     status: 'active',
     title: 'Portfolio Intelligence',
     period: 'Q2–Q3 2026',
     items: [
       'Steuer-Export (CSV / PDF)',
-      'Multi-Portfolio-Unterstützung',
+      'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)',
       'Benchmark-Vergleich (ETF vs. Portfolio)',
       'Inflationsbereingte Renditeansicht',
     ],
   },
   {
-    phase: '05',
+    phase: '04',
     status: 'planned',
-    title: 'Notifications & Automation',
+    title: 'Benachrichtigungen & Automatisierung',
     period: 'Q3–Q4 2026',
     items: [
       'E-Mail-Benachrichtigung bei Dividendenzahlungen',
       'Wöchentlicher Portfolio-Report per Mail',
+      'Multi-Portfolio-Unterstützung'
       'Browser Push-Notifications',
       'Automatischer Daten-Refresh (Cron)',
     ],
   },
   {
-    phase: '06',
+    phase: '05',
     status: 'planned',
     title: 'Social & Sharing',
     period: '2027',
