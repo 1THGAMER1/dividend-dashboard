@@ -63,47 +63,36 @@ function rolling12m(monthly, endYear, endMonth) {
   return total
 }
 
-// ─── Branded Loading Screen ───────────────────────────────────────────────────
+// ─── Shared Logo Component
+export function DashLogo({ size = 32 }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size} aria-label="Dividend Dashboard">
+      <rect width="32" height="32" rx="8" fill="#0f1420"/>
+      <circle cx="16" cy="16" r="12" fill="none" stroke="#1e3a2a" strokeWidth="2"/>
+      <circle cx="16" cy="16" r="12" fill="none" stroke="#22c55e" strokeWidth="2"
+        strokeDasharray="28 48" strokeDashoffset="0" strokeLinecap="round"/>
+      <polyline points="11,19 15,13 17,16 21,10" fill="none" stroke="#4ade80"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+// ─── Branded Loading Screen
 function LoadingScreen({ text }) {
   return (
     <div style={{
-      minHeight: '100vh',
-      background: '#0f1420',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'column',
-      gap: 20,
+      minHeight: '100vh', background: '#0f1420',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 20,
     }}>
-      {/* Pulsierendes Logo */}
       <div style={{ animation: 'logoPulse 1.6s ease-in-out infinite' }}>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64">
-          <rect width="32" height="32" rx="6" fill="#111827"/>
-          <rect x="4"  y="22" width="5" height="6"  rx="1" fill="#22c55e"/>
-          <rect x="11" y="16" width="5" height="12" rx="1" fill="#22c55e"/>
-          <rect x="18" y="10" width="5" height="18" rx="1" fill="#22c55e"/>
-          <polyline points="18,10 23,4 28,8" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <DashLogo size={64} />
       </div>
-
-      {/* App-Name */}
       <div style={{ textAlign: 'center' }}>
-        <p style={{ color: '#e0e6f0', fontWeight: 700, fontSize: 16, margin: 0 }}>
-          Dividenden Dashboard
-        </p>
-        <p style={{ color: '#556070', fontSize: 13, margin: '4px 0 0' }}>
-          {text}
-        </p>
+        <p style={{ color: '#e0e6f0', fontWeight: 700, fontSize: 16, margin: 0 }}>Dividenden Dashboard</p>
+        <p style={{ color: '#556070', fontSize: 13, margin: '4px 0 0' }}>{text}</p>
       </div>
-
-      {/* Ladebalken */}
-      <div style={{
-        width: 160,
-        height: 3,
-        background: '#1e2a3a',
-        borderRadius: 99,
-        overflow: 'hidden',
-      }}>
+      <div style={{ width: 160, height: 3, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden' }}>
         <div style={{
           height: '100%',
           background: 'linear-gradient(90deg, #22c55e, #4ade80)',
@@ -111,7 +100,6 @@ function LoadingScreen({ text }) {
           animation: 'loadBar 1.6s ease-in-out infinite',
         }} />
       </div>
-
       <style>{`
         @keyframes logoPulse {
           0%, 100% { opacity: 1;   transform: scale(1);    }
@@ -234,10 +222,7 @@ export default function App() {
   }
 
   const calcTrueCagr = () => {
-    const years = Object.keys(monthly)
-      .map(Number)
-      .filter(y => y < cy)
-      .sort()
+    const years = Object.keys(monthly).map(Number).filter(y => y < cy).sort()
     if (years.length < 2) return null
     const firstYear = years[0]
     const lastYear  = years[years.length - 1]
@@ -252,7 +237,7 @@ export default function App() {
   const yoy      = calcYoY()
   const trueCagr = calcTrueCagr()
 
-  const rawYield    = dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0
+  const rawYield      = dividendYield?.['12m'] ?? dividendYield?.['all'] ?? 0
   const forecastYield = currentValue > 0
     ? calcForecastNext12mNet() / currentValue
     : rawYield / 100
@@ -267,7 +252,6 @@ export default function App() {
   }
 
   const statusIndicator = getStatusIndicator(dataSource)
-
   const hasData      = Object.keys(monthly).length > 0
   const showSkeleton = loading && !hasData
   const showEmpty    = !loading && !hasData
@@ -279,9 +263,17 @@ export default function App() {
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#161b27', borderBottom: '1px solid #1e2a3a',
-        padding: '0 10px', height: 52,
+        padding: '0 12px', height: 52,
         position: 'sticky', top: 0, zIndex: 100,
       }}>
+
+        {/* LEFT: Brand */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <DashLogo size={28} />
+          <span className="nav-brand-text">Dividend Dashboard</span>
+        </div>
+
+        {/* CENTER: Nav Tabs */}
         <div style={{ display: 'flex', gap: 4 }}>
           {NAV_TABS.map(tab => (
             <button key={tab.id} onClick={() => setPage(tab.id)} style={{
@@ -298,7 +290,8 @@ export default function App() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {/* RIGHT: Status + Actions */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {lastUpdated && (
             <div
               className="nav-status"
@@ -414,11 +407,7 @@ export default function App() {
                   />
                   <KpiCard
                     label="YoY-Wachstum"
-                    value={
-                      yoy === null
-                        ? '–'
-                        : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'
-                    }
+                    value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'}
                     color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
                     sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
                   />
