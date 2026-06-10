@@ -10,6 +10,7 @@ import ParqetSetup        from './components/ParqetSetup'
 import DividendChart      from './components/DividendChart'
 import DividendHeatmap    from './components/DividendHeatmap'
 import PositionsTable     from './components/PositionsTable'
+import DividendDonut      from './components/DividendDonut'
 import DividendCalculator from './pages/DividendCalculator'
 import DripSimulator      from './pages/DripSimulator'
 import RoadmapPage        from './pages/RoadmapPage'
@@ -404,7 +405,7 @@ export default function App() {
                   />
                 </div>
 
-                {/* Zeile 2: CAGR + YoY (immer angezeigt) */}
+                {/* Zeile 2: CAGR + YoY */}
                 <div className="kpi-grid">
                   {trueCagr !== null && (
                     <KpiCard
@@ -464,7 +465,10 @@ export default function App() {
                   byHolding={byHolding} forecastByHolding={forecastByHolding}
                 />
                 <DividendHeatmap monthly={monthly} />
+
+                {/* Donut + Tabelle */}
                 <div id="dividends-table">
+                  <DividendDonut byHolding={byHolding} kpiRange={kpiRange} />
                   <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
                 </div>
               </div>
