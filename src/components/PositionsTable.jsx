@@ -26,7 +26,7 @@ const YEAR_COLORS = ['#009991','#3b82f6','#a78bfa','#f472b6','#fb923c','#facc15'
 
 function DividendHistoryPanel({ holding }) {
     const { monthly } = holding
-    const [mode, setMode] = useState('monthly') // 'monthly' | 'cumulative'
+    const [mode, setMode] = useState('monthly') // 'monthly' | 'cumulative' | 'performance'
 
     if (!monthly || Object.keys(monthly).length === 0) {
         return <div style={{ color:'#556070', fontSize:13, padding:'16px 0' }}>Keine Verlaufsdaten vorhanden.</div>
@@ -41,19 +41,32 @@ function DividendHistoryPanel({ holding }) {
         months: Array.from({ length: 12 }, (_, m) => monthly[y]?.[m] ?? 0),
     }))
 
-    // Akkumulierte Werte pro Jahr (laufende Summe über Monate)
+    // Akkumuliert pro Jahr (laufend innerhalb des Jahres)
     const yearDataCum = yearData.map(yd => {
         let running = 0
-        return {
-            ...yd,
-            months: yd.months.map(v => { running += v; return running }),
-        }
+        return { ...yd, months: yd.months.map(v => { running += v; return running }) }
     })
 
-    const activeData = mode === 'cumulative' ? yearDataCum : yearData
-    const allValues  = activeData.flatMap(yd => yd.months)
-    const maxVal     = Math.max(...allValues, 0.01)
-    const CHART_H    = 100
+    // All-time Performance: ein einziger Datenstrom über alle Monate aller Jahre
+    const allTimePoints = []
+    let runningTotal = 0
+    years.forEach(y => {
+        Array.from({ length: 12 }, (_, m) => monthly[y]?.[m] ?? 0).forEach((v, m) => {
+            runningTotal += v
+            allTimePoints.push({ year: y, month: m, value: runningTotal, raw: v })
+        })
+    })
+    // nur bis letztem Monat mit Zahlung schneiden
+    const lastPayIdx = allTimePoints.reduce((last, pt, i) => pt.raw > 0 ? i : last, -1)
+    const perfPoints = lastPayIdx >= 0 ? allTimePoints.slice(0, lastPayIdx + 1) : allTimePoints
+
+    const maxVal = mode === 'cumulative'
+        ? Math.max(...yearDataCum.flatMap(yd => yd.months), 0.01)
+        : mode === 'performance'
+        ? Math.max(...perfPoints.map(p => p.value), 0.01)
+        : Math.max(...yearData.flatMap(yd => yd.months), 0.01)
+
+    const CHART_H = 100
 
     const yearSums = yearData.map(yd => ({
         year:  yd.year,
@@ -61,30 +74,55 @@ function DividendHistoryPanel({ holding }) {
         net:   yd.months.reduce((s, v) => s + v, 0),
     }))
 
+    // SVG-Dimensionen für Performance-Chart
+    const W = 360, H = 116, PAD_L = 4, PAD_R = 4, PAD_T = 8, PAD_B = 16
+    const chartW = W - PAD_L - PAD_R
+    const chartH = H - PAD_T - PAD_B
+    const n = perfPoints.length
+    const toX = i => PAD_L + (i / Math.max(n - 1, 1)) * chartW
+    const toY = v => PAD_T + chartH - (v / maxVal) * chartH
+
+    // Polyline-Punkte
+    const linePoints = perfPoints.map((p, i) => `${toX(i)},${toY(p.value)}`).join(' ')
+
+    // Bereich für Jahrstrennlinien und Labels im Performance-Chart
+    const yearBoundaries = []
+    years.forEach(y => {
+        const firstIdx = perfPoints.findIndex(p => p.year === y)
+        if (firstIdx > 0) yearBoundaries.push({ x: toX(firstIdx), year: y })
+    })
+
     return (
         <div style={{ padding:'16px 4px 8px', display:'flex', flexDirection:'column', gap:14 }}>
 
             {/* Legende + Toggle */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-                <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-                    {yearData.map(yd => (
-                        <div key={yd.year} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11 }}>
-                            <div style={{ width:10, height:10, borderRadius:2, background: yd.color }} />
-                            <span style={{ color: yd.year === currentYear ? '#e0e6f0' : '#7a8ba0', fontWeight: yd.year === currentYear ? 600 : 400 }}>{yd.year}</span>
-                        </div>
-                    ))}
-                </div>
+                {mode !== 'performance' ? (
+                    <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                        {yearData.map(yd => (
+                            <div key={yd.year} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11 }}>
+                                <div style={{ width:10, height:10, borderRadius:2, background: yd.color }} />
+                                <span style={{ color: yd.year === currentYear ? '#e0e6f0' : '#7a8ba0', fontWeight: yd.year === currentYear ? 600 : 400 }}>{yd.year}</span>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <div style={{ width:10, height:3, borderRadius:2, background:'#22c55e' }} />
+                        <span style={{ fontSize:11, color:'#7a8ba0' }}>Gesamtperformance seit {years[0]}</span>
+                    </div>
+                )}
 
                 {/* Ansicht-Toggle */}
                 <div style={{ display:'flex', background:'#0f1420', borderRadius:20, padding:2, border:'1px solid #1e2a3a', gap:2 }}>
-                    {[['monthly','Monatlich'],['cumulative','Akkumuliert']].map(([val, label]) => (
+                    {[['monthly','Monatlich'],['cumulative','Akkumuliert'],['performance','Performance']].map(([val, label]) => (
                         <button
                             key={val}
                             onClick={() => setMode(val)}
                             style={{
-                                background: mode === val ? '#1e3a5f' : 'transparent',
+                                background: mode === val ? (val === 'performance' ? '#1a3a1a' : '#1e3a5f') : 'transparent',
                                 border: 'none',
-                                color: mode === val ? '#93c5fd' : '#556070',
+                                color: mode === val ? (val === 'performance' ? '#4ade80' : '#93c5fd') : '#556070',
                                 borderRadius: 16, padding: '3px 10px',
                                 fontSize: 11, cursor: 'pointer',
                                 fontWeight: mode === val ? 600 : 400,
@@ -97,10 +135,10 @@ function DividendHistoryPanel({ holding }) {
                 </div>
             </div>
 
-            {/* Balken- oder Linien-Chart */}
+            {/* Charts */}
             <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
-                {mode === 'monthly' ? (
-                    // Balkendiagramm (unverändert)
+
+                {mode === 'monthly' && (
                     <div style={{ display:'flex', alignItems:'flex-end', gap:3, minWidth:320 }}>
                         {MONTHS_SHORT.map((mon, mIdx) => {
                             const hasAny = yearData.some(yd => yd.months[mIdx] > 0)
@@ -126,9 +164,10 @@ function DividendHistoryPanel({ holding }) {
                             )
                         })}
                     </div>
-                ) : (
-                    // SVG-Liniendiagramm für akkumulierte Ansicht
-                    <div style={{ minWidth: 320 }}>
+                )}
+
+                {mode === 'cumulative' && (
+                    <div style={{ minWidth:320 }}>
                         <svg width="100%" viewBox="0 0 360 116" preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
                             {yearDataCum.map((yd) => {
                                 const pts = yd.months.map((v, i) => {
@@ -138,37 +177,97 @@ function DividendHistoryPanel({ holding }) {
                                 }).join(' ')
                                 return (
                                     <g key={yd.year}>
-                                        <polyline
-                                            points={pts}
-                                            fill="none"
-                                            stroke={yd.color}
+                                        <polyline points={pts} fill="none" stroke={yd.color}
                                             strokeWidth={yd.year === currentYear ? 2.5 : 1.5}
-                                            strokeLinejoin="round"
-                                            strokeLinecap="round"
-                                            opacity={yd.year === currentYear ? 1 : 0.5}
-                                        />
-                                        {/* Punkte an jedem Monat */}
+                                            strokeLinejoin="round" strokeLinecap="round"
+                                            opacity={yd.year === currentYear ? 1 : 0.5} />
                                         {yd.months.map((v, i) => {
                                             if (v === 0) return null
                                             const x = (i / 11) * 340 + 10
                                             const y = 100 - (v / maxVal) * 90 + 8
-                                            return (
-                                                <circle key={i} cx={x} cy={y} r={yd.year === currentYear ? 3 : 2}
-                                                    fill={yd.color} opacity={yd.year === currentYear ? 1 : 0.5}>
-                                                    <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
-                                                </circle>
-                                            )
+                                            return <circle key={i} cx={x} cy={y} r={yd.year === currentYear ? 3 : 2}
+                                                fill={yd.color} opacity={yd.year === currentYear ? 1 : 0.5}>
+                                                <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
+                                            </circle>
                                         })}
                                     </g>
                                 )
                             })}
-                            {/* X-Achse Monatsbeschriftung */}
                             {MONTHS_SHORT.map((mon, i) => (
                                 <text key={mon} x={(i / 11) * 340 + 10} y="114"
-                                    textAnchor="middle" fontSize="8" fill="#3d5266">
-                                    {mon}
-                                </text>
+                                    textAnchor="middle" fontSize="8" fill="#3d5266">{mon}</text>
                             ))}
+                        </svg>
+                    </div>
+                )}
+
+                {mode === 'performance' && (
+                    <div style={{ minWidth:320 }}>
+                        <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+                            {/* Jahrstrennlinien */}
+                            {yearBoundaries.map(({ x, year }) => (
+                                <g key={year}>
+                                    <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + chartH}
+                                        stroke="#1e2a3a" strokeWidth="1" strokeDasharray="3 3" />
+                                    <text x={x + 3} y={PAD_T + 9} fontSize="8" fill="#3d5266">{year}</text>
+                                </g>
+                            ))}
+
+                            {/* Fläche unter der Linie */}
+                            {perfPoints.length > 1 && (
+                                <polygon
+                                    points={[
+                                        `${toX(0)},${PAD_T + chartH}`,
+                                        ...perfPoints.map((p, i) => `${toX(i)},${toY(p.value)}`),
+                                        `${toX(perfPoints.length - 1)},${PAD_T + chartH}`,
+                                    ].join(' ')}
+                                    fill="url(#perfGrad)"
+                                    opacity="0.25"
+                                />
+                            )}
+
+                            {/* Gradient-Definition */}
+                            <defs>
+                                <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.8" />
+                                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                                </linearGradient>
+                            </defs>
+
+                            {/* Hauptlinie */}
+                            {perfPoints.length > 1 && (
+                                <polyline points={linePoints} fill="none" stroke="#22c55e"
+                                    strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                            )}
+
+                            {/* Punkte nur an Zahlungsmonaten */}
+                            {perfPoints.map((p, i) => {
+                                if (p.raw === 0) return null
+                                return (
+                                    <circle key={i} cx={toX(i)} cy={toY(p.value)} r="2.5"
+                                        fill="#22c55e" stroke="#0f1420" strokeWidth="1">
+                                        <title>{MONTHS_SHORT[p.month]} {p.year}: +{fmt(p.raw)} → {fmt(p.value)} gesamt</title>
+                                    </circle>
+                                )
+                            })}
+
+                            {/* Endwert-Label */}
+                            {perfPoints.length > 0 && (() => {
+                                const last = perfPoints[perfPoints.length - 1]
+                                const x = toX(perfPoints.length - 1)
+                                const y = toY(last.value)
+                                return (
+                                    <g>
+                                        <rect x={x - 28} y={y - 16} width={56} height={14} rx="3"
+                                            fill="#1a3a1a" stroke="#22c55e" strokeWidth="0.5" />
+                                        <text x={x} y={y - 6} textAnchor="middle" fontSize="8"
+                                            fill="#4ade80" fontWeight="bold">{fmt(last.value)}</text>
+                                    </g>
+                                )
+                            })()}
+
+                            {/* X-Achse: Jahres-Labels beim ersten Jahr */}
+                            <text x={toX(0)} y={H - 2} textAnchor="middle" fontSize="8" fill="#3d5266">{years[0]}</text>
                         </svg>
                     </div>
                 )}
@@ -186,6 +285,19 @@ function DividendHistoryPanel({ holding }) {
                         {ys.net > 0 && <div style={{ fontSize:10, color:'#3d5266', marginTop:2 }}>≈ {fmt(ys.net / 12)} / Mo</div>}
                     </div>
                 ))}
+                {/* Gesamtsumme extra */}
+                {mode === 'performance' && (() => {
+                    const total = yearSums.reduce((s, ys) => s + ys.net, 0)
+                    return total > 0 ? (
+                        <div style={{
+                            background:'#0f1420', border:'1px solid #22c55e40',
+                            borderRadius:8, padding:'8px 12px', minWidth:68,
+                        }}>
+                            <div style={{ fontSize:11, color:'#22c55e', marginBottom:3, fontWeight:600 }}>Gesamt</div>
+                            <div style={{ fontSize:13, fontWeight:700, color:'#4ade80' }}>{fmt(total)}</div>
+                        </div>
+                    ) : null
+                })()}
             </div>
         </div>
     )
