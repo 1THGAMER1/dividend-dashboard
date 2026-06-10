@@ -1,4 +1,6 @@
 import { supabase } from './supabaseClient'
+import { decrypt, encrypt, isEncrypted } from './crypto'
+import { getPassword } from './passwordStore'
 
 let CLIENT_ID = null
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
@@ -26,7 +28,49 @@ export async function getClientId() {
     .single()
 
   if (error) throw error
-  CLIENT_ID = data?.parqet_client_id || null
+
+  const raw = data?.parqet_client_id || null
+  if (!raw) return null
+
+  // Auto-migration: if the stored value is still plaintext, encrypt it now.
+  if (!isEncrypted(raw)) {
+    const password = getPassword()
+    if (password) {
+      try {
+        const encrypted = await encrypt(raw, password)
+        await supabase
+          .from('profiles')
+          .update({ parqet_client_id: encrypted })
+          .eq('id', user.id)
+        CLIENT_ID = raw
+        return CLIENT_ID
+      } catch (e) {
+        console.warn('Auto-migration of client ID failed:', e)
+        // Fall through — return plaintext so the app keeps working
+        CLIENT_ID = raw
+        return CLIENT_ID
+      }
+    }
+    // No password in RAM yet (e.g. OAuth callback path): return plaintext as-is.
+    CLIENT_ID = raw
+    return CLIENT_ID
+  }
+
+  // Decrypt using the in-RAM password.
+  const password = getPassword()
+  if (!password) {
+    // Password not available (e.g. page hard-refresh after session restore).
+    // The user will be asked to re-authenticate via the normal Supabase session;
+    // we cannot decrypt without the password so we signal "not ready" here.
+    return null
+  }
+
+  try {
+    CLIENT_ID = await decrypt(raw, password)
+  } catch {
+    // Wrong password or corrupted data — force re-login.
+    CLIENT_ID = null
+  }
   return CLIENT_ID
 }
 
@@ -101,11 +145,9 @@ export async function handleCallback() {
   const tokens    = await res.json()
   const expiresAt = Date.now() + (tokens.expires_in || 3600) * 1000
 
-  // Access Token → sessionStorage (kurzlebig, sicherer gegen XSS-Diebstahl über Tabs)
   sessionStorage.setItem('parqet_access_token', tokens.access_token)
   sessionStorage.setItem('parqet_expires_at',   String(expiresAt))
 
-  // Refresh Token → localStorage (muss Tab-Neustarts überleben)
   if (tokens.refresh_token) {
     localStorage.setItem('parqet_refresh_token', tokens.refresh_token)
   }
@@ -124,10 +166,8 @@ export async function getAccessToken() {
 
   if (!token && !refreshToken) return null
 
-  // Token noch gültig?
   if (token && Date.now() < expiresAt - 60_000) return token
 
-  // Token abgelaufen – Refresh versuchen
   if (!refreshToken || !clientId) { logout(); return null }
 
   try {
@@ -156,12 +196,9 @@ export async function getAccessToken() {
 }
 
 export async function logout() {
-  // Access Token aus sessionStorage entfernen
   sessionStorage.removeItem('parqet_access_token')
   sessionStorage.removeItem('parqet_expires_at')
-  // Refresh Token aus localStorage entfernen
   localStorage.removeItem('parqet_refresh_token')
-  // Rückwärtskompatibilität: alten localStorage-Access-Token auch löschen (falls noch vorhanden)
   localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_expires_at')
 
@@ -171,7 +208,6 @@ export async function logout() {
 }
 
 export function isLoggedIn() {
-  // Gültig, wenn Access Token in sessionStorage ODER Refresh Token in localStorage vorhanden
   return !!sessionStorage.getItem('parqet_access_token') ||
          !!localStorage.getItem('parqet_refresh_token')
 }
