@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { startOAuthFlow, logout, getClientId, clearCachedClientId } from './auth'
 import { supabase } from './supabaseClient'
 import useDividendData from './hooks/useDividendData'
+import { calcRealTotal } from './inflation'
 
 import KpiCard            from './components/KpiCard'
 import LoginScreen        from './components/LoginScreen'
@@ -252,6 +253,13 @@ export default function App() {
     cagrOrganic: null,
   }
 
+  // ── Inflationsbereinigte Real-Rendite ──────────────────────────────────────
+  const nominalTotal = kpi?.['all']?.net ?? 0
+  const realTotal    = calcRealTotal(monthly)
+  const inflation    = nominalTotal - realTotal
+  const hasRealData  = nominalTotal > 0 && Object.keys(monthly).length > 1
+  // ──────────────────────────────────────────────────────────────────────────
+
   const statusIndicator = getStatusIndicator(dataSource)
   const hasData      = Object.keys(monthly).length > 0
   const showSkeleton = loading && !hasData
@@ -405,7 +413,7 @@ export default function App() {
                   />
                 </div>
 
-                {/* Zeile 2: CAGR + YoY */}
+                {/* Zeile 2: CAGR + YoY + Real */}
                 <div className="kpi-grid">
                   {trueCagr !== null && (
                     <KpiCard
@@ -421,6 +429,15 @@ export default function App() {
                     color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
                     sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
                   />
+                  {hasRealData && (
+                    <KpiCard
+                      label="Real (inflationsber.)"
+                      value={fmt(realTotal)}
+                      color="#f59e0b"
+                      detail={{ label: 'Kaufkraftverlust', value: fmt(inflation), color: '#ef4444' }}
+                      sub={`Gesamt · Basis: ${Object.keys(monthly).map(Number).sort()[0]}`}
+                    />
+                  )}
                 </div>
 
                 <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
