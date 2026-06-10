@@ -63,11 +63,66 @@ function rolling12m(monthly, endYear, endMonth) {
   return total
 }
 
-function CenteredSpinner({ text }) {
+// ─── Branded Loading Screen ───────────────────────────────────────────────────
+function LoadingScreen({ text }) {
   return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
-      <div style={{ fontSize:32 }}>⟳</div>
-      <p style={{ color:'#7a8ba0' }}>{text}</p>
+    <div style={{
+      minHeight: '100vh',
+      background: '#0f1420',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: 20,
+    }}>
+      {/* Pulsierendes Logo */}
+      <div style={{ animation: 'logoPulse 1.6s ease-in-out infinite' }}>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64">
+          <rect width="32" height="32" rx="6" fill="#111827"/>
+          <rect x="4"  y="22" width="5" height="6"  rx="1" fill="#22c55e"/>
+          <rect x="11" y="16" width="5" height="12" rx="1" fill="#22c55e"/>
+          <rect x="18" y="10" width="5" height="18" rx="1" fill="#22c55e"/>
+          <polyline points="18,10 23,4 28,8" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+
+      {/* App-Name */}
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ color: '#e0e6f0', fontWeight: 700, fontSize: 16, margin: 0 }}>
+          Dividenden Dashboard
+        </p>
+        <p style={{ color: '#556070', fontSize: 13, margin: '4px 0 0' }}>
+          {text}
+        </p>
+      </div>
+
+      {/* Ladebalken */}
+      <div style={{
+        width: 160,
+        height: 3,
+        background: '#1e2a3a',
+        borderRadius: 99,
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          height: '100%',
+          background: 'linear-gradient(90deg, #22c55e, #4ade80)',
+          borderRadius: 99,
+          animation: 'loadBar 1.6s ease-in-out infinite',
+        }} />
+      </div>
+
+      <style>{`
+        @keyframes logoPulse {
+          0%, 100% { opacity: 1;   transform: scale(1);    }
+          50%       { opacity: 0.7; transform: scale(0.93); }
+        }
+        @keyframes loadBar {
+          0%   { width: 0%;   margin-left: 0;    }
+          50%  { width: 70%;  margin-left: 15%;  }
+          100% { width: 0%;   margin-left: 100%; }
+        }
+      `}</style>
     </div>
   )
 }
@@ -126,10 +181,10 @@ export default function App() {
     return () => { active = false }
   }, [appUser])
 
-  if (appUser === undefined || profileLoading) return <CenteredSpinner text="App wird vorbereitet…" />
+  if (appUser === undefined || profileLoading) return <LoadingScreen text="App wird vorbereitet…" />
   if (!appUser)        return <AppLogin />
   if (!clientIdReady)  return <ParqetSetup onDone={() => setClientIdReady(true)} />
-  if (authLoading)     return <CenteredSpinner text="Authentifizierung läuft…" />
+  if (authLoading)     return <LoadingScreen text="Authentifizierung läuft…" />
   if (!loggedIn)       return <LoginScreen onLogin={startOAuthFlow} loading={authLoading} error={error} />
 
   const cy = new Date().getFullYear()
