@@ -74,9 +74,6 @@ export default function useDividendData() {
 
         const { names, types, tickers } = holdingData
 
-        // Yahoo Finance Dividendendaten für alle Positionen laden
-        // Nur für ISINs ohne ausreichende Eigenhistorie nötig – aber wir laden
-        // alle parallel; estimateDps nutzt Yahoo nur als Fallback.
         const yahooByIsin = await fetchYahooDividendsForHoldings(tickers)
 
         const m  = groupByYearMonth(acts)
@@ -88,9 +85,51 @@ export default function useDividendData() {
         const kpiYtd = calcKpiFromActivities(acts, 'ytd')
         const kpi12m = calcKpiFromActivities(acts, '12m')
 
-        const dataset = { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData }
+        // rawActs + names + tickers + yahooByIsin werden mitcached
+        // damit refreshYahooForCached den Forecast rebuilden kann
+        const dataset = {
+            m, c, fc, bh,
+            kpiAll, kpiYtd, kpi12m,
+            purchaseValue, currentVal,
+            buyActsData,
+            rawActs: acts,
+            names,
+            tickers,
+            yahooByIsin,
+        }
         writeCache(dataset).catch(err => console.warn('Cache-Schreiben fehlgeschlagen:', err))
         return dataset
+    }, [])
+
+    /**
+     * Rebuild forecast mit frischen Yahoo-Daten, ohne Parqet neu abzufragen.
+     * Setzt forecastByHolding/forecastMonthly/forecastCum direkt.
+     */
+    const refreshYahooForCached = useCallback(async (cached) => {
+        const payload  = cached.payload
+        const tickers  = payload.tickers  || {}
+        const rawActs  = payload.rawActs  || []
+        const buyActs  = payload.buyActsData || []
+        const names    = payload.names    || {}
+
+        if (Object.keys(tickers).length === 0) return
+        if (rawActs.length === 0) return  // keine Rohdaten im Cache
+
+        try {
+            const yahooByIsin = await fetchYahooDividendsForHoldings(tickers)
+            if (Object.keys(yahooByIsin).length === 0) return
+
+            const fc = buildForecast(payload.c, rawActs, buyActs, names, yahooByIsin)
+            setForecastCum(fc.cum)
+            setForecastMonthly(fc.monthly)
+            setForecastByHolding(fc.forecastByHolding)
+
+            // Cache mit aktualisierten Yahoo-Daten + neuem fc überschreiben
+            const updated = { ...payload, fc, yahooByIsin }
+            writeCache(updated).catch(err => console.warn('Yahoo-Cache-Update fehlgeschlagen:', err))
+        } catch (e) {
+            console.warn('Yahoo-Refresh aus Cache fehlgeschlagen:', e.message)
+        }
     }, [])
 
     const loadData = useCallback(async (forceRefresh = false) => {
@@ -105,6 +144,15 @@ export default function useDividendData() {
                     setDataSource('cache')
                     setCacheInfo({ cachedAt: cached.cachedAt })
                     setLoading(false)
+
+                    // Yahoo im Hintergrund nachladen wenn:
+                    // a) yahooByIsin fehlt im Cache, ODER
+                    // b) rawActs fehlen (alter Cache ohne rawActs)
+                    const hasYahoo   = cached.payload.yahooByIsin && Object.keys(cached.payload.yahooByIsin).length > 0
+                    const hasRawActs = cached.payload.rawActs && cached.payload.rawActs.length > 0
+                    if (!hasYahoo || !hasRawActs) {
+                        refreshYahooForCached(cached).catch(() => {})
+                    }
                     return
                 }
             }
@@ -140,7 +188,7 @@ export default function useDividendData() {
             setError(e.message)
             setDataSource(null)
         } finally { setLoading(false) }
-    }, [applyData, fetchFromParqet])
+    }, [applyData, fetchFromParqet, refreshYahooForCached])
 
     useEffect(() => { if (loggedIn) loadData() }, [loggedIn, loadData])
 

@@ -80,7 +80,6 @@ export async function fetchHoldingNames() {
     if (isin) {
       names[isin]   = name
       types[isin]   = h.asset?.type || 'security'
-      // Ticker aus Parqet speichern falls vorhanden
       const ticker  = h.asset?.ticker || h.asset?.symbol || null
       if (ticker) tickers[isin] = ticker
     }
@@ -105,24 +104,46 @@ export async function fetchYahooDividends(ticker) {
   }
 }
 
+// Typen die keine Dividenden zahlen → kein Yahoo-Request
+const NO_DIVIDEND_TYPES = new Set(['crypto', 'cryptocurrency'])
+
 /**
  * Lädt Yahoo-Dividendendaten für alle Tickers parallel.
+ * Krypto-Holdings werden übersprungen (zahlen keine Dividenden).
  * Gibt { [isin]: [{month, year, amount}, ...] } zurück.
  */
-export async function fetchYahooDividendsForHoldings(tickers = {}) {
+export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   const entries = Object.entries(tickers) // [[isin, ticker], ...]
   if (entries.length === 0) return {}
 
+  // Nur Holdings mit relevantem Typ anfragen
+  const filtered = entries.filter(([isin, ticker]) => {
+    const t = (types[isin] || '').toLowerCase()
+    if (NO_DIVIDEND_TYPES.has(t)) {
+      console.log(`[Yahoo] Überspringe ${ticker} (${isin}) — Typ: ${t}`)
+      return false
+    }
+    return true
+  })
+
+  console.log(`[Yahoo] ${filtered.length}/${entries.length} Holdings werden abgefragt (${entries.length - filtered.length} Krypto übersprungen)`)
+
   const results = await Promise.allSettled(
-    entries.map(([isin, ticker]) =>
-      fetchYahooDividends(ticker).then(divs => ({ isin, divs }))
+    filtered.map(([isin, ticker]) =>
+      fetchYahooDividends(ticker).then(divs => ({ isin, ticker, divs }))
     )
   )
 
   const map = {}
   for (const r of results) {
-    if (r.status === 'fulfilled' && r.value.divs.length > 0) {
-      map[r.value.isin] = r.value.divs
+    if (r.status === 'fulfilled') {
+      const { isin, ticker, divs } = r.value
+      if (divs.length > 0) {
+        map[isin] = divs
+        console.log(`[Yahoo] ✓ ${ticker}: ${divs.length} Dividenden gefunden`)
+      } else {
+        console.log(`[Yahoo] – ${ticker}: keine Dividenden`)
+      }
     }
   }
   return map
