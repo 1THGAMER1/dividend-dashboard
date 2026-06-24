@@ -49,6 +49,15 @@ function calcXInterval(totalPoints) {
     return Math.ceil(totalPoints / 12) - 1 // ~12 Labels gesamt
 }
 
+// Forward-fill: füllt null-Werte mit dem letzten bekannten Wert auf
+function forwardFill(arr) {
+    let last = null
+    return arr.map(v => {
+        if (v !== null && v !== undefined) { last = v; return v }
+        return last
+    })
+}
+
 export default function DividendChart({ monthly, cum, forecastCum, forecastMonthly, byHolding, forecastByHolding }) {
     const [mode,      setMode]      = useState('monthly')
     const [showGross, setShowGross] = useState(false)
@@ -118,8 +127,8 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
-    // Akkumuliert
-    const cumLineData = MONTHS.map((name, i) => {
+    // Akkumuliert — forward-fill damit keine Lücken entstehen
+    const cumLineDataRaw = MONTHS.map((name, i) => {
         const pt = { name }
         years.filter(y => y < cy).forEach(y => {
             pt[String(y)] = +scaleNet(cum[y]?.[i] || 0).toFixed(2)
@@ -146,6 +155,27 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
+    // Forward-fill alle Linien im cumLineData
+    const cumLineData = (() => {
+        const keys = [
+            ...years.filter(y => y < cy).map(String),
+            `${cy}_real`,
+            `${cy}_forecast`,
+            `${ny}_forecast`,
+            ...(showInflation ? ['inflation_target'] : []),
+        ]
+        // Extrahiere pro key ein array, forward-fill, schreib zurück
+        const filled = keys.reduce((acc, key) => {
+            acc[key] = forwardFill(cumLineDataRaw.map(pt => pt[key] ?? null))
+            return acc
+        }, {})
+        return cumLineDataRaw.map((pt, i) => {
+            const newPt = { name: pt.name }
+            keys.forEach(key => { newPt[key] = filled[key][i] })
+            return newPt
+        })
+    })()
+
     // Nach Aktie
     const isins = Object.keys(byHolding || {}).filter(isin => {
         const h = byHolding[isin]
@@ -166,7 +196,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         const year     = date.getFullYear()
         const month    = date.getMonth()
         const isFuture = date >= new Date(cy, cm, 1)
-        // Kurzes Label: "Jan" für Jan, "J '26" für Jahreswechsel
         const isJan    = month === 0
         const label    = isJan
             ? `Jan '${String(year).slice(2)}`
@@ -357,20 +386,20 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                         {years.filter(y => y < cy).map(y => (
                             <Line key={y} type="monotone" dataKey={String(y)}
                                   stroke={YEAR_COLORS[y] || '#94a3b8'} strokeWidth={2}
-                                  dot={{ r:2 }} activeDot={{ r:5 }} connectNulls
+                                  dot={{ r:2 }} activeDot={{ r:5 }}
                             />
                         ))}
                         <Line type="monotone" dataKey={`${cy}_real`}
                               stroke={YEAR_COLORS[cy] || '#f472b6'} strokeWidth={2}
-                              dot={{ r:2 }} activeDot={{ r:5 }} connectNulls
+                              dot={{ r:2 }} activeDot={{ r:5 }}
                         />
                         <Line type="monotone" dataKey={`${cy}_forecast`}
                               stroke={YEAR_COLORS[cy] || '#f472b6'} strokeWidth={2}
-                              strokeDasharray="6 4" dot={false} connectNulls
+                              strokeDasharray="6 4" dot={false}
                         />
                         <Line type="monotone" dataKey={`${ny}_forecast`}
                               stroke="#34d399" strokeWidth={2}
-                              strokeDasharray="6 4" dot={false} connectNulls
+                              strokeDasharray="6 4" dot={false}
                         />
                         {showInflation && (
                             <Line
@@ -380,7 +409,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                                 strokeWidth={1.5}
                                 strokeDasharray="5 3"
                                 dot={false}
-                                connectNulls
                                 name="inflation_target"
                             />
                         )}
