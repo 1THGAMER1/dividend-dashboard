@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { handleCallback, isLoggedIn } from '../auth'
 import { groupByYearMonth, toCumulative, buildForecast, groupByHolding } from '../dataUtils'
-import { fetchDividendActivities, fetchBuyActivities, calcKpiFromActivities, fetchHoldingNames, fetchPurchaseValue, fetchPurchaseValuePerHolding, fetchCurrentValue } from '../api'
+import {
+    fetchDividendActivities,
+    fetchBuyActivities,
+    calcKpiFromActivities,
+    fetchHoldingNames,
+    fetchPurchaseValue,
+    fetchPurchaseValuePerHolding,
+    fetchCurrentValue,
+    fetchYahooDividendsForHoldings,
+} from '../api'
 import { readCache, writeCache, readStaleCache } from '../cache'
 
 export default function useDividendData() {
@@ -62,15 +71,23 @@ export default function useDividendData() {
             fetchPurchaseValuePerHolding(),
             fetchCurrentValue(),
         ])
+
         const { names, types, tickers } = holdingData
+
+        // Yahoo Finance Dividendendaten für alle Positionen laden
+        // Nur für ISINs ohne ausreichende Eigenhistorie nötig – aber wir laden
+        // alle parallel; estimateDps nutzt Yahoo nur als Fallback.
+        const yahooByIsin = await fetchYahooDividendsForHoldings(tickers)
+
         const m  = groupByYearMonth(acts)
         const c  = toCumulative(m)
-        // names an buildForecast übergeben für automatischen ISIN-Merge
-        const fc = buildForecast(c, acts, buyActsData, names)
+        const fc = buildForecast(c, acts, buyActsData, names, yahooByIsin)
         const bh = groupByHolding(acts, names, types, purchaseValuePerHolding, tickers)
+
         const kpiAll = calcKpiFromActivities(acts, 'all')
         const kpiYtd = calcKpiFromActivities(acts, 'ytd')
         const kpi12m = calcKpiFromActivities(acts, '12m')
+
         const dataset = { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData }
         writeCache(dataset).catch(err => console.warn('Cache-Schreiben fehlgeschlagen:', err))
         return dataset
