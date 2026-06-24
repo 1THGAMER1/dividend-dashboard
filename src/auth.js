@@ -3,18 +3,38 @@ import { decrypt, encrypt, isEncrypted, clearCachedKey } from './crypto'
 import { getPassword } from './passwordStore'
 
 let CLIENT_ID = null
-let _clientIdPromise = null  // laufendes Promise zwischenspeichern
+let _clientIdPromise = null
 
+const CLIENT_ID_CACHE_KEY = 'parqet_client_id_cache'
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
 const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
 const TOKEN_URL    = '/oauth/token'
 const SCOPE        = 'portfolio:read'
 
-export async function getClientId() {
-  // Bereits gecacht
+function readCachedClientId() {
   if (CLIENT_ID) return CLIENT_ID
+  try {
+    const cached = sessionStorage.getItem(CLIENT_ID_CACHE_KEY)
+    if (cached) {
+      CLIENT_ID = cached
+      return CLIENT_ID
+    }
+  } catch {}
+  return null
+}
 
-  // Bereits ein laufender Request → denselben abwarten statt neuen starten
+function writeCachedClientId(value) {
+  CLIENT_ID = value || null
+  try {
+    if (value) sessionStorage.setItem(CLIENT_ID_CACHE_KEY, value)
+    else sessionStorage.removeItem(CLIENT_ID_CACHE_KEY)
+  } catch {}
+}
+
+export async function getClientId() {
+  const cached = readCachedClientId()
+  if (cached) return cached
+
   if (_clientIdPromise) return _clientIdPromise
 
   _clientIdPromise = _fetchClientId().finally(() => {
@@ -38,9 +58,6 @@ async function _fetchClientId() {
   const raw = data?.parqet_client_id || null
   if (!raw) return null
 
-  // -------------------------------------------------------------------------
-  // Auto-migration: plaintext → encrypted
-  // -------------------------------------------------------------------------
   if (!isEncrypted(raw)) {
     const password = getPassword()
     if (password) {
@@ -54,24 +71,24 @@ async function _fetchClientId() {
         console.warn('Auto-migration of client ID failed:', e)
       }
     }
-    CLIENT_ID = raw
-    return CLIENT_ID
+    writeCachedClientId(raw)
+    return raw
   }
 
-  // -------------------------------------------------------------------------
-  // Decrypt
-  // -------------------------------------------------------------------------
   try {
-    CLIENT_ID = await decrypt(raw, getPassword())
+    const decrypted = await decrypt(raw, getPassword())
+    writeCachedClientId(decrypted)
+    return decrypted
   } catch {
-    CLIENT_ID = null
+    writeCachedClientId(null)
+    return null
   }
-  return CLIENT_ID
 }
 
 export function clearCachedClientId() {
   CLIENT_ID = null
   _clientIdPromise = null
+  try { sessionStorage.removeItem(CLIENT_ID_CACHE_KEY) } catch {}
 }
 
 function generateCodeVerifier() {
@@ -158,12 +175,12 @@ export async function getAccessToken() {
   const token        = sessionStorage.getItem('parqet_access_token')
   const expiresAt    = Number(sessionStorage.getItem('parqet_expires_at') || 0)
   const refreshToken = localStorage.getItem('parqet_refresh_token')
-  const clientId     = await getClientId()
 
   if (!token && !refreshToken) return null
 
   if (token && Date.now() < expiresAt - 60_000) return token
 
+  const clientId = await getClientId()
   if (!refreshToken || !clientId) { logout(); return null }
 
   try {
