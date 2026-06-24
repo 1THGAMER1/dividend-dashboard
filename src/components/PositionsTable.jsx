@@ -24,7 +24,12 @@ const typeColor = label => {
 
 const YEAR_COLORS = ['#009991','#3b82f6','#a78bfa','#f472b6','#fb923c','#facc15']
 
-// Gemeinsame Chart-Wrapper-Komponente
+// SVG-Dimensionen — identisch für alle drei Chart-Modi
+const VW = 520, VH = 160
+const PL = 8, PR = 8, PT = 10, PB = 22
+const CW = VW - PL - PR
+const CH = VH - PT - PB
+
 function ChartBox({ children }) {
     return (
         <div style={{
@@ -78,19 +83,11 @@ function DividendHistoryPanel({ holding }) {
         ? Math.max(...perfPoints.map(p => p.value), 0.01)
         : Math.max(...yearData.flatMap(yd => yd.months), 0.01)
 
-    const CHART_H = 100
-
     const yearSums = yearData.map(yd => ({
         year:  yd.year,
         color: yd.color,
         net:   yd.months.reduce((s, v) => s + v, 0),
     }))
-
-    // SVG-Dimensionen (echtes Seitenverhältnis, kein stretch)
-    const VW = 520, VH = 160
-    const PL = 8, PR = 8, PT = 10, PB = 22
-    const CW = VW - PL - PR
-    const CH = VH - PT - PB
 
     // Cumulative helpers
     const cumX = i => PL + (i / 11) * CW
@@ -106,6 +103,12 @@ function DividendHistoryPanel({ holding }) {
         const firstIdx = perfPoints.findIndex(p => p.year === y)
         if (firstIdx > 0) yearBoundaries.push({ x: perfX(firstIdx), year: y })
     })
+
+    // Monthly chart als SVG — gleiche Dimensionen wie die anderen Charts
+    const barGroupW = CW / 12
+    const barW = Math.max(3, Math.floor((barGroupW * 0.75) / Math.max(yearData.length, 1)))
+    const barGap = yearData.length > 1 ? 1 : 0
+    const totalBarW = yearData.length * barW + (yearData.length - 1) * barGap
 
     return (
         <div style={{ padding:'16px 4px 8px', display:'flex', flexDirection:'column', gap:14 }}>
@@ -142,36 +145,59 @@ function DividendHistoryPanel({ holding }) {
                 </div>
             </div>
 
-            {/* Charts */}
+            {/* Charts — alle in ChartBox mit SVG, einheitlich */}
             <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
 
-                {/* Chart 1: Monthly bars — unverändert */}
+                {/* Chart 1: Monthly — jetzt als SVG in ChartBox */}
                 {mode === 'monthly' && (
-                    <div style={{ display:'flex', alignItems:'flex-end', gap:3, minWidth:320 }}>
-                        {MONTHS_SHORT.map((mon, mIdx) => {
-                            const hasAny = yearData.some(yd => yd.months[mIdx] > 0)
-                            return (
-                                <div key={mon} style={{ flex:'1 0 auto', display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                                    <div style={{ display:'flex', alignItems:'flex-end', gap:1, height:CHART_H }}>
-                                        {yearData.map(yd => {
+                    <ChartBox>
+                        <svg
+                            width="100%"
+                            viewBox={`0 0 ${VW} ${VH}`}
+                            preserveAspectRatio="xMidYMid meet"
+                            style={{ display:'block' }}
+                        >
+                            {/* Gitterlinien */}
+                            {[0.25, 0.5, 0.75, 1].map(f => (
+                                <line key={f}
+                                    x1={PL} y1={PT + CH - f * CH}
+                                    x2={VW - PR} y2={PT + CH - f * CH}
+                                    stroke="#1e2a3a" strokeWidth="1"
+                                />
+                            ))}
+
+                            {/* Bars */}
+                            {MONTHS_SHORT.map((mon, mIdx) => {
+                                const cx = PL + (mIdx / 11) * CW
+                                const offsetX = cx - totalBarW / 2
+                                return (
+                                    <g key={mon}>
+                                        {yearData.map((yd, yi) => {
                                             const val = yd.months[mIdx]
-                                            const h   = Math.max(val > 0 ? 3 : 0, (val / maxVal) * CHART_H)
+                                            const barH = val > 0 ? Math.max(3, (val / maxVal) * CH) : 0
+                                            const bx = offsetX + yi * (barW + barGap)
+                                            const by = PT + CH - barH
                                             return (
-                                                <div key={yd.year} title={`${mon} ${yd.year}: ${fmt(val)}`} style={{
-                                                    width: Math.max(6, Math.floor(24 / yearData.length)),
-                                                    height: h, borderRadius:'3px 3px 0 0',
-                                                    background: val > 0 ? yd.color : 'transparent',
-                                                    opacity: yd.year === currentYear ? 1 : 0.65,
-                                                    alignSelf: 'flex-end',
-                                                }} />
+                                                <rect key={yd.year}
+                                                    x={bx} y={by}
+                                                    width={barW} height={barH}
+                                                    rx="2" ry="2"
+                                                    fill={val > 0 ? yd.color : 'transparent'}
+                                                    opacity={yd.year === currentYear ? 1 : 0.65}
+                                                >
+                                                    <title>{mon} {yd.year}: {fmt(val)}</title>
+                                                </rect>
                                             )
                                         })}
-                                    </div>
-                                    <span style={{ fontSize:9, color: hasAny ? '#556070' : '#2a3a50', marginTop:3 }}>{mon}</span>
-                                </div>
-                            )
-                        })}
-                    </div>
+                                        <text
+                                            x={cx} y={VH - 4}
+                                            textAnchor="middle" fontSize="9" fill="#3d5266"
+                                        >{mon}</text>
+                                    </g>
+                                )
+                            })}
+                        </svg>
+                    </ChartBox>
                 )}
 
                 {/* Chart 2: Akkumuliert */}
@@ -192,7 +218,6 @@ function DividendHistoryPanel({ holding }) {
                                 ))}
                             </defs>
 
-                            {/* Gitterlinien */}
                             {[0.25, 0.5, 0.75, 1].map(f => (
                                 <line key={f}
                                     x1={PL} y1={PT + CH - f * CH}
@@ -201,7 +226,6 @@ function DividendHistoryPanel({ holding }) {
                                 />
                             ))}
 
-                            {/* Linien + Flächen */}
                             {yearDataCum.map(yd => {
                                 const pts = yd.months.map((v, i) => `${cumX(i)},${cumY(v)}`).join(' ')
                                 const area = `${cumX(0)},${PT + CH} ${pts} ${cumX(11)},${PT + CH}`
@@ -213,27 +237,21 @@ function DividendHistoryPanel({ holding }) {
                                             strokeLinejoin="round" strokeLinecap="round"
                                             opacity={yd.year === currentYear ? 1 : 0.55}
                                         />
-                                        {yd.months.map((v, i) => {
-                                            if (v === 0) return null
-                                            return (
-                                                <circle key={i} cx={cumX(i)} cy={cumY(v)}
-                                                    r={yd.year === currentYear ? 2.5 : 2}
-                                                    fill={yd.color}
-                                                    stroke="#131c2e" strokeWidth="1.5"
-                                                    opacity={yd.year === currentYear ? 1 : 0.55}
-                                                >
-                                                    <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
-                                                </circle>
-                                            )
-                                        })}
+                                        {yd.months.map((v, i) => v === 0 ? null : (
+                                            <circle key={i} cx={cumX(i)} cy={cumY(v)}
+                                                r={yd.year === currentYear ? 2.5 : 2}
+                                                fill={yd.color} stroke="#131c2e" strokeWidth="1.5"
+                                                opacity={yd.year === currentYear ? 1 : 0.55}
+                                            >
+                                                <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
+                                            </circle>
+                                        ))}
                                     </g>
                                 )
                             })}
 
-                            {/* X-Achse Monatslabels */}
                             {MONTHS_SHORT.map((mon, i) => (
-                                <text key={mon}
-                                    x={cumX(i)} y={VH - 4}
+                                <text key={mon} x={cumX(i)} y={VH - 4}
                                     textAnchor="middle" fontSize="9" fill="#3d5266"
                                 >{mon}</text>
                             ))}
@@ -257,7 +275,6 @@ function DividendHistoryPanel({ holding }) {
                                 </linearGradient>
                             </defs>
 
-                            {/* Gitterlinien */}
                             {[0.25, 0.5, 0.75, 1].map(f => (
                                 <line key={f}
                                     x1={PL} y1={PT + CH - f * CH}
@@ -266,7 +283,6 @@ function DividendHistoryPanel({ holding }) {
                                 />
                             ))}
 
-                            {/* Jahrstrennlinien */}
                             {yearBoundaries.map(({ x, year }) => (
                                 <g key={year}>
                                     <line x1={x} y1={PT} x2={x} y2={PT + CH}
@@ -275,7 +291,6 @@ function DividendHistoryPanel({ holding }) {
                                 </g>
                             ))}
 
-                            {/* Fläche */}
                             {perfPoints.length > 1 && (
                                 <polygon
                                     points={[
@@ -287,24 +302,18 @@ function DividendHistoryPanel({ holding }) {
                                 />
                             )}
 
-                            {/* Hauptlinie */}
                             {perfPoints.length > 1 && (
                                 <polyline points={linePoints} fill="none" stroke="#22c55e"
                                     strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
                             )}
 
-                            {/* Punkte nur an Zahlungsmonaten */}
-                            {perfPoints.map((p, i) => {
-                                if (p.raw === 0) return null
-                                return (
-                                    <circle key={i} cx={perfX(i)} cy={perfY(p.value)} r="2.5"
-                                        fill="#22c55e" stroke="#131c2e" strokeWidth="1.5">
-                                        <title>{MONTHS_SHORT[p.month]} {p.year}: +{fmt(p.raw)} → {fmt(p.value)} gesamt</title>
-                                    </circle>
-                                )
-                            })}
+                            {perfPoints.map((p, i) => p.raw === 0 ? null : (
+                                <circle key={i} cx={perfX(i)} cy={perfY(p.value)} r="2.5"
+                                    fill="#22c55e" stroke="#131c2e" strokeWidth="1.5">
+                                    <title>{MONTHS_SHORT[p.month]} {p.year}: +{fmt(p.raw)} → {fmt(p.value)} gesamt</title>
+                                </circle>
+                            ))}
 
-                            {/* Endwert-Label */}
                             {perfPoints.length > 0 && (() => {
                                 const last = perfPoints[perfPoints.length - 1]
                                 const x = perfX(n - 1)
@@ -321,7 +330,6 @@ function DividendHistoryPanel({ holding }) {
                                 )
                             })()}
 
-                            {/* X-Achse: erstes Jahr links */}
                             <text x={perfX(0)} y={VH - 4} textAnchor="middle" fontSize="9" fill="#3d5266">{years[0]}</text>
                         </svg>
                     </ChartBox>
@@ -357,7 +365,6 @@ function DividendHistoryPanel({ holding }) {
     )
 }
 
-/* Mobile card view */
 function PositionCard({ p, isOpen, onToggle }) {
     const label = typeLabel(p.type, p.name)
     const { bg, color } = typeColor(label)
@@ -422,14 +429,12 @@ export default function PositionsTable({ byHolding = {}, kpiRange = 'all' }) {
         <div style={{ marginBottom:20 }}>
             <h2 style={{ fontSize:15, fontWeight:600, color:'#c8d4e0', marginBottom:14 }}>Dividenden nach Positionen</h2>
 
-            {/* Mobile: cards */}
             <div className="positions-mobile">
                 {positions.map(p => (
                     <PositionCard key={p.isin} p={p} isOpen={expandedRow === p.isin} onToggle={() => toggle(p.isin)} />
                 ))}
             </div>
 
-            {/* Desktop: table */}
             <div className="positions-desktop" style={{ background:'#161b27', borderRadius:12, padding:20, border:'1px solid #222d3d' }}>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
                     <thead>
