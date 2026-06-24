@@ -84,6 +84,13 @@ export async function fetchHoldingNames() {
       if (ticker) tickers[isin] = ticker
     }
   }
+
+  // Debug: zeige alle Holdings mit Typ und Ticker
+  console.log('[Holdings] Rohdaten von Parqet:')
+  for (const isin of Object.keys(names)) {
+    console.log(`  ${isin} | type="${types[isin]}" | ticker="${tickers[isin] ?? '–'}" | name="${names[isin]}"`)
+  }
+
   return { names, types, tickers }
 }
 
@@ -120,11 +127,16 @@ const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
  * Gibt { [isin]: [{month, year, amount}, ...] } zurueck.
  */
 export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
-  // Alle bekannten ISINs sammeln: aus tickers-Keys + explizite isin-Parameter
-  // tickers = { [isin]: ticker|symbol }
-  // Wir iterieren ueber alle ISINs die wir kennen
   const allIsins = Object.keys(tickers)
   if (allIsins.length === 0) return {}
+
+  // Debug: zeige welche Types ankommen und was gefiltert wird
+  console.log('[Yahoo] Filter-Entscheidungen:')
+  for (const isin of allIsins) {
+    const t    = types[isin] ?? '(nicht im types-Objekt)'
+    const skip = NO_DIVIDEND_TYPES.has((types[isin] || '').toLowerCase())
+    console.log(`  ${isin} | type="${t}" | ${skip ? '⛔ übersprungen' : '✓ wird abgefragt'}`)
+  }
 
   // Krypto rausfiltern
   const relevant = allIsins.filter(isin => {

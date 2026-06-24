@@ -3,23 +3,27 @@ import { decrypt, encrypt, isEncrypted, clearCachedKey } from './crypto'
 import { getPassword } from './passwordStore'
 
 let CLIENT_ID = null
+let _clientIdPromise = null  // laufendes Promise zwischenspeichern
+
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
 const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
 const TOKEN_URL    = '/oauth/token'
 const SCOPE        = 'portfolio:read'
 
-// —————————————————————————————————————————————————————————————————
-// Token-Storage:
-//   access_token  → sessionStorage  (kurzlebig, XSS-Angriffe haben nach Tab-Schließen keinen Zugriff mehr)
-//   refresh_token → localStorage    (längerfristig, nötig für automatischen Refresh)
-//   expires_at    → sessionStorage  (gehört logisch zum Access Token)
-//   AES key (JWK) → sessionStorage  (überlebt Reload, stirbt mit Tab-Schließen)
-//   Passwort      → nur RAM          (nie persistiert)
-// —————————————————————————————————————————————————————————————————
-
 export async function getClientId() {
+  // Bereits gecacht
   if (CLIENT_ID) return CLIENT_ID
 
+  // Bereits ein laufender Request → denselben abwarten statt neuen starten
+  if (_clientIdPromise) return _clientIdPromise
+
+  _clientIdPromise = _fetchClientId().finally(() => {
+    _clientIdPromise = null
+  })
+  return _clientIdPromise
+}
+
+async function _fetchClientId() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
@@ -41,7 +45,7 @@ export async function getClientId() {
     const password = getPassword()
     if (password) {
       try {
-        const encrypted = await encrypt(raw, password)   // also caches the key
+        const encrypted = await encrypt(raw, password)
         await supabase
           .from('profiles')
           .update({ parqet_client_id: encrypted })
@@ -55,14 +59,11 @@ export async function getClientId() {
   }
 
   // -------------------------------------------------------------------------
-  // Decrypt — uses cached JWK key if available (survives page reloads),
-  // falls back to password-based derivation on first call after login.
+  // Decrypt
   // -------------------------------------------------------------------------
   try {
-    // Pass password as fallback — decrypt() will prefer the cached key.
     CLIENT_ID = await decrypt(raw, getPassword())
   } catch {
-    // Cached key missing and no password in RAM — need fresh login.
     CLIENT_ID = null
   }
   return CLIENT_ID
@@ -70,6 +71,7 @@ export async function getClientId() {
 
 export function clearCachedClientId() {
   CLIENT_ID = null
+  _clientIdPromise = null
 }
 
 function generateCodeVerifier() {
@@ -195,7 +197,7 @@ export async function logout() {
   localStorage.removeItem('parqet_refresh_token')
   localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_expires_at')
-  clearCachedKey()    // remove cached AES key from sessionStorage
+  clearCachedKey()
 
   await supabase.auth.signOut()
   clearCachedClientId()
