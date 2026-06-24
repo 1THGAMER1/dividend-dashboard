@@ -72,7 +72,6 @@ export async function fetchHoldingNames() {
   const types   = {}
   const tickers = {}
 
-  // Pagination-Loop: lade ALLE Holdings, nicht nur Seite 1
   let cursor = null
   do {
     const params = new URLSearchParams({ limit: '200' })
@@ -83,21 +82,23 @@ export async function fetchHoldingNames() {
     for (const h of items) {
       const isin = h.asset?.isin || h.asset?.symbol
       const name = h.asset?.name || h.asset?.symbol || isin
-      if (isin) {
-        names[isin]   = name
-        types[isin]   = h.asset?.type || 'security'
-        const ticker  = h.asset?.ticker || h.asset?.symbol || null
-        if (ticker) tickers[isin] = ticker
-      }
+      if (!isin) continue
+
+      names[isin] = name
+      types[isin] = h.asset?.type || 'security'
+
+      // Echter Börsen-Ticker bevorzugen, sonst ISIN als Fallback damit
+      // fetchYahooDividendsForHoldings die Position überhaupt versucht
+      const ticker = h.asset?.ticker || h.asset?.symbol || null
+      tickers[isin] = ticker && ticker !== isin ? ticker : isin
     }
 
     cursor = data.cursor || null
   } while (cursor)
 
-  // Debug: zeige alle Holdings mit Typ und Ticker
   console.log('[Holdings] Rohdaten von Parqet:')
   for (const isin of Object.keys(names)) {
-    console.log(`  ${isin} | type="${types[isin]}" | ticker="${tickers[isin] ?? '–'}" | name="${names[isin]}"`)
+    console.log(`  ${isin} | type="${types[isin]}" | ticker="${tickers[isin]}" | name="${names[isin]}"`)
   }
 
   return { names, types, tickers }
@@ -105,8 +106,6 @@ export async function fetchHoldingNames() {
 
 /**
  * Holt Yahoo Finance Dividendenhistorie fuer einen Ticker oder eine ISIN.
- * Gibt ein Array von { date, amount, month, year } zurueck.
- * Bei Fehler oder fehlendem Ticker wird [] zurueckgegeben.
  */
 export async function fetchYahooDividends(ticker) {
   if (!ticker) return []
@@ -120,52 +119,35 @@ export async function fetchYahooDividends(ticker) {
   }
 }
 
-// Typen die keine Dividenden zahlen → kein Yahoo-Request
 const NO_DIVIDEND_TYPES = new Set(['crypto', 'cryptocurrency'])
-
-// ISINs beginnen mit 2 Großbuchstaben gefolgt von Ziffern/Buchstaben (12 Zeichen)
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 
 /**
  * Ladet Yahoo-Dividendendaten fuer alle Holdings parallel.
- * Strategie pro Holding:
- *   1. Versuche mit Ticker (falls vorhanden und kein ISIN-Format)
- *   2. Falls keine Dividenden → versuche direkt mit ISIN
- *   3. Falls immer noch nichts → leer
- * Krypto-Holdings werden uebersprungen.
- * Gibt { [isin]: [{month, year, amount}, ...] } zurueck.
+ * Krypto wird übersprungen.
+ * Gibt { [isin]: [{month, year, amount}, ...] } zurück.
  */
 export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   const allIsins = Object.keys(tickers)
   if (allIsins.length === 0) return {}
 
-  // Debug: zeige welche Types ankommen und was gefiltert wird
-  console.log('[Yahoo] Filter-Entscheidungen:')
-  for (const isin of allIsins) {
-    const t    = types[isin] ?? '(nicht im types-Objekt)'
-    const skip = NO_DIVIDEND_TYPES.has((types[isin] || '').toLowerCase())
-    console.log(`  ${isin} | type="${t}" | ${skip ? '⛔ übersprungen' : '✓ wird abgefragt'}`)
-  }
-
-  // Krypto rausfiltern
   const relevant = allIsins.filter(isin => {
     const t = (types[isin] || '').toLowerCase()
     return !NO_DIVIDEND_TYPES.has(t)
   })
 
   const skipped = allIsins.length - relevant.length
-  console.log(`[Yahoo] ${relevant.length}/${allIsins.length} Holdings werden abgefragt (${skipped} Krypto uebersprungen)`)
+  console.log(`[Yahoo] ${relevant.length}/${allIsins.length} Holdings werden abgefragt (${skipped} Krypto übersprungen)`)
 
   const results = await Promise.allSettled(
     relevant.map(async isin => {
       const rawTicker = tickers[isin] || null
 
-      // Pruefe ob rawTicker ein echter Boersen-Ticker ist oder nur eine ISIN/interner Code
       const tickerIsReal = rawTicker &&
         !ISIN_REGEX.test(rawTicker) &&
         rawTicker !== isin
 
-      // Schritt 1: Ticker versuchen (falls echter Ticker vorhanden)
+      // Schritt 1: echter Ticker
       if (tickerIsReal) {
         const divs = await fetchYahooDividends(rawTicker)
         if (divs.length > 0) {
@@ -175,7 +157,7 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
         console.log(`[Yahoo] ~ ${rawTicker} (Ticker): keine Dividenden, versuche ISIN...`)
       }
 
-      // Schritt 2: ISIN direkt versuchen (Yahoo kennt viele ISINs direkt)
+      // Schritt 2: ISIN direkt
       if (ISIN_REGEX.test(isin)) {
         const divs = await fetchYahooDividends(isin)
         if (divs.length > 0) {
