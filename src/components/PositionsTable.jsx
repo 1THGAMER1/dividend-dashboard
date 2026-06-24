@@ -23,13 +23,9 @@ const typeColor = label => {
 }
 
 const YEAR_COLORS = ['#009991','#3b82f6','#a78bfa','#f472b6','#fb923c','#facc15']
+const CHART_H = 100
 
-// SVG-Dimensionen — identisch für alle drei Chart-Modi
-const VW = 520, VH = 160
-const PL = 8, PR = 8, PT = 10, PB = 22
-const CW = VW - PL - PR
-const CH = VH - PT - PB
-
+// Chart-Wrapper für Akkumuliert + Performance (SVG-basiert)
 function ChartBox({ children }) {
     return (
         <div style={{
@@ -89,11 +85,15 @@ function DividendHistoryPanel({ holding }) {
         net:   yd.months.reduce((s, v) => s + v, 0),
     }))
 
-    // Cumulative helpers
+    // SVG-Dimensionen für Akkumuliert + Performance
+    const VW = 520, VH = 160
+    const PL = 8, PR = 8, PT = 10, PB = 22
+    const CW = VW - PL - PR
+    const CH = VH - PT - PB
+
     const cumX = i => PL + (i / 11) * CW
     const cumY = v => PT + CH - (v / maxVal) * CH
 
-    // Performance helpers
     const n = perfPoints.length
     const perfX = i => PL + (i / Math.max(n - 1, 1)) * CW
     const perfY = v => PT + CH - (v / maxVal) * CH
@@ -103,12 +103,6 @@ function DividendHistoryPanel({ holding }) {
         const firstIdx = perfPoints.findIndex(p => p.year === y)
         if (firstIdx > 0) yearBoundaries.push({ x: perfX(firstIdx), year: y })
     })
-
-    // Monthly chart als SVG — gleiche Dimensionen wie die anderen Charts
-    const barGroupW = CW / 12
-    const barW = Math.max(3, Math.floor((barGroupW * 0.75) / Math.max(yearData.length, 1)))
-    const barGap = yearData.length > 1 ? 1 : 0
-    const totalBarW = yearData.length * barW + (yearData.length - 1) * barGap
 
     return (
         <div style={{ padding:'16px 4px 8px', display:'flex', flexDirection:'column', gap:14 }}>
@@ -145,62 +139,38 @@ function DividendHistoryPanel({ holding }) {
                 </div>
             </div>
 
-            {/* Charts — alle in ChartBox mit SVG, einheitlich */}
             <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
 
-                {/* Chart 1: Monthly — jetzt als SVG in ChartBox */}
+                {/* ===== Chart 1: Monatlich — ORIGINAL, unverändert ===== */}
                 {mode === 'monthly' && (
-                    <ChartBox>
-                        <svg
-                            width="100%"
-                            viewBox={`0 0 ${VW} ${VH}`}
-                            preserveAspectRatio="xMidYMid meet"
-                            style={{ display:'block' }}
-                        >
-                            {/* Gitterlinien */}
-                            {[0.25, 0.5, 0.75, 1].map(f => (
-                                <line key={f}
-                                    x1={PL} y1={PT + CH - f * CH}
-                                    x2={VW - PR} y2={PT + CH - f * CH}
-                                    stroke="#1e2a3a" strokeWidth="1"
-                                />
-                            ))}
-
-                            {/* Bars */}
-                            {MONTHS_SHORT.map((mon, mIdx) => {
-                                const cx = PL + (mIdx / 11) * CW
-                                const offsetX = cx - totalBarW / 2
-                                return (
-                                    <g key={mon}>
-                                        {yearData.map((yd, yi) => {
+                    <div style={{ display:'flex', alignItems:'flex-end', gap:3, minWidth:320 }}>
+                        {MONTHS_SHORT.map((mon, mIdx) => {
+                            const hasAny = yearData.some(yd => yd.months[mIdx] > 0)
+                            return (
+                                <div key={mon} style={{ flex:'1 0 auto', display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+                                    <div style={{ display:'flex', alignItems:'flex-end', gap:1, height:CHART_H }}>
+                                        {yearData.map(yd => {
                                             const val = yd.months[mIdx]
-                                            const barH = val > 0 ? Math.max(3, (val / maxVal) * CH) : 0
-                                            const bx = offsetX + yi * (barW + barGap)
-                                            const by = PT + CH - barH
+                                            const h   = Math.max(val > 0 ? 3 : 0, (val / maxVal) * CHART_H)
                                             return (
-                                                <rect key={yd.year}
-                                                    x={bx} y={by}
-                                                    width={barW} height={barH}
-                                                    rx="2" ry="2"
-                                                    fill={val > 0 ? yd.color : 'transparent'}
-                                                    opacity={yd.year === currentYear ? 1 : 0.65}
-                                                >
-                                                    <title>{mon} {yd.year}: {fmt(val)}</title>
-                                                </rect>
+                                                <div key={yd.year} title={`${mon} ${yd.year}: ${fmt(val)}`} style={{
+                                                    width: Math.max(6, Math.floor(24 / yearData.length)),
+                                                    height: h, borderRadius:'3px 3px 0 0',
+                                                    background: val > 0 ? yd.color : 'transparent',
+                                                    opacity: yd.year === currentYear ? 1 : 0.65,
+                                                    alignSelf: 'flex-end',
+                                                }} />
                                             )
                                         })}
-                                        <text
-                                            x={cx} y={VH - 4}
-                                            textAnchor="middle" fontSize="9" fill="#3d5266"
-                                        >{mon}</text>
-                                    </g>
-                                )
-                            })}
-                        </svg>
-                    </ChartBox>
+                                    </div>
+                                    <span style={{ fontSize:9, color: hasAny ? '#556070' : '#2a3a50', marginTop:3 }}>{mon}</span>
+                                </div>
+                            )
+                        })}
+                    </div>
                 )}
 
-                {/* Chart 2: Akkumuliert */}
+                {/* ===== Chart 2: Akkumuliert — in ChartBox, gleiche Größe wie Monatlich-Container ===== */}
                 {mode === 'cumulative' && (
                     <ChartBox>
                         <svg
@@ -217,15 +187,9 @@ function DividendHistoryPanel({ holding }) {
                                     </linearGradient>
                                 ))}
                             </defs>
-
                             {[0.25, 0.5, 0.75, 1].map(f => (
-                                <line key={f}
-                                    x1={PL} y1={PT + CH - f * CH}
-                                    x2={VW - PR} y2={PT + CH - f * CH}
-                                    stroke="#1e2a3a" strokeWidth="1"
-                                />
+                                <line key={f} x1={PL} y1={PT + CH - f * CH} x2={VW - PR} y2={PT + CH - f * CH} stroke="#1e2a3a" strokeWidth="1" />
                             ))}
-
                             {yearDataCum.map(yd => {
                                 const pts = yd.months.map((v, i) => `${cumX(i)},${cumY(v)}`).join(' ')
                                 const area = `${cumX(0)},${PT + CH} ${pts} ${cumX(11)},${PT + CH}`
@@ -249,17 +213,14 @@ function DividendHistoryPanel({ holding }) {
                                     </g>
                                 )
                             })}
-
                             {MONTHS_SHORT.map((mon, i) => (
-                                <text key={mon} x={cumX(i)} y={VH - 4}
-                                    textAnchor="middle" fontSize="9" fill="#3d5266"
-                                >{mon}</text>
+                                <text key={mon} x={cumX(i)} y={VH - 4} textAnchor="middle" fontSize="9" fill="#3d5266">{mon}</text>
                             ))}
                         </svg>
                     </ChartBox>
                 )}
 
-                {/* Chart 3: Performance */}
+                {/* ===== Chart 3: Performance — in ChartBox, gleiche Größe wie Monatlich-Container ===== */}
                 {mode === 'performance' && (
                     <ChartBox>
                         <svg
@@ -274,23 +235,15 @@ function DividendHistoryPanel({ holding }) {
                                     <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
                                 </linearGradient>
                             </defs>
-
                             {[0.25, 0.5, 0.75, 1].map(f => (
-                                <line key={f}
-                                    x1={PL} y1={PT + CH - f * CH}
-                                    x2={VW - PR} y2={PT + CH - f * CH}
-                                    stroke="#1e2a3a" strokeWidth="1"
-                                />
+                                <line key={f} x1={PL} y1={PT + CH - f * CH} x2={VW - PR} y2={PT + CH - f * CH} stroke="#1e2a3a" strokeWidth="1" />
                             ))}
-
                             {yearBoundaries.map(({ x, year }) => (
                                 <g key={year}>
-                                    <line x1={x} y1={PT} x2={x} y2={PT + CH}
-                                        stroke="#2a3a50" strokeWidth="1" strokeDasharray="4 4" />
+                                    <line x1={x} y1={PT} x2={x} y2={PT + CH} stroke="#2a3a50" strokeWidth="1" strokeDasharray="4 4" />
                                     <text x={x + 4} y={PT + 11} fontSize="9" fill="#3d5266">{year}</text>
                                 </g>
                             ))}
-
                             {perfPoints.length > 1 && (
                                 <polygon
                                     points={[
@@ -301,19 +254,16 @@ function DividendHistoryPanel({ holding }) {
                                     fill="url(#perfGrad)"
                                 />
                             )}
-
                             {perfPoints.length > 1 && (
                                 <polyline points={linePoints} fill="none" stroke="#22c55e"
                                     strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
                             )}
-
                             {perfPoints.map((p, i) => p.raw === 0 ? null : (
                                 <circle key={i} cx={perfX(i)} cy={perfY(p.value)} r="2.5"
                                     fill="#22c55e" stroke="#131c2e" strokeWidth="1.5">
                                     <title>{MONTHS_SHORT[p.month]} {p.year}: +{fmt(p.raw)} → {fmt(p.value)} gesamt</title>
                                 </circle>
                             ))}
-
                             {perfPoints.length > 0 && (() => {
                                 const last = perfPoints[perfPoints.length - 1]
                                 const x = perfX(n - 1)
@@ -329,7 +279,6 @@ function DividendHistoryPanel({ holding }) {
                                     </g>
                                 )
                             })()}
-
                             <text x={perfX(0)} y={VH - 4} textAnchor="middle" fontSize="9" fill="#3d5266">{years[0]}</text>
                         </svg>
                     </ChartBox>
