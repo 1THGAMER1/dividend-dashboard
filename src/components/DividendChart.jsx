@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
 import {
     BarChart, Bar, LineChart, Line,
-    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { MONTHS, YEAR_COLORS } from '../dataUtils'
+import { cumulativeInflationFactor, inflationRate } from '../inflation'
 
 const MODES = [
     { key: 'monthly',    label: 'Monatlich' },
@@ -11,8 +12,6 @@ const MODES = [
     { key: 'cumulative', label: 'Akkumuliert' },
 ]
 
-// Berechnet die durchschnittliche Steuerquote eines Holdings aus historischen Daten.
-// Gibt 0 zurück wenn keine Daten vorhanden (Prognose bleibt dann Netto-basiert).
 function taxRateForHolding(holding) {
     if (!holding) return 0
     let totalNet = 0
@@ -24,30 +23,29 @@ function taxRateForHolding(holding) {
         for (const v of year) totalGross += v || 0
     }
     if (totalGross <= 0 || totalNet <= 0) return 0
-    // Steuerquote = 1 - (Netto / Brutto)
     return Math.max(0, Math.min(1, 1 - totalNet / totalGross))
 }
 
-// Rechnet einen Netto-Wert auf Brutto hoch.
 function toGross(netValue, taxRate) {
     if (taxRate <= 0 || taxRate >= 1) return netValue
     return netValue / (1 - taxRate)
 }
 
 export default function DividendChart({ monthly, cum, forecastCum, forecastMonthly, byHolding, forecastByHolding }) {
-    const [mode,     setMode]     = useState('monthly')
+    const [mode,      setMode]      = useState('monthly')
     const [showGross, setShowGross] = useState(false)
+    const [showInflation, setShowInflation] = useState(false)
 
     const cy    = new Date().getFullYear()
     const ny    = cy + 1
     const cm    = new Date().getMonth()
     const years = Object.keys(monthly).map(Number).sort()
+    const baseYear = years[0] ?? cy
 
     const fcCy = forecastCum?.[cy]     || Array(12).fill(null)
     const fcNy = forecastCum?.[ny]     || Array(12).fill(null)
     const fmCy = forecastMonthly?.[cy] || Array(12).fill(0)
 
-    // Globale durchschnittliche Steuerquote (gewichtet nach Netto-Summe)
     const globalTaxRate = useMemo(() => {
         let totalNet = 0, totalGross = 0
         for (const h of Object.values(byHolding || {})) {
@@ -58,7 +56,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return Math.max(0, Math.min(1, 1 - totalNet / totalGross))
     }, [byHolding])
 
-    // Steuerquote pro ISIN (gecacht)
     const taxRates = useMemo(() => {
         const map = {}
         for (const [isin, h] of Object.entries(byHolding || {})) {
@@ -67,9 +64,34 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return map
     }, [byHolding])
 
-    // Hilfsfunktionen die net↔gross je nach Schalter umrechnen
-    const scaleNet  = (v)           => showGross ? toGross(v, globalTaxRate) : v
-    const scaleIsin = (v, isin)     => showGross ? toGross(v, taxRates[isin] ?? globalTaxRate) : v
+    const scaleNet  = (v)       => showGross ? toGross(v, globalTaxRate) : v
+    const scaleIsin = (v, isin) => showGross ? toGross(v, taxRates[isin] ?? globalTaxRate) : v
+
+    // ── Inflationslinie für Akkumuliert-Modus ──────────────────────────────────
+    // Zeigt: Wie viel hättest du nominal verdienen müssen,
+    // damit deine erste Jahres-Dividende inflationsbereinigt gleich geblieben wäre?
+    const inflationLineData = useMemo(() => {
+        if (!years.length || years.length < 2) return null
+        // Basiswert = Dividende im ersten vollständigen Jahr
+        const firstYearTotal = (monthly[baseYear] || []).reduce((s, v) => s + (v || 0), 0)
+        if (firstYearTotal <= 0) return null
+        // Für jedes Jahr: nominaler Wert der nötig wäre um Kaufkraft zu erhalten
+        const yearTargets = {}
+        years.forEach(y => {
+            yearTargets[y] = firstYearTotal * cumulativeInflationFactor(baseYear, y)
+        })
+        // Kumulieren
+        let cumTarget = 0
+        const cumTargets = {}
+        years.forEach(y => {
+            cumTarget += yearTargets[y]
+            cumTargets[y] = cumTarget
+        })
+        return cumTargets
+    }, [monthly, years, baseYear])
+
+    // Inflation-Referenzwert für aktuelles Jahr im kumulierten Chart
+    const inflationRefValue = inflationLineData?.[cy] ?? null
 
     // Monatlich
     const monthlyBarData = MONTHS.map((name, i) => {
@@ -84,7 +106,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
-    // Akkumuliert — historische cum-Daten nach Steuerquote hochrechnen
+    // Akkumuliert
     const cumLineData = MONTHS.map((name, i) => {
         const pt = { name }
         years.filter(y => y < cy).forEach(y => {
@@ -93,6 +115,27 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         pt[`${cy}_real`]     = i <= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
         pt[`${cy}_forecast`] = i >= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
         pt[`${ny}_forecast`] = fcNy[i] != null ? +scaleNet(fcNy[i]).toFixed(2) : null
+        // Inflation: monatliche Zwischenwerte interpolieren zwischen Jahreswerten
+        if (showInflation && inflationLineData && years.length >= 2) {
+            // Verteile Jahreswert gleichmäßig auf Monate (kumuliert bis Monat i)
+            const yearKeys = years.filter(y => y <= cy)
+            let runningInflation = 0
+            yearKeys.forEach((y, yIdx) => {
+                const yearTotal = (monthly[y] || []).reduce((s, v) => s + (v || 0), 0) || 0
+                const yearTarget = inflationLineData[y] ?? 0
+                // Anteil bis Monat i im letzten relevanten Jahr
+                if (y < cy) {
+                    runningInflation += yearTarget - (yIdx > 0 ? (inflationLineData[years[yIdx - 1]] ?? 0) : 0)
+                } else {
+                    // Aktuelles Jahr: nur bis Monat i anteilig
+                    const prevCum = yIdx > 0 ? (inflationLineData[years[yIdx - 1]] ?? 0) : 0
+                    const curTarget = inflationLineData[y] ?? 0
+                    const monthShare = i <= cm - 1 ? (i + 1) / 12 : (cm) / 12
+                    runningInflation += (curTarget - prevCum) * monthShare
+                }
+            })
+            pt['inflation_target'] = i <= cm - 1 ? +runningInflation.toFixed(2) : null
+        }
         return pt
     })
 
@@ -138,6 +181,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
     const fmtTip = v => `${(+v).toFixed(2)} € (${label})`
 
     const renderLineLegend = value => {
+        if (value === 'inflation_target') return <span style={{ color: '#f97316' }}>Inflation (Ziel)</span>
         const color = value === `${cy}_real`     ? YEAR_COLORS[cy] || '#f472b6'
             : value === `${cy}_forecast` ? YEAR_COLORS[cy] || '#f472b6'
                 : value === `${ny}_forecast` ? '#34d399'
@@ -149,29 +193,37 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return <span style={{ color }}>{lbl}</span>
     }
 
-    // Pill-Button-Stil (konsistent mit Rest der App)
-    const pillBase   = { padding:'5px 14px', borderRadius:20, fontSize:12, cursor:'pointer', border:'1px solid #2a3a50', background:'transparent', color:'#7a8ba0' }
-    const pillActive = { ...pillBase, background:'#1e3a5f', color:'#93c5fd' }
+    const pillBase    = { padding:'5px 14px', borderRadius:20, fontSize:12, cursor:'pointer', border:'1px solid #2a3a50', background:'transparent', color:'#7a8ba0' }
+    const pillActive  = { ...pillBase, background:'#1e3a5f', color:'#93c5fd' }
     const grossActive = { ...pillBase, background:'rgba(251,146,60,0.12)', border:'1px solid #fb923c', color:'#fb923c' }
+    const inflActive  = { ...pillBase, background:'rgba(249,115,22,0.12)', border:'1px solid #f97316', color:'#f97316' }
+
+    const canShowInflation = mode === 'cumulative' && years.length >= 2 && inflationLineData !== null
 
     return (
         <div style={{ background:'#161b27', borderRadius:12, padding:20, border:'1px solid #222d3d', marginBottom:20 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:8 }}>
                 <h2 style={{ fontSize:15, fontWeight:600, color:'#c8d4e0' }}>Jahresverlauf</h2>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-                    {/* Netto / Brutto Schalter */}
+                    {/* Netto / Brutto */}
                     <div style={{ display:'flex', gap:4, padding:'2px', background:'#0f1420', borderRadius:22, border:'1px solid #1e2a3a' }}>
                         <button onClick={() => setShowGross(false)} style={!showGross ? pillActive : pillBase}>Netto</button>
                         <button onClick={() => setShowGross(true)}  style={ showGross ? grossActive : pillBase}>Brutto</button>
                     </div>
                     {/* Ansichts-Tabs */}
                     <div style={{ display:'flex', gap:4 }}>
-                        {MODES.map(({ key, lbl: mLabel, label: mL }) => (
+                        {MODES.map(({ key }) => (
                             <button key={key} onClick={() => setMode(key)} style={mode === key ? pillActive : pillBase}>
                                 {key === 'monthly' ? 'Monatlich' : key === 'stacked' ? 'Nach Aktie' : 'Akkumuliert'}
                             </button>
                         ))}
                     </div>
+                    {/* Inflation-Toggle — nur im Akkumuliert-Modus */}
+                    {canShowInflation && (
+                        <button onClick={() => setShowInflation(v => !v)} style={showInflation ? inflActive : pillBase}>
+                            📉 Inflation
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -271,6 +323,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                             contentStyle={{ background:'#1a2233', border:'1px solid #222d3d', borderRadius:8 }}
                             labelStyle={{ color:'#c8d4e0' }}
                             formatter={(v, n) => {
+                                if (n === 'inflation_target') return [`${(+v).toFixed(2)} € (Ziel)`, '📉 Inflation']
                                 const lbl = n === `${cy}_real` ? `${cy}` : n.endsWith('_forecast') ? 'Prognose' : n
                                 return [fmtTip(v), lbl]
                             }}
@@ -295,13 +348,27 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                               stroke="#34d399" strokeWidth={2}
                               strokeDasharray="6 4" dot={false} connectNulls
                         />
+                        {/* Inflationslinie */}
+                        {showInflation && (
+                            <Line
+                                type="monotone"
+                                dataKey="inflation_target"
+                                stroke="#f97316"
+                                strokeWidth={1.5}
+                                strokeDasharray="5 3"
+                                dot={false}
+                                connectNulls
+                                name="inflation_target"
+                            />
+                        )}
                     </LineChart>
                 )}
             </ResponsiveContainer>
 
             {mode === 'cumulative' && (
                 <p style={{ color:'#4a6080', fontSize:11, marginTop:10 }}>
-                    ⋯ Prognose = Ø Dividende pro Anteil × aktuelle Anteile· organisches DPS-Wachstum für {ny}
+                    ⋯ Prognose = Ø Dividende pro Anteil × aktuelle Anteile · organisches DPS-Wachstum für {ny}
+                    {showInflation && <span style={{ color:'#f97316' }}> · 📉 Orangene Linie = nötige Dividende um Kaufkraft seit {baseYear} zu erhalten (Destatis VPI)</span>}
                     {showGross && <span style={{ color:'#fb923c' }}> · Brutto basiert auf ø Steuerquote je Aktie</span>}
                 </p>
             )}
@@ -313,7 +380,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
             )}
             {mode === 'monthly' && showGross && (
                 <p style={{ color:'#fb923c', fontSize:11, marginTop:10 }}>
-                    ⚠️ Brutto-Hochrechnung basiert auf der ø Steuerquote aller Positionen ({(globalTaxRate * 100).toFixed(1)} %)
+                    ⚠️ Brutto-Hochrechnung basiert auf der ø Steuerquote aller Positionen ({(globalTaxRate * 100).toFixed(1)} %)
                 </p>
             )}
         </div>

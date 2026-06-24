@@ -78,11 +78,54 @@ export async function fetchHoldingNames() {
     const isin = h.asset?.isin || h.asset?.symbol
     const name = h.asset?.name || h.asset?.symbol || isin
     if (isin) {
-      names[isin] = name
-      types[isin] = h.asset?.type || 'security'
+      names[isin]   = name
+      types[isin]   = h.asset?.type || 'security'
+      // Ticker aus Parqet speichern falls vorhanden
+      const ticker  = h.asset?.ticker || h.asset?.symbol || null
+      if (ticker) tickers[isin] = ticker
     }
   }
   return { names, types, tickers }
+}
+
+/**
+ * Holt Yahoo Finance Dividendenhistorie für einen Ticker (via Netlify Proxy).
+ * Gibt ein Array von { date, amount, month, year } zurück.
+ * Bei Fehler oder fehlendem Ticker wird [] zurückgegeben.
+ */
+export async function fetchYahooDividends(ticker) {
+  if (!ticker) return []
+  try {
+    const res = await fetch(`/yahoo-dividends?ticker=${encodeURIComponent(ticker)}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.dividends || []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Lädt Yahoo-Dividendendaten für alle Tickers parallel.
+ * Gibt { [isin]: [{month, year, amount}, ...] } zurück.
+ */
+export async function fetchYahooDividendsForHoldings(tickers = {}) {
+  const entries = Object.entries(tickers) // [[isin, ticker], ...]
+  if (entries.length === 0) return {}
+
+  const results = await Promise.allSettled(
+    entries.map(([isin, ticker]) =>
+      fetchYahooDividends(ticker).then(divs => ({ isin, divs }))
+    )
+  )
+
+  const map = {}
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.divs.length > 0) {
+      map[r.value.isin] = r.value.divs
+    }
+  }
+  return map
 }
 
 export function calcKpiFromActivities(activities, range = 'all') {

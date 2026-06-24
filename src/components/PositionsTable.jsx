@@ -24,6 +24,21 @@ const typeColor = label => {
 
 const YEAR_COLORS = ['#009991','#3b82f6','#a78bfa','#f472b6','#fb923c','#facc15']
 
+// Gemeinsame Chart-Wrapper-Komponente
+function ChartBox({ children }) {
+    return (
+        <div style={{
+            background: '#131c2e',
+            border: '1px solid #1e2a3a',
+            borderRadius: 10,
+            padding: '14px 16px 10px',
+            minWidth: 320,
+        }}>
+            {children}
+        </div>
+    )
+}
+
 function DividendHistoryPanel({ holding }) {
     const { monthly } = holding
     const [mode, setMode] = useState('monthly')
@@ -71,18 +86,25 @@ function DividendHistoryPanel({ holding }) {
         net:   yd.months.reduce((s, v) => s + v, 0),
     }))
 
-    // Performance chart dimensions
-    const W = 360, H = 100, PAD_L = 8, PAD_R = 8, PAD_T = 8, PAD_B = 18
-    const chartW = W - PAD_L - PAD_R
-    const chartH = H - PAD_T - PAD_B
+    // SVG-Dimensionen (echtes Seitenverhältnis, kein stretch)
+    const VW = 520, VH = 160
+    const PL = 8, PR = 8, PT = 10, PB = 22
+    const CW = VW - PL - PR
+    const CH = VH - PT - PB
+
+    // Cumulative helpers
+    const cumX = i => PL + (i / 11) * CW
+    const cumY = v => PT + CH - (v / maxVal) * CH
+
+    // Performance helpers
     const n = perfPoints.length
-    const toX = i => PAD_L + (i / Math.max(n - 1, 1)) * chartW
-    const toY = v => PAD_T + chartH - (v / maxVal) * chartH
-    const linePoints = perfPoints.map((p, i) => `${toX(i)},${toY(p.value)}`).join(' ')
+    const perfX = i => PL + (i / Math.max(n - 1, 1)) * CW
+    const perfY = v => PT + CH - (v / maxVal) * CH
+    const linePoints = perfPoints.map((p, i) => `${perfX(i)},${perfY(p.value)}`).join(' ')
     const yearBoundaries = []
     years.forEach(y => {
         const firstIdx = perfPoints.findIndex(p => p.year === y)
-        if (firstIdx > 0) yearBoundaries.push({ x: toX(firstIdx), year: y })
+        if (firstIdx > 0) yearBoundaries.push({ x: perfX(firstIdx), year: y })
     })
 
     return (
@@ -101,7 +123,7 @@ function DividendHistoryPanel({ holding }) {
                     </div>
                 ) : (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <div style={{ width:10, height:3, borderRadius:2, background:'#22c55e' }} />
+                        <div style={{ width:12, height:3, borderRadius:2, background:'#22c55e' }} />
                         <span style={{ fontSize:11, color:'#7a8ba0' }}>Gesamtperformance seit {years[0]}</span>
                     </div>
                 )}
@@ -152,76 +174,104 @@ function DividendHistoryPanel({ holding }) {
                     </div>
                 )}
 
-                {/* Chart 2: Cumulative — angepasst */}
+                {/* Chart 2: Akkumuliert */}
                 {mode === 'cumulative' && (
-                    <div style={{ minWidth:320, background:'#0f1420', borderRadius:10, padding:'10px 8px 4px', border:'1px solid #1e2a3a' }}>
-                        <svg width="100%" viewBox="0 0 360 108" preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
-                            {/* Horizontale Gitterlinien */}
-                            {[0.25, 0.5, 0.75, 1].map(f => {
-                                const y = 8 + (1 - f) * 80
-                                return <line key={f} x1="10" y1={y} x2="350" y2={y} stroke="#1e2a3a" strokeWidth="0.5" />
-                            })}
-                            {yearDataCum.map((yd) => {
-                                const pts = yd.months.map((v, i) => {
-                                    const x = (i / 11) * 340 + 10
-                                    const y = 88 - (v / maxVal) * 80
-                                    return `${x},${y}`
-                                }).join(' ')
-                                // Fläche
-                                const firstX = 10, lastX = (11 / 11) * 340 + 10
-                                const areaPts = `${firstX},88 ${pts} ${lastX},88`
+                    <ChartBox>
+                        <svg
+                            width="100%"
+                            viewBox={`0 0 ${VW} ${VH}`}
+                            preserveAspectRatio="xMidYMid meet"
+                            style={{ display:'block' }}
+                        >
+                            <defs>
+                                {yearDataCum.map(yd => (
+                                    <linearGradient key={yd.year} id={`cumGrad${yd.year}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor={yd.color} stopOpacity={yd.year === currentYear ? 0.18 : 0.06} />
+                                        <stop offset="100%" stopColor={yd.color} stopOpacity="0" />
+                                    </linearGradient>
+                                ))}
+                            </defs>
+
+                            {/* Gitterlinien */}
+                            {[0.25, 0.5, 0.75, 1].map(f => (
+                                <line key={f}
+                                    x1={PL} y1={PT + CH - f * CH}
+                                    x2={VW - PR} y2={PT + CH - f * CH}
+                                    stroke="#1e2a3a" strokeWidth="1"
+                                />
+                            ))}
+
+                            {/* Linien + Flächen */}
+                            {yearDataCum.map(yd => {
+                                const pts = yd.months.map((v, i) => `${cumX(i)},${cumY(v)}`).join(' ')
+                                const area = `${cumX(0)},${PT + CH} ${pts} ${cumX(11)},${PT + CH}`
                                 return (
                                     <g key={yd.year}>
-                                        <polygon points={areaPts} fill={yd.color}
-                                            opacity={yd.year === currentYear ? 0.12 : 0.05} />
+                                        <polygon points={area} fill={`url(#cumGrad${yd.year})`} />
                                         <polyline points={pts} fill="none" stroke={yd.color}
-                                            strokeWidth={yd.year === currentYear ? 2.5 : 1.5}
+                                            strokeWidth={yd.year === currentYear ? 2 : 1.5}
                                             strokeLinejoin="round" strokeLinecap="round"
-                                            opacity={yd.year === currentYear ? 1 : 0.5} />
+                                            opacity={yd.year === currentYear ? 1 : 0.55}
+                                        />
                                         {yd.months.map((v, i) => {
                                             if (v === 0) return null
-                                            const x = (i / 11) * 340 + 10
-                                            const y = 88 - (v / maxVal) * 80
-                                            return <circle key={i} cx={x} cy={y} r={yd.year === currentYear ? 3 : 2}
-                                                fill={yd.color} opacity={yd.year === currentYear ? 1 : 0.5}
-                                                stroke="#0f1420" strokeWidth="1">
-                                                <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
-                                            </circle>
+                                            return (
+                                                <circle key={i} cx={cumX(i)} cy={cumY(v)}
+                                                    r={yd.year === currentYear ? 2.5 : 2}
+                                                    fill={yd.color}
+                                                    stroke="#131c2e" strokeWidth="1.5"
+                                                    opacity={yd.year === currentYear ? 1 : 0.55}
+                                                >
+                                                    <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
+                                                </circle>
+                                            )
                                         })}
                                     </g>
                                 )
                             })}
+
+                            {/* X-Achse Monatslabels */}
                             {MONTHS_SHORT.map((mon, i) => (
-                                <text key={mon} x={(i / 11) * 340 + 10} y="104"
-                                    textAnchor="middle" fontSize="8" fill="#3d5266">{mon}</text>
+                                <text key={mon}
+                                    x={cumX(i)} y={VH - 4}
+                                    textAnchor="middle" fontSize="9" fill="#3d5266"
+                                >{mon}</text>
                             ))}
                         </svg>
-                    </div>
+                    </ChartBox>
                 )}
 
-                {/* Chart 3: Performance — angepasst */}
+                {/* Chart 3: Performance */}
                 {mode === 'performance' && (
-                    <div style={{ minWidth:320, background:'#0f1420', borderRadius:10, padding:'10px 8px 4px', border:'1px solid #1e2a3a' }}>
-                        <svg width="100%" viewBox={`0 0 ${W} ${H + 18}`} preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+                    <ChartBox>
+                        <svg
+                            width="100%"
+                            viewBox={`0 0 ${VW} ${VH}`}
+                            preserveAspectRatio="xMidYMid meet"
+                            style={{ display:'block' }}
+                        >
                             <defs>
                                 <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.6" />
+                                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.35" />
                                     <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
                                 </linearGradient>
                             </defs>
 
-                            {/* Horizontale Gitterlinien */}
-                            {[0.25, 0.5, 0.75, 1].map(f => {
-                                const y = PAD_T + chartH - f * chartH
-                                return <line key={f} x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#1e2a3a" strokeWidth="0.5" />
-                            })}
+                            {/* Gitterlinien */}
+                            {[0.25, 0.5, 0.75, 1].map(f => (
+                                <line key={f}
+                                    x1={PL} y1={PT + CH - f * CH}
+                                    x2={VW - PR} y2={PT + CH - f * CH}
+                                    stroke="#1e2a3a" strokeWidth="1"
+                                />
+                            ))}
 
                             {/* Jahrstrennlinien */}
                             {yearBoundaries.map(({ x, year }) => (
                                 <g key={year}>
-                                    <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + chartH}
-                                        stroke="#2a3a50" strokeWidth="1" strokeDasharray="3 3" />
-                                    <text x={x + 3} y={PAD_T + 9} fontSize="8" fill="#3d5266">{year}</text>
+                                    <line x1={x} y1={PT} x2={x} y2={PT + CH}
+                                        stroke="#2a3a50" strokeWidth="1" strokeDasharray="4 4" />
+                                    <text x={x + 4} y={PT + 11} fontSize="9" fill="#3d5266">{year}</text>
                                 </g>
                             ))}
 
@@ -229,9 +279,9 @@ function DividendHistoryPanel({ holding }) {
                             {perfPoints.length > 1 && (
                                 <polygon
                                     points={[
-                                        `${toX(0)},${PAD_T + chartH}`,
-                                        ...perfPoints.map((p, i) => `${toX(i)},${toY(p.value)}`),
-                                        `${toX(perfPoints.length - 1)},${PAD_T + chartH}`,
+                                        `${perfX(0)},${PT + CH}`,
+                                        ...perfPoints.map((_, i) => `${perfX(i)},${perfY(perfPoints[i].value)}`),
+                                        `${perfX(n - 1)},${PT + CH}`,
                                     ].join(' ')}
                                     fill="url(#perfGrad)"
                                 />
@@ -243,12 +293,12 @@ function DividendHistoryPanel({ holding }) {
                                     strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
                             )}
 
-                            {/* Punkte an Zahlungsmonaten */}
+                            {/* Punkte nur an Zahlungsmonaten */}
                             {perfPoints.map((p, i) => {
                                 if (p.raw === 0) return null
                                 return (
-                                    <circle key={i} cx={toX(i)} cy={toY(p.value)} r="2.5"
-                                        fill="#22c55e" stroke="#0f1420" strokeWidth="1">
+                                    <circle key={i} cx={perfX(i)} cy={perfY(p.value)} r="2.5"
+                                        fill="#22c55e" stroke="#131c2e" strokeWidth="1.5">
                                         <title>{MONTHS_SHORT[p.month]} {p.year}: +{fmt(p.raw)} → {fmt(p.value)} gesamt</title>
                                     </circle>
                                 )
@@ -257,22 +307,24 @@ function DividendHistoryPanel({ holding }) {
                             {/* Endwert-Label */}
                             {perfPoints.length > 0 && (() => {
                                 const last = perfPoints[perfPoints.length - 1]
-                                const x = toX(perfPoints.length - 1)
-                                const y = toY(last.value)
+                                const x = perfX(n - 1)
+                                const y = perfY(last.value)
+                                const labelW = 58
+                                const lx = Math.min(x, VW - PR - labelW / 2)
                                 return (
                                     <g>
-                                        <rect x={x - 28} y={y - 16} width={56} height={14} rx="3"
-                                            fill="#1a3a1a" stroke="#22c55e" strokeWidth="0.5" />
-                                        <text x={x} y={y - 6} textAnchor="middle" fontSize="8"
+                                        <rect x={lx - labelW / 2} y={y - 18} width={labelW} height={15} rx="4"
+                                            fill="#1a3a1a" stroke="#22c55e" strokeWidth="0.75" />
+                                        <text x={lx} y={y - 7} textAnchor="middle" fontSize="9"
                                             fill="#4ade80" fontWeight="bold">{fmt(last.value)}</text>
                                     </g>
                                 )
                             })()}
 
-                            {/* X-Achse erstes Jahr */}
-                            <text x={toX(0)} y={H + 14} textAnchor="middle" fontSize="8" fill="#3d5266">{years[0]}</text>
+                            {/* X-Achse: erstes Jahr links */}
+                            <text x={perfX(0)} y={VH - 4} textAnchor="middle" fontSize="9" fill="#3d5266">{years[0]}</text>
                         </svg>
-                    </div>
+                    </ChartBox>
                 )}
             </div>
 

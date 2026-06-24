@@ -29,7 +29,11 @@ export function toCumulative(monthly) {
   return result
 }
 
-export function buildForecast(cum, activities, buyActivities = [], names = {}) {
+/**
+ * @param {object} yahooByIsin  { [isin]: [{month, year, amount}, ...] }
+ *   Dividenden pro Aktie (DPS) von Yahoo Finance – als Fallback für neue Positionen.
+ */
+export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
   const ny = cy + 1
@@ -86,16 +90,12 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
     return Math.min(Math.max(dpsLast / dpsPrev, 0.9), 1.2)
   }
 
-  const isins = Object.keys(byIsin)
-
-  const curYearActuals = Array(12).fill(0)
-  for (const a of activities) {
-    const d = new Date(a.datetime)
-    if (d.getFullYear() === cy) {
-      curYearActuals[d.getMonth()] += a.amountNet ?? a.amount ?? 0
-    }
-  }
-
+  /**
+   * Schätzt DPS für einen Monat.
+   * Priorität:
+   *   1. Eigene historische Daten (cy-1, cy-2) – gewichtet 70/30
+   *   2. Yahoo Finance Fallback – DPS direkt aus Yahoo-Daten
+   */
   function estimateDps(isin, month) {
     const yearData = byIsin[isin] || {}
     const refYears = [cy - 1, cy - 2]
@@ -106,13 +106,58 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
       return (e && e.shares > 0) ? e.amount / e.shares : null
     })
 
-    if (points.every(p => p === null)) return 0
+    if (!points.every(p => p === null)) {
+      // Eigene historische Daten vorhanden – normale Gewichtung
+      let weightedSum = 0, weightTotal = 0
+      points.forEach((v, i) => {
+        if (v !== null) { weightedSum += v * weights[i]; weightTotal += weights[i] }
+      })
+      return weightTotal > 0 ? weightedSum / weightTotal : 0
+    }
 
-    let weightedSum = 0, weightTotal = 0
-    points.forEach((v, i) => {
-      if (v !== null) { weightedSum += v * weights[i]; weightTotal += weights[i] }
-    })
-    return weightTotal > 0 ? weightedSum / weightTotal : 0
+    // ── Fallback: Yahoo Finance ──────────────────────────────────────────
+    // Suche nach einer Dividendenzahlung für diesen Monat in cy-1 oder cy-2
+    const yahooDivs = yahooByIsin[isin] || []
+    if (yahooDivs.length === 0) return 0
+
+    // Bevorzuge cy-1, dann cy-2
+    for (const refYear of [cy - 1, cy - 2]) {
+      const match = yahooDivs.find(d => d.year === refYear && d.month === month)
+      if (match) return match.amount  // Yahoo liefert bereits DPS
+    }
+
+    // Kein exakter Monats-Treffer: prüfe ob die Aktie überhaupt in diesem
+    // Monat zahlt (Quartals-/Monatszahler erkennen) anhand der letzten 2 Jahre
+    const recentDivs = yahooDivs.filter(d => d.year >= cy - 2)
+    if (recentDivs.length === 0) return 0
+
+    // Durchschnittliche Anzahl Zahlungen pro Jahr bestimmen
+    const payMonths = recentDivs.map(d => d.month)
+    if (!payMonths.includes(month)) return 0  // Dieser Monat war nie ein Zahlungsmonat
+
+    // Durchschnittliche DPS für diesen Monat über verfügbare Jahre
+    const monthMatches = recentDivs.filter(d => d.month === month)
+    const avg = monthMatches.reduce((s, d) => s + d.amount, 0) / monthMatches.length
+    return avg
+  }
+
+  // ISINs aus Dividendenaktivitäten + neue Positionen aus buyActivities
+  const isinsFromDivs = Object.keys(byIsin)
+  const isinsFromBuys = Object.keys(currentSharesFromBuys)
+  const isins = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
+
+  // Für neue Positionen (nur in buyActivities, noch nie Dividende erhalten)
+  // byIsin-Eintrag initialisieren damit estimateDps funktioniert
+  for (const isin of isinsFromBuys) {
+    if (!byIsin[isin]) byIsin[isin] = {}
+  }
+
+  const curYearActuals = Array(12).fill(0)
+  for (const a of activities) {
+    const d = new Date(a.datetime)
+    if (d.getFullYear() === cy) {
+      curYearActuals[d.getMonth()] += a.amountNet ?? a.amount ?? 0
+    }
   }
 
   const forecastByHolding = {}
@@ -174,9 +219,8 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}) {
 export function heatColor(value, max) {
   if (!value || value === 0) return '#1a2233'
   const intensity = Math.min(value / max, 1)
-  // Dunkel-Grün bei niedrig, sattes Grün bei hoch – besserer Kontrast
-  const from = [20, 83, 45]   // #145328 — dunkles Grün
-  const to   = [21, 180, 90]  // #15b45a — helles Grün
+  const from = [20, 83, 45]
+  const to   = [21, 180, 90]
   const rgb  = from.map((f, i) => Math.round(f + (to[i] - f) * Math.pow(intensity, 0.45)))
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
 }
