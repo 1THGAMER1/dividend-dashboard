@@ -68,22 +68,31 @@ export async function fetchPurchaseValuePerHolding() {
 
 export async function fetchHoldingNames() {
   const PID = await getPortfolioId()
-  const data  = await request(`/portfolios/${PID}/holdings`)
   const names   = {}
   const types   = {}
   const tickers = {}
 
-  const items = data.items || data.holdings || []
-  for (const h of items) {
-    const isin = h.asset?.isin || h.asset?.symbol
-    const name = h.asset?.name || h.asset?.symbol || isin
-    if (isin) {
-      names[isin]   = name
-      types[isin]   = h.asset?.type || 'security'
-      const ticker  = h.asset?.ticker || h.asset?.symbol || null
-      if (ticker) tickers[isin] = ticker
+  // Pagination-Loop: lade ALLE Holdings, nicht nur Seite 1
+  let cursor = null
+  do {
+    const params = new URLSearchParams({ limit: '200' })
+    if (cursor) params.set('cursor', cursor)
+    const data = await request(`/portfolios/${PID}/holdings?${params}`)
+    const items = data.items || data.holdings || []
+
+    for (const h of items) {
+      const isin = h.asset?.isin || h.asset?.symbol
+      const name = h.asset?.name || h.asset?.symbol || isin
+      if (isin) {
+        names[isin]   = name
+        types[isin]   = h.asset?.type || 'security'
+        const ticker  = h.asset?.ticker || h.asset?.symbol || null
+        if (ticker) tickers[isin] = ticker
+      }
     }
-  }
+
+    cursor = data.cursor || null
+  } while (cursor)
 
   // Debug: zeige alle Holdings mit Typ und Ticker
   console.log('[Holdings] Rohdaten von Parqet:')
@@ -152,7 +161,6 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
       const rawTicker = tickers[isin] || null
 
       // Pruefe ob rawTicker ein echter Boersen-Ticker ist oder nur eine ISIN/interner Code
-      // Echter Ticker: kein ISIN-Format, nicht identisch mit der ISIN selbst
       const tickerIsReal = rawTicker &&
         !ISIN_REGEX.test(rawTicker) &&
         rawTicker !== isin
