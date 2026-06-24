@@ -23,22 +23,9 @@ const typeColor = label => {
 }
 
 const YEAR_COLORS = ['#009991','#3b82f6','#a78bfa','#f472b6','#fb923c','#facc15']
-const CHART_H = 100
 
-// Chart-Wrapper für Akkumuliert + Performance (SVG-basiert)
-function ChartBox({ children }) {
-    return (
-        <div style={{
-            background: '#131c2e',
-            border: '1px solid #1e2a3a',
-            borderRadius: 10,
-            padding: '14px 16px 10px',
-            minWidth: 320,
-        }}>
-            {children}
-        </div>
-    )
-}
+// Gemeinsame Höhe aller drei Charts in px
+const CHART_H = 100
 
 function DividendHistoryPanel({ holding }) {
     const { monthly } = holding
@@ -85,15 +72,18 @@ function DividendHistoryPanel({ holding }) {
         net:   yd.months.reduce((s, v) => s + v, 0),
     }))
 
-    // SVG-Dimensionen für Akkumuliert + Performance
-    const VW = 520, VH = 160
-    const PL = 8, PR = 8, PT = 10, PB = 22
+    // SVG koordinaten — viewBox passt sich an CHART_H an
+    // PB = Platz für X-Achsen-Labels (Monatsnamen)
+    const VW = 500, PB = 18, PT = 6, PL = 4, PR = 4
+    const VH = CHART_H + PT + PB
     const CW = VW - PL - PR
-    const CH = VH - PT - PB
+    const CH = CHART_H // == CHART_H damit alle drei Höhen identisch sind
 
+    // Akkumuliert
     const cumX = i => PL + (i / 11) * CW
     const cumY = v => PT + CH - (v / maxVal) * CH
 
+    // Performance
     const n = perfPoints.length
     const perfX = i => PL + (i / Math.max(n - 1, 1)) * CW
     const perfY = v => PT + CH - (v / maxVal) * CH
@@ -103,6 +93,12 @@ function DividendHistoryPanel({ holding }) {
         const firstIdx = perfPoints.findIndex(p => p.year === y)
         if (firstIdx > 0) yearBoundaries.push({ x: perfX(firstIdx), year: y })
     })
+
+    // Gemeinsamer äußerer Container-Style (entspricht dem Monatlich-div)
+    const chartContainerStyle = {
+        width: '100%',
+        minWidth: 320,
+    }
 
     return (
         <div style={{ padding:'16px 4px 8px', display:'flex', flexDirection:'column', gap:14 }}>
@@ -141,43 +137,45 @@ function DividendHistoryPanel({ holding }) {
 
             <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
 
-                {/* ===== Chart 1: Monatlich — ORIGINAL, unverändert ===== */}
+                {/* ===== Chart 1: Monatlich ===== */}
                 {mode === 'monthly' && (
-                    <div style={{ display:'flex', alignItems:'flex-end', gap:3, minWidth:320 }}>
-                        {MONTHS_SHORT.map((mon, mIdx) => {
-                            const hasAny = yearData.some(yd => yd.months[mIdx] > 0)
-                            return (
-                                <div key={mon} style={{ flex:'1 0 auto', display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                                    <div style={{ display:'flex', alignItems:'flex-end', gap:1, height:CHART_H }}>
-                                        {yearData.map(yd => {
-                                            const val = yd.months[mIdx]
-                                            const h   = Math.max(val > 0 ? 3 : 0, (val / maxVal) * CHART_H)
-                                            return (
-                                                <div key={yd.year} title={`${mon} ${yd.year}: ${fmt(val)}`} style={{
-                                                    width: Math.max(6, Math.floor(24 / yearData.length)),
-                                                    height: h, borderRadius:'3px 3px 0 0',
-                                                    background: val > 0 ? yd.color : 'transparent',
-                                                    opacity: yd.year === currentYear ? 1 : 0.65,
-                                                    alignSelf: 'flex-end',
-                                                }} />
-                                            )
-                                        })}
+                    <div style={chartContainerStyle}>
+                        <div style={{ display:'flex', alignItems:'flex-end', gap:3, height: CHART_H + PB }}>
+                            {MONTHS_SHORT.map((mon, mIdx) => {
+                                const hasAny = yearData.some(yd => yd.months[mIdx] > 0)
+                                return (
+                                    <div key={mon} style={{ flex:'1 0 auto', display:'flex', flexDirection:'column', alignItems:'center', gap:0 }}>
+                                        <div style={{ display:'flex', alignItems:'flex-end', gap:1, height:CHART_H }}>
+                                            {yearData.map(yd => {
+                                                const val = yd.months[mIdx]
+                                                const h   = Math.max(val > 0 ? 3 : 0, (val / maxVal) * CHART_H)
+                                                return (
+                                                    <div key={yd.year} title={`${mon} ${yd.year}: ${fmt(val)}`} style={{
+                                                        width: Math.max(6, Math.floor(24 / yearData.length)),
+                                                        height: h, borderRadius:'3px 3px 0 0',
+                                                        background: val > 0 ? yd.color : 'transparent',
+                                                        opacity: yd.year === currentYear ? 1 : 0.65,
+                                                        alignSelf: 'flex-end',
+                                                    }} />
+                                                )
+                                            })}
+                                        </div>
+                                        <span style={{ fontSize:9, color: hasAny ? '#556070' : '#2a3a50', marginTop:3, height: PB - 3, lineHeight:'1' }}>{mon}</span>
                                     </div>
-                                    <span style={{ fontSize:9, color: hasAny ? '#556070' : '#2a3a50', marginTop:3 }}>{mon}</span>
-                                </div>
-                            )
-                        })}
+                                )
+                            })}
+                        </div>
                     </div>
                 )}
 
-                {/* ===== Chart 2: Akkumuliert — in ChartBox, gleiche Größe wie Monatlich-Container ===== */}
+                {/* ===== Chart 2: Akkumuliert ===== */}
                 {mode === 'cumulative' && (
-                    <ChartBox>
+                    <div style={chartContainerStyle}>
                         <svg
                             width="100%"
                             viewBox={`0 0 ${VW} ${VH}`}
-                            preserveAspectRatio="xMidYMid meet"
-                            style={{ display:'block' }}
+                            preserveAspectRatio="none"
+                            style={{ display:'block', height: CHART_H + PB }}
                         >
                             <defs>
                                 {yearDataCum.map(yd => (
@@ -204,7 +202,7 @@ function DividendHistoryPanel({ holding }) {
                                         {yd.months.map((v, i) => v === 0 ? null : (
                                             <circle key={i} cx={cumX(i)} cy={cumY(v)}
                                                 r={yd.year === currentYear ? 2.5 : 2}
-                                                fill={yd.color} stroke="#131c2e" strokeWidth="1.5"
+                                                fill={yd.color} stroke="#1a2540" strokeWidth="1.5"
                                                 opacity={yd.year === currentYear ? 1 : 0.55}
                                             >
                                                 <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
@@ -214,20 +212,20 @@ function DividendHistoryPanel({ holding }) {
                                 )
                             })}
                             {MONTHS_SHORT.map((mon, i) => (
-                                <text key={mon} x={cumX(i)} y={VH - 4} textAnchor="middle" fontSize="9" fill="#3d5266">{mon}</text>
+                                <text key={mon} x={cumX(i)} y={VH - 3} textAnchor="middle" fontSize="9" fill="#556070">{mon}</text>
                             ))}
                         </svg>
-                    </ChartBox>
+                    </div>
                 )}
 
-                {/* ===== Chart 3: Performance — in ChartBox, gleiche Größe wie Monatlich-Container ===== */}
+                {/* ===== Chart 3: Performance ===== */}
                 {mode === 'performance' && (
-                    <ChartBox>
+                    <div style={chartContainerStyle}>
                         <svg
                             width="100%"
                             viewBox={`0 0 ${VW} ${VH}`}
-                            preserveAspectRatio="xMidYMid meet"
-                            style={{ display:'block' }}
+                            preserveAspectRatio="none"
+                            style={{ display:'block', height: CHART_H + PB }}
                         >
                             <defs>
                                 <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
@@ -260,7 +258,7 @@ function DividendHistoryPanel({ holding }) {
                             )}
                             {perfPoints.map((p, i) => p.raw === 0 ? null : (
                                 <circle key={i} cx={perfX(i)} cy={perfY(p.value)} r="2.5"
-                                    fill="#22c55e" stroke="#131c2e" strokeWidth="1.5">
+                                    fill="#22c55e" stroke="#1a2540" strokeWidth="1.5">
                                     <title>{MONTHS_SHORT[p.month]} {p.year}: +{fmt(p.raw)} → {fmt(p.value)} gesamt</title>
                                 </circle>
                             ))}
@@ -279,9 +277,9 @@ function DividendHistoryPanel({ holding }) {
                                     </g>
                                 )
                             })()}
-                            <text x={perfX(0)} y={VH - 4} textAnchor="middle" fontSize="9" fill="#3d5266">{years[0]}</text>
+                            <text x={perfX(0)} y={VH - 3} textAnchor="middle" fontSize="9" fill="#556070">{years[0]}</text>
                         </svg>
-                    </ChartBox>
+                    </div>
                 )}
             </div>
 
