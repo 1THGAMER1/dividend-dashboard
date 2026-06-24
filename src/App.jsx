@@ -65,7 +65,6 @@ function rolling12m(monthly, endYear, endMonth) {
   return total
 }
 
-// ─── Shared Logo Component
 export function DashLogo({ size = 32 }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size} aria-label="Dividend Dashboard">
@@ -79,7 +78,6 @@ export function DashLogo({ size = 32 }) {
   )
 }
 
-// ─── Branded Loading Screen
 function LoadingScreen({ text }) {
   return (
     <div style={{
@@ -142,10 +140,14 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       if (mounted) setAppUser(data.session?.user ?? null)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setAppUser(session?.user ?? null)
-      clearCachedClientId()
-      setClientIdReady(false)
+
+      const shouldResetClientId = event === 'SIGNED_OUT' || event === 'USER_UPDATED' || !session?.user
+      if (shouldResetClientId) {
+        clearCachedClientId()
+        setClientIdReady(false)
+      }
     })
     return () => { mounted = false; listener.subscription.unsubscribe() }
   }, [])
@@ -253,12 +255,10 @@ export default function App() {
     cagrOrganic: null,
   }
 
-  // ── Inflationsbereinigte Real-Rendite ──────────────────────────────────────
   const nominalTotal = kpi?.['all']?.net ?? 0
   const realTotal    = calcRealTotal(monthly)
   const inflation    = nominalTotal - realTotal
   const hasRealData  = nominalTotal > 0 && Object.keys(monthly).length > 1
-  // ──────────────────────────────────────────────────────────────────────────
 
   const statusIndicator = getStatusIndicator(dataSource)
   const hasData      = Object.keys(monthly).length > 0
@@ -267,8 +267,6 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f1420', display: 'flex', flexDirection: 'column' }}>
-
-      {/* NAV */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#161b27', borderBottom: '1px solid #1e2a3a',
@@ -344,7 +342,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* PAGES */}
       <div style={{ flex: 1 }}>
         {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
         {page === 'drip'       && <DripSimulator      portfolioData={portfolioData} />}
@@ -363,8 +360,7 @@ export default function App() {
                   <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
                   <DividendCalendar  forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
                 </>
-              )
-            }
+              )}
           </div>
         )}
 
@@ -399,7 +395,6 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Zeile 1: Netto, Brutto, Dividendenrendite */}
                 <div className="kpi-grid">
                   <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
                            detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
@@ -413,7 +408,6 @@ export default function App() {
                   />
                 </div>
 
-                {/* Zeile 2: CAGR + YoY + Real */}
                 <div className="kpi-grid">
                   {trueCagr !== null && (
                     <KpiCard
@@ -483,7 +477,6 @@ export default function App() {
                 />
                 <DividendHeatmap monthly={monthly} />
 
-                {/* Donut + Tabelle */}
                 <div id="dividends-table">
                   <DividendDonut byHolding={byHolding} kpiRange={kpiRange} />
                   <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
@@ -494,7 +487,6 @@ export default function App() {
         )}
       </div>
 
-      {/* FOOTER */}
       <Footer onNavigate={setPage} />
     </div>
   )
