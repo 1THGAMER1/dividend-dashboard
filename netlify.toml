@@ -3,6 +3,22 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# API-Routen → Netlify Functions
+# Müssen VOR dem /*-Wildcard stehen, sonst wird alles zu index.html umgeleitet
+# ─────────────────────────────────────────────────────────────────────────────
+[[redirects]]
+  from = "/yahoo-dividends"
+  to = "/.netlify/functions/yahoo-dividends"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/parqet-proxy/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -10,35 +26,14 @@
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HTTP Security Headers
-# Doku: https://docs.netlify.com/routing/headers/
 # ─────────────────────────────────────────────────────────────────────────────
 [[headers]]
   for = "/*"
   [headers.values]
-    # Verhindert Clickjacking (deine App darf nicht in iframes eingebettet werden)
     X-Frame-Options = "DENY"
-
-    # Verhindert MIME-Typ-Sniffing (Browser muss deklarierten Content-Type respektieren)
     X-Content-Type-Options = "nosniff"
-
-    # Kein Referrer bei Cross-Origin-Requests (schützt OAuth-Redirect-URLs)
     Referrer-Policy = "strict-origin-when-cross-origin"
-
-    # Erzwingt HTTPS für 1 Jahr, inkl. Subdomains
     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
-
-    # Deaktiviert Browser-Features, die du nicht brauchst
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
-
-    # Content Security Policy:
-    # - default-src 'self'          → alles nur von der eigenen Domain
-    # - script-src 'self'           → kein inline-JS erlaubt (wichtig gegen XSS)
-    # - style-src 'self' 'unsafe-inline' → React benötigt inline-styles (Recharts etc.)
-    # - connect-src                 → erlaubte API-Ziele explizit aufgelistet
-    # - img-src 'self' data:        → Base64-Bilder (z. B. Charts) erlaubt
-    # - font-src 'self'             → nur lokale Fonts
-    # - frame-ancestors 'none'      → verstärkt X-Frame-Options
     Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://connect.parqet.com; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-
-    # Suchmaschinen-Indexierung vollständig sperren (HTTP-Ebene)
     X-Robots-Tag = "noindex, nofollow, noarchive, nosnippet"
