@@ -31,6 +31,24 @@ function toGross(netValue, taxRate) {
     return netValue / (1 - taxRate)
 }
 
+// Berechnet die ideale Balkenbreite basierend auf der Anzahl Datenpunkte
+function calcBarSize(totalPoints) {
+    if (totalPoints <= 12)  return 20
+    if (totalPoints <= 24)  return 14
+    if (totalPoints <= 36)  return 10
+    if (totalPoints <= 48)  return 7
+    return 5
+}
+
+// Berechnet sinnvollen X-Achsen-Intervall damit Labels nicht überlappen
+function calcXInterval(totalPoints) {
+    if (totalPoints <= 12)  return 0        // alle Labels
+    if (totalPoints <= 24)  return 1        // jeden 2. (Jan, Jan, ...)
+    if (totalPoints <= 36)  return 2
+    if (totalPoints <= 60)  return 5        // jeden 6.
+    return Math.ceil(totalPoints / 12) - 1 // ~12 Labels gesamt
+}
+
 export default function DividendChart({ monthly, cum, forecastCum, forecastMonthly, byHolding, forecastByHolding }) {
     const [mode,      setMode]      = useState('monthly')
     const [showGross, setShowGross] = useState(false)
@@ -68,19 +86,14 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
     const scaleIsin = (v, isin) => showGross ? toGross(v, taxRates[isin] ?? globalTaxRate) : v
 
     // ── Inflationslinie für Akkumuliert-Modus ──────────────────────────────────
-    // Zeigt: Wie viel hättest du nominal verdienen müssen,
-    // damit deine erste Jahres-Dividende inflationsbereinigt gleich geblieben wäre?
     const inflationLineData = useMemo(() => {
         if (!years.length || years.length < 2) return null
-        // Basiswert = Dividende im ersten vollständigen Jahr
         const firstYearTotal = (monthly[baseYear] || []).reduce((s, v) => s + (v || 0), 0)
         if (firstYearTotal <= 0) return null
-        // Für jedes Jahr: nominaler Wert der nötig wäre um Kaufkraft zu erhalten
         const yearTargets = {}
         years.forEach(y => {
             yearTargets[y] = firstYearTotal * cumulativeInflationFactor(baseYear, y)
         })
-        // Kumulieren
         let cumTarget = 0
         const cumTargets = {}
         years.forEach(y => {
@@ -90,7 +103,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return cumTargets
     }, [monthly, years, baseYear])
 
-    // Inflation-Referenzwert für aktuelles Jahr im kumulierten Chart
     const inflationRefValue = inflationLineData?.[cy] ?? null
 
     // Monatlich
@@ -115,19 +127,14 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         pt[`${cy}_real`]     = i <= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
         pt[`${cy}_forecast`] = i >= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
         pt[`${ny}_forecast`] = fcNy[i] != null ? +scaleNet(fcNy[i]).toFixed(2) : null
-        // Inflation: monatliche Zwischenwerte interpolieren zwischen Jahreswerten
         if (showInflation && inflationLineData && years.length >= 2) {
-            // Verteile Jahreswert gleichmäßig auf Monate (kumuliert bis Monat i)
             const yearKeys = years.filter(y => y <= cy)
             let runningInflation = 0
             yearKeys.forEach((y, yIdx) => {
-                const yearTotal = (monthly[y] || []).reduce((s, v) => s + (v || 0), 0) || 0
                 const yearTarget = inflationLineData[y] ?? 0
-                // Anteil bis Monat i im letzten relevanten Jahr
                 if (y < cy) {
                     runningInflation += yearTarget - (yIdx > 0 ? (inflationLineData[years[yIdx - 1]] ?? 0) : 0)
                 } else {
-                    // Aktuelles Jahr: nur bis Monat i anteilig
                     const prevCum = yIdx > 0 ? (inflationLineData[years[yIdx - 1]] ?? 0) : 0
                     const curTarget = inflationLineData[y] ?? 0
                     const monthShare = i <= cm - 1 ? (i + 1) / 12 : (cm) / 12
@@ -159,7 +166,11 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         const year     = date.getFullYear()
         const month    = date.getMonth()
         const isFuture = date >= new Date(cy, cm, 1)
-        const label    = `${MONTHS[month]} ${String(year).slice(2)}`
+        // Kurzes Label: "Jan" für Jan, "J '26" für Jahreswechsel
+        const isJan    = month === 0
+        const label    = isJan
+            ? `Jan '${String(year).slice(2)}`
+            : MONTHS[month].slice(0, 3)
         const pt       = { name: label, _future: isFuture }
         for (const isin of isins) {
             const h   = byHolding[isin]
@@ -170,6 +181,10 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         }
         return pt
     })
+
+    // Dynamische Werte für stacked Chart
+    const stackedBarSize = calcBarSize(totalMonths)
+    const stackedXInterval = calcXInterval(totalMonths)
 
     const maxVal = Math.max(
         ...monthlyBarData.flatMap(d =>
@@ -259,9 +274,19 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                     </BarChart>
 
                 ) : mode === 'stacked' ? (
-                    <BarChart data={stackedData} margin={{ top:8, right:16, left:0, bottom:0 }} barCategoryGap="15%">
+                    <BarChart
+                        data={stackedData}
+                        margin={{ top:8, right:16, left:0, bottom:0 }}
+                        barCategoryGap="15%"
+                        barSize={stackedBarSize}
+                    >
                         <CartesianGrid strokeDasharray="3 3" stroke="#1a2233" />
-                        <XAxis dataKey="name" tick={{ fill:'#7a8ba0', fontSize:11 }} interval="preserveStartEnd" />
+                        <XAxis
+                            dataKey="name"
+                            tick={{ fill:'#7a8ba0', fontSize:10 }}
+                            tickLine={false}
+                            interval={stackedXInterval}
+                        />
                         <YAxis tick={{ fill:'#7a8ba0', fontSize:12 }} tickFormatter={v => v.toFixed(0) + '€'} width={52} />
                         <Tooltip
                             contentStyle={{ background:'#1a2233', border:'1px solid #222d3d', borderRadius:8 }}
@@ -294,7 +319,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                                 <Bar key={isin} dataKey={isin} stackId="a"
                                      fill={color}
                                      radius={isTopmost ? [3,3,0,0] : [0,0,0,0]}
-                                     maxBarSize={40}
                                      shape={(props) => {
                                          const isFuture = stackedData[props.index]?._future || false
                                          const { x, y, width, height } = props
@@ -348,7 +372,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                               stroke="#34d399" strokeWidth={2}
                               strokeDasharray="6 4" dot={false} connectNulls
                         />
-                        {/* Inflationslinie */}
                         {showInflation && (
                             <Line
                                 type="monotone"

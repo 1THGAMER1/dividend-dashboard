@@ -88,9 +88,9 @@ export async function fetchHoldingNames() {
 }
 
 /**
- * Holt Yahoo Finance Dividendenhistorie für einen Ticker (via Netlify Proxy).
- * Gibt ein Array von { date, amount, month, year } zurück.
- * Bei Fehler oder fehlendem Ticker wird [] zurückgegeben.
+ * Holt Yahoo Finance Dividendenhistorie fuer einen Ticker oder eine ISIN.
+ * Gibt ein Array von { date, amount, month, year } zurueck.
+ * Bei Fehler oder fehlendem Ticker wird [] zurueckgegeben.
  */
 export async function fetchYahooDividends(ticker) {
   if (!ticker) return []
@@ -107,43 +107,72 @@ export async function fetchYahooDividends(ticker) {
 // Typen die keine Dividenden zahlen → kein Yahoo-Request
 const NO_DIVIDEND_TYPES = new Set(['crypto', 'cryptocurrency'])
 
+// ISINs beginnen mit 2 Großbuchstaben gefolgt von Ziffern/Buchstaben (12 Zeichen)
+const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
+
 /**
- * Lädt Yahoo-Dividendendaten für alle Tickers parallel.
- * Krypto-Holdings werden übersprungen (zahlen keine Dividenden).
- * Gibt { [isin]: [{month, year, amount}, ...] } zurück.
+ * Ladet Yahoo-Dividendendaten fuer alle Holdings parallel.
+ * Strategie pro Holding:
+ *   1. Versuche mit Ticker (falls vorhanden und kein ISIN-Format)
+ *   2. Falls keine Dividenden → versuche direkt mit ISIN
+ *   3. Falls immer noch nichts → leer
+ * Krypto-Holdings werden uebersprungen.
+ * Gibt { [isin]: [{month, year, amount}, ...] } zurueck.
  */
 export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
-  const entries = Object.entries(tickers) // [[isin, ticker], ...]
-  if (entries.length === 0) return {}
+  // Alle bekannten ISINs sammeln: aus tickers-Keys + explizite isin-Parameter
+  // tickers = { [isin]: ticker|symbol }
+  // Wir iterieren ueber alle ISINs die wir kennen
+  const allIsins = Object.keys(tickers)
+  if (allIsins.length === 0) return {}
 
-  // Nur Holdings mit relevantem Typ anfragen
-  const filtered = entries.filter(([isin, ticker]) => {
+  // Krypto rausfiltern
+  const relevant = allIsins.filter(isin => {
     const t = (types[isin] || '').toLowerCase()
-    if (NO_DIVIDEND_TYPES.has(t)) {
-      console.log(`[Yahoo] Überspringe ${ticker} (${isin}) — Typ: ${t}`)
-      return false
-    }
-    return true
+    return !NO_DIVIDEND_TYPES.has(t)
   })
 
-  console.log(`[Yahoo] ${filtered.length}/${entries.length} Holdings werden abgefragt (${entries.length - filtered.length} Krypto übersprungen)`)
+  const skipped = allIsins.length - relevant.length
+  console.log(`[Yahoo] ${relevant.length}/${allIsins.length} Holdings werden abgefragt (${skipped} Krypto uebersprungen)`)
 
   const results = await Promise.allSettled(
-    filtered.map(([isin, ticker]) =>
-      fetchYahooDividends(ticker).then(divs => ({ isin, ticker, divs }))
-    )
+    relevant.map(async isin => {
+      const rawTicker = tickers[isin] || null
+
+      // Pruefe ob rawTicker ein echter Boersen-Ticker ist oder nur eine ISIN/interner Code
+      // Echter Ticker: kein ISIN-Format, nicht identisch mit der ISIN selbst
+      const tickerIsReal = rawTicker &&
+        !ISIN_REGEX.test(rawTicker) &&
+        rawTicker !== isin
+
+      // Schritt 1: Ticker versuchen (falls echter Ticker vorhanden)
+      if (tickerIsReal) {
+        const divs = await fetchYahooDividends(rawTicker)
+        if (divs.length > 0) {
+          console.log(`[Yahoo] ✓ ${rawTicker} (Ticker): ${divs.length} Dividenden`)
+          return { isin, divs }
+        }
+        console.log(`[Yahoo] ~ ${rawTicker} (Ticker): keine Dividenden, versuche ISIN...`)
+      }
+
+      // Schritt 2: ISIN direkt versuchen (Yahoo kennt viele ISINs direkt)
+      if (ISIN_REGEX.test(isin)) {
+        const divs = await fetchYahooDividends(isin)
+        if (divs.length > 0) {
+          console.log(`[Yahoo] ✓ ${isin} (ISIN): ${divs.length} Dividenden`)
+          return { isin, divs }
+        }
+        console.log(`[Yahoo] - ${isin}: keine Dividenden gefunden`)
+      }
+
+      return { isin, divs: [] }
+    })
   )
 
   const map = {}
   for (const r of results) {
-    if (r.status === 'fulfilled') {
-      const { isin, ticker, divs } = r.value
-      if (divs.length > 0) {
-        map[isin] = divs
-        console.log(`[Yahoo] ✓ ${ticker}: ${divs.length} Dividenden gefunden`)
-      } else {
-        console.log(`[Yahoo] – ${ticker}: keine Dividenden`)
-      }
+    if (r.status === 'fulfilled' && r.value.divs.length > 0) {
+      map[r.value.isin] = r.value.divs
     }
   }
   return map
