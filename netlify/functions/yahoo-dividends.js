@@ -1,12 +1,12 @@
 // netlify/functions/yahoo-dividends.js
 // Proxy fuer Yahoo Finance Dividendenhistorie
-// ISIN-Resolver: Yahoo Search zuerst (praeziser), OpenFIGI als Fallback
+// Aufruf: GET /yahoo-dividends?ticker=AAPL
+//         GET /yahoo-dividends?ticker=IE000S9YS762  <- ISIN wird aufgeloest
 
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 
-// --- Resolver 1: Yahoo Finance Search (primaer) -----------------------------------
-// Yahoo kennt den richtigen boersengehandelten Ticker besser als OpenFIGI,
-// das oft falsche OTC-Symbole zurueckgibt.
+// --- Resolver: Yahoo Finance Search (primaer) ------------------------------------
+// Yahoo Search gibt direkt Yahoo-kompatible Ticker zurueck.
 async function resolveTickerFromYahooSearch(isin) {
   try {
     const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=5&newsCount=0&listsCount=0`
@@ -23,22 +23,42 @@ async function resolveTickerFromYahooSearch(isin) {
       !q.symbol.includes('=') &&
       ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType)
     )
-    // Bevorzuge Nicht-OTC: Symbole ohne Punkt sind meist US-listed oder OTC.
-    // Symbole mit Punkt (z.B. CSPX.L, EXS1.DE) sind boersengehandelte ETFs.
-    const exchange = quotes.find(q => q.symbol.includes('.')) || quotes[0]
-    return exchange?.symbol || null
+    if (quotes.length === 0) return null
+    // Bevorzuge Ticker ohne Punkt (US-Boerse) oder mit bekannten Suffixen
+    const preferred = quotes.find(q => !q.symbol.includes('.')) || quotes[0]
+    return preferred.symbol
   } catch {
     return null
   }
 }
 
-// --- Resolver 2: OpenFIGI (Fallback fuer US-Aktien ohne Punkt-Suffix) ------------
+// --- Validator: prueft ob ein Ticker bei Yahoo Daten liefert --------------------
+async function validateTickerOnYahoo(symbol) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=0&period2=1&interval=1d`
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DividendDashboard/1.0)',
+        'Accept': 'application/json',
+      },
+    })
+    if (!res.ok) return false
+    const json = await res.json()
+    return !!(json?.chart?.result?.[0])
+  } catch {
+    return false
+  }
+}
+
+// --- Resolver: OpenFIGI (Fallback) -----------------------------------------------
 async function resolveTickerFromOpenFigi(isin) {
-  // Nur US-ISINs via OpenFIGI aufloesen (US ISINs beginnen mit "US")
-  // Europaeische ISINs werden besser via Yahoo Search gefunden
-  const strategies = isin.startsWith('US')
-    ? [{ idType: 'ID_ISIN', idValue: isin, exchCode: 'US' }]
-    : [{ idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' }]
+  const strategies = [
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'US' },
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'LN' },
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' },
+    { idType: 'ID_ISIN', idValue: isin },
+  ]
+  const suffixMap = { GS: '.DE', LN: '.L', PA: '.PA', AS: '.AS', SW: '.SW' }
 
   for (const body of strategies) {
     try {
@@ -49,32 +69,31 @@ async function resolveTickerFromOpenFigi(isin) {
       })
       if (!res.ok) continue
       const data = await res.json()
-      const ticker = data?.[0]?.data?.[0]?.ticker
-      if (ticker) {
-        const suffix = body.exchCode === 'GS' ? '.DE' : ''
-        return ticker + suffix
-      }
+      const item = data?.[0]?.data?.[0]
+      if (!item?.ticker) continue
+      const suffix = suffixMap[body.exchCode] || ''
+      const candidate = item.ticker + suffix
+      const valid = await validateTickerOnYahoo(candidate)
+      if (valid) return candidate
     } catch {
-      // ignorieren, naechste Strategie
+      continue
     }
   }
   return null
 }
 
-// --- Kette: Yahoo Search -> OpenFIGI ---------------------------------------------
+// --- Hauptkette: Yahoo Search -> OpenFIGI ----------------------------------------
 async function resolveTickerFromIsin(isin) {
-  const yahooBased = await resolveTickerFromYahooSearch(isin)
-  if (yahooBased) {
-    console.log(`[Resolver] ${isin} via Yahoo Search -> ${yahooBased}`)
-    return yahooBased
+  const yahooResult = await resolveTickerFromYahooSearch(isin)
+  if (yahooResult) {
+    console.log(`[Resolver] ${isin} via Yahoo Search -> ${yahooResult}`)
+    return yahooResult
   }
-
-  const figiBased = await resolveTickerFromOpenFigi(isin)
-  if (figiBased) {
-    console.log(`[Resolver] ${isin} via OpenFIGI -> ${figiBased}`)
-    return figiBased
+  const figiResult = await resolveTickerFromOpenFigi(isin)
+  if (figiResult) {
+    console.log(`[Resolver] ${isin} via OpenFIGI -> ${figiResult}`)
+    return figiResult
   }
-
   console.log(`[Resolver] ${isin} -> nicht aufloesbar`)
   return null
 }
