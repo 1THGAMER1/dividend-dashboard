@@ -3,6 +3,7 @@ import { startOAuthFlow, logout, getClientId, clearCachedClientId } from './auth
 import { supabase } from './supabaseClient'
 import useDividendData from './hooks/useDividendData'
 import { calcRealTotal } from './inflation'
+import { setTickerProgressCallback } from './api'
 
 import KpiCard            from './components/KpiCard'
 import LoginScreen        from './components/LoginScreen'
@@ -78,7 +79,10 @@ export function DashLogo({ size = 32 }) {
   )
 }
 
-function LoadingScreen({ text }) {
+function LoadingScreen({ text, progress }) {
+  const hasProgress = progress && progress.total > 0
+  const pct = hasProgress ? Math.round((progress.done / progress.total) * 100) : null
+
   return (
     <div style={{
       minHeight: '100vh', background: '#0f1420',
@@ -92,14 +96,33 @@ function LoadingScreen({ text }) {
         <p style={{ color: '#e0e6f0', fontWeight: 700, fontSize: 16, margin: 0 }}>Dividenden Dashboard</p>
         <p style={{ color: '#556070', fontSize: 13, margin: '4px 0 0' }}>{text}</p>
       </div>
-      <div style={{ width: 160, height: 3, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden' }}>
-        <div style={{
-          height: '100%',
-          background: 'linear-gradient(90deg, #22c55e, #4ade80)',
-          borderRadius: 99,
-          animation: 'loadBar 1.6s ease-in-out infinite',
-        }} />
-      </div>
+
+      {hasProgress ? (
+        <div style={{ width: 220, textAlign: 'center' }}>
+          <div style={{ width: '100%', height: 6, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
+            <div style={{
+              height: '100%',
+              width: `${pct}%`,
+              background: 'linear-gradient(90deg, #22c55e, #4ade80)',
+              borderRadius: 99,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+          <span style={{ color: '#556070', fontSize: 12 }}>
+            {progress.label} ({pct} %)
+          </span>
+        </div>
+      ) : (
+        <div style={{ width: 160, height: 3, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%',
+            background: 'linear-gradient(90deg, #22c55e, #4ade80)',
+            borderRadius: 99,
+            animation: 'loadBar 1.6s ease-in-out infinite',
+          }} />
+        </div>
+      )}
+
       <style>{`
         @keyframes logoPulse {
           0%, 100% { opacity: 1;   transform: scale(1);    }
@@ -134,6 +157,15 @@ export default function App() {
   const [clientIdReady,  setClientIdReady]  = useState(false)
   const [profileLoading, setProfileLoading] = useState(true)
   const [tooltipVisible, setTooltipVisible] = useState(false)
+  const [tickerProgress, setTickerProgress] = useState(null)
+
+  // Ticker-Fortschritts-Callback registrieren
+  useEffect(() => {
+    setTickerProgressCallback((p) => {
+      setTickerProgress(p.done >= p.total ? null : p)
+    })
+    return () => setTickerProgressCallback(null)
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -178,6 +210,14 @@ export default function App() {
   if (!clientIdReady)  return <ParqetSetup onDone={() => setClientIdReady(true)} />
   if (authLoading)     return <LoadingScreen text="Authentifizierung läuft…" />
   if (!loggedIn)       return <LoginScreen onLogin={startOAuthFlow} loading={authLoading} error={error} />
+
+  // Ticker-Aufloesung laeuft: Fortschrittsanzeige als Overlay
+  if (tickerProgress) {
+    return <LoadingScreen
+      text="Wertpapiere werden mit Yahoo Finance verknüpft…"
+      progress={tickerProgress}
+    />
+  }
 
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
