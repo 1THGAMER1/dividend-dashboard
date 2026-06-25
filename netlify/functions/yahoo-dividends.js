@@ -1,47 +1,15 @@
 // netlify/functions/yahoo-dividends.js
 // Proxy fuer Yahoo Finance Dividendenhistorie
 // Aufruf: GET /yahoo-dividends?ticker=AAPL
-//         GET /yahoo-dividends?ticker=IE000S9YS762  <- ISIN wird aufgeloest via OpenFIGI → Yahoo Search
+//         GET /yahoo-dividends?ticker=IE000S9YS762  <- ISIN wird aufgeloest
 
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 
-// --- Resolver 1: OpenFIGI (offizielles Finanzregister) ----------------------------
-// Strategie: Erst US-Boerse, dann Deutschland, dann generisch (kein exchCode)
-// Gibt den ersten gueltigen Ticker zurueck oder null.
-async function resolveTickerFromOpenFigi(isin) {
-  const strategies = [
-    { idType: 'ID_ISIN', idValue: isin, exchCode: 'US' },
-    { idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' },   // Xetra / Deutsche Boerse
-    { idType: 'ID_ISIN', idValue: isin },                    // kein exchCode = globale Suche
-  ]
-
-  for (const body of strategies) {
-    try {
-      const res = await fetch('https://api.openfigi.com/v3/mapping', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([body]),
-      })
-      if (!res.ok) continue
-      const data = await res.json()
-      const ticker = data?.[0]?.data?.[0]?.ticker
-      if (ticker) {
-        // OpenFIGI gibt manchmal Rohborsenkuerzel ohne Suffix zurueck.
-        // Fuer Xetra-Aktien Suffix .DE anhaengen, damit Yahoo es findet.
-        const suffix = body.exchCode === 'GS' ? '.DE' : ''
-        return ticker + suffix
-      }
-    } catch {
-      // Fehler bei einem Strategy-Versuch ignorieren, naechsten probieren
-    }
-  }
-  return null
-}
-
-// --- Resolver 2: Yahoo Finance Search (Fallback) ----------------------------------
+// --- Resolver: Yahoo Finance Search (primaer) ------------------------------------
+// Yahoo Search gibt direkt Yahoo-kompatible Ticker zurueck.
 async function resolveTickerFromYahooSearch(isin) {
   try {
-    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=3&newsCount=0&listsCount=0`
+    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=5&newsCount=0&listsCount=0`
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; DividendDashboard/1.0)',
@@ -55,27 +23,78 @@ async function resolveTickerFromYahooSearch(isin) {
       !q.symbol.includes('=') &&
       ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType)
     )
-    return quotes[0]?.symbol || null
+    if (quotes.length === 0) return null
+    // Bevorzuge Ticker ohne Punkt (US-Boerse) oder mit bekannten Suffixen
+    const preferred = quotes.find(q => !q.symbol.includes('.')) || quotes[0]
+    return preferred.symbol
   } catch {
     return null
   }
 }
 
-// --- Kette: OpenFIGI → Yahoo Search ----------------------------------------------
+// --- Validator: prueft ob ein Ticker bei Yahoo Daten liefert --------------------
+async function validateTickerOnYahoo(symbol) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=0&period2=1&interval=1d`
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DividendDashboard/1.0)',
+        'Accept': 'application/json',
+      },
+    })
+    if (!res.ok) return false
+    const json = await res.json()
+    return !!(json?.chart?.result?.[0])
+  } catch {
+    return false
+  }
+}
+
+// --- Resolver: OpenFIGI (Fallback) -----------------------------------------------
+async function resolveTickerFromOpenFigi(isin) {
+  const strategies = [
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'US' },
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'LN' },
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' },
+    { idType: 'ID_ISIN', idValue: isin },
+  ]
+  const suffixMap = { GS: '.DE', LN: '.L', PA: '.PA', AS: '.AS', SW: '.SW' }
+
+  for (const body of strategies) {
+    try {
+      const res = await fetch('https://api.openfigi.com/v3/mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([body]),
+      })
+      if (!res.ok) continue
+      const data = await res.json()
+      const item = data?.[0]?.data?.[0]
+      if (!item?.ticker) continue
+      const suffix = suffixMap[body.exchCode] || ''
+      const candidate = item.ticker + suffix
+      const valid = await validateTickerOnYahoo(candidate)
+      if (valid) return candidate
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+// --- Hauptkette: Yahoo Search -> OpenFIGI ----------------------------------------
 async function resolveTickerFromIsin(isin) {
-  const figiBased = await resolveTickerFromOpenFigi(isin)
-  if (figiBased) {
-    console.log(`[Resolver] ${isin} via OpenFIGI → ${figiBased}`)
-    return figiBased
+  const yahooResult = await resolveTickerFromYahooSearch(isin)
+  if (yahooResult) {
+    console.log(`[Resolver] ${isin} via Yahoo Search -> ${yahooResult}`)
+    return yahooResult
   }
-
-  const yahooBased = await resolveTickerFromYahooSearch(isin)
-  if (yahooBased) {
-    console.log(`[Resolver] ${isin} via Yahoo Search → ${yahooBased}`)
-    return yahooBased
+  const figiResult = await resolveTickerFromOpenFigi(isin)
+  if (figiResult) {
+    console.log(`[Resolver] ${isin} via OpenFIGI -> ${figiResult}`)
+    return figiResult
   }
-
-  console.log(`[Resolver] ${isin} → nicht aufloesbar`)
+  console.log(`[Resolver] ${isin} -> nicht aufloesbar`)
   return null
 }
 
@@ -95,8 +114,8 @@ async function fetchDividends(symbol) {
   if (!res.ok) return { dividends: [], currency: 'EUR', resolvedTicker: symbol }
 
   const json = await res.json()
-  const meta     = json?.chart?.result?.[0]?.meta ?? {}
-  const rawDivs  = json?.chart?.result?.[0]?.events?.dividends ?? {}
+  const meta    = json?.chart?.result?.[0]?.meta ?? {}
+  const rawDivs = json?.chart?.result?.[0]?.events?.dividends ?? {}
   const currency = meta.currency ?? 'EUR'
 
   const dividends = Object.values(rawDivs).map(d => {

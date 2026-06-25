@@ -10,7 +10,6 @@ const RETRY_DELAYS = [1000, 2000, 4000]
 
 let _portfolioId = import.meta.env.VITE_PORTFOLIO_ID || null
 
-// Fortschritts-Callback: wird von aussen gesetzt (z.B. aus App.jsx)
 let _onTickerProgress = null
 export function setTickerProgressCallback(fn) { _onTickerProgress = fn }
 
@@ -117,7 +116,9 @@ export async function fetchHoldingNames() {
   return { names, types, tickers }
 }
 
-// ─── ISIN Ticker Cache (Supabase) ─────────────────────────────────────────────
+// --- Supabase Ticker Cache ---
+// WICHTIG: null-Eintraege werden nicht gecacht und nicht als bekannt behandelt.
+// Nur echte Ticker (non-null, non-empty strings) kommen in den Cache.
 
 async function loadTickerCache(isins) {
   if (isins.length === 0) return {}
@@ -129,6 +130,8 @@ async function loadTickerCache(isins) {
   const cutoff = Date.now() - CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
   const map = {}
   for (const row of data) {
+    // null oder leere Ticker ignorieren: werden neu aufgeloest
+    if (!row.ticker) continue
     if (new Date(row.updated_at).getTime() > cutoff) {
       map[row.isin] = row.ticker
     }
@@ -137,16 +140,17 @@ async function loadTickerCache(isins) {
 }
 
 async function saveTickerCache(entries) {
-  if (entries.length === 0) return
+  // Nur echte Ticker speichern — null NIE cachen
+  const valid = entries.filter(e => e.ticker)
+  if (valid.length === 0) return
   await supabase
     .from('isin_ticker_cache')
     .upsert(
-      entries.map(e => ({ isin: e.isin, ticker: e.ticker, updated_at: new Date().toISOString() })),
+      valid.map(e => ({ isin: e.isin, ticker: e.ticker, updated_at: new Date().toISOString() })),
       { onConflict: 'isin' }
     )
 }
 
-// Einzelner Yahoo-Search-Request mit Exponential Backoff bei 429
 async function resolveOneIsin(isin) {
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
     try {
@@ -169,9 +173,9 @@ async function resolveOneIsin(isin) {
   return null
 }
 
-// Loest ISINs in Batches auf, mit Fortschritts-Callback und Backoff
 async function resolveIsinsToTickers(isins) {
   const cached  = await loadTickerCache(isins)
+  // missing = ISINs die NICHT im Cache sind (null zaehlt als nicht gecacht)
   const missing = isins.filter(i => !(i in cached))
 
   console.log(`[TickerCache] ${Object.keys(cached).length} aus Cache, ${missing.length} muessen aufgeloest werden`)
@@ -185,7 +189,6 @@ async function resolveIsinsToTickers(isins) {
 
   emitProgress(0, total, 'Ticker werden aufgeloest…')
 
-  // Batches: je BATCH_SIZE ISINs parallel, dann BATCH_DELAY_MS warten
   for (let i = 0; i < missing.length; i += BATCH_SIZE) {
     const batch = missing.slice(i, i + BATCH_SIZE)
 
@@ -197,7 +200,8 @@ async function resolveIsinsToTickers(isins) {
       const isin   = batch[j]
       const ticker = batchResults[j].status === 'fulfilled' ? batchResults[j].value : null
       result[isin] = ticker
-      newEntries.push({ isin, ticker })
+      // Nur echte Treffer merken
+      if (ticker) newEntries.push({ isin, ticker })
       done++
       console.log(`[TickerCache] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
     }
@@ -214,7 +218,7 @@ async function resolveIsinsToTickers(isins) {
   return result
 }
 
-// ─── Yahoo Dividenden ─────────────────────────────────────────────────────────
+// --- Yahoo Dividenden ---
 
 export async function fetchYahooDividends(ticker) {
   if (!ticker) return { dividends: [], currency: 'EUR', _resolvedTicker: null }
@@ -246,13 +250,11 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   const skipped = allIsins.length - relevant.length
   console.log(`[Yahoo] ${relevant.length}/${allIsins.length} Holdings werden abgefragt (${skipped} Krypto uebersprungen)`)
 
-  // ISINs ohne echten Ticker via Cache aufloesen
   const isinOnlyKeys = relevant.filter(
     isin => !tickers[isin] || ISIN_REGEX.test(tickers[isin])
   )
   const tickerMap = await resolveIsinsToTickers(isinOnlyKeys)
 
-  // Endgueltiges Ticker-Mapping
   const resolvedTickers = {}
   for (const isin of relevant) {
     const raw = tickers[isin]
@@ -263,7 +265,6 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
     }
   }
 
-  // Dividenden laden - nur fuer ISINs mit bekanntem Ticker
   const withTicker = relevant.filter(isin => resolvedTickers[isin])
   console.log(`[Yahoo] ${withTicker.length}/${relevant.length} haben Ticker, rest wird uebersprungen`)
 
