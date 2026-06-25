@@ -2,44 +2,19 @@ import { supabase } from './supabaseClient'
 import { decrypt, encrypt, isEncrypted, clearCachedKey } from './crypto'
 import { getPassword } from './passwordStore'
 
-let CLIENT_ID = null
+// _clientIdPromise bleibt nach dem ersten Resolve stehen (aufgelöstes Promise)
+// damit alle späteren Aufrufe sofort dasselbe resolved Promise zurückbekommen
+// und kein zweiter Supabase-Request entsteht.
 let _clientIdPromise = null
 
-const CLIENT_ID_CACHE_KEY = 'parqet_client_id_cache'
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
 const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
 const TOKEN_URL    = '/oauth/token'
 const SCOPE        = 'portfolio:read'
 
-function readCachedClientId() {
-  if (CLIENT_ID) return CLIENT_ID
-  try {
-    const cached = sessionStorage.getItem(CLIENT_ID_CACHE_KEY)
-    if (cached) {
-      CLIENT_ID = cached
-      return CLIENT_ID
-    }
-  } catch {}
-  return null
-}
-
-function writeCachedClientId(value) {
-  CLIENT_ID = value || null
-  try {
-    if (value) sessionStorage.setItem(CLIENT_ID_CACHE_KEY, value)
-    else sessionStorage.removeItem(CLIENT_ID_CACHE_KEY)
-  } catch {}
-}
-
 export async function getClientId() {
-  const cached = readCachedClientId()
-  if (cached) return cached
-
   if (_clientIdPromise) return _clientIdPromise
-
-  _clientIdPromise = _fetchClientId().finally(() => {
-    _clientIdPromise = null
-  })
+  _clientIdPromise = _fetchClientId()
   return _clientIdPromise
 }
 
@@ -71,24 +46,18 @@ async function _fetchClientId() {
         console.warn('Auto-migration of client ID failed:', e)
       }
     }
-    writeCachedClientId(raw)
     return raw
   }
 
   try {
-    const decrypted = await decrypt(raw, getPassword())
-    writeCachedClientId(decrypted)
-    return decrypted
+    return await decrypt(raw, getPassword())
   } catch {
-    writeCachedClientId(null)
     return null
   }
 }
 
 export function clearCachedClientId() {
-  CLIENT_ID = null
   _clientIdPromise = null
-  try { sessionStorage.removeItem(CLIENT_ID_CACHE_KEY) } catch {}
 }
 
 function generateCodeVerifier() {
