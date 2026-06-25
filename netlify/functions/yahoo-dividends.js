@@ -1,47 +1,15 @@
 // netlify/functions/yahoo-dividends.js
 // Proxy fuer Yahoo Finance Dividendenhistorie
-// Aufruf: GET /yahoo-dividends?ticker=AAPL
-//         GET /yahoo-dividends?ticker=IE000S9YS762  <- ISIN wird aufgeloest via OpenFIGI → Yahoo Search
+// ISIN-Resolver: Yahoo Search zuerst (praeziser), OpenFIGI als Fallback
 
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 
-// --- Resolver 1: OpenFIGI (offizielles Finanzregister) ----------------------------
-// Strategie: Erst US-Boerse, dann Deutschland, dann generisch (kein exchCode)
-// Gibt den ersten gueltigen Ticker zurueck oder null.
-async function resolveTickerFromOpenFigi(isin) {
-  const strategies = [
-    { idType: 'ID_ISIN', idValue: isin, exchCode: 'US' },
-    { idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' },   // Xetra / Deutsche Boerse
-    { idType: 'ID_ISIN', idValue: isin },                    // kein exchCode = globale Suche
-  ]
-
-  for (const body of strategies) {
-    try {
-      const res = await fetch('https://api.openfigi.com/v3/mapping', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([body]),
-      })
-      if (!res.ok) continue
-      const data = await res.json()
-      const ticker = data?.[0]?.data?.[0]?.ticker
-      if (ticker) {
-        // OpenFIGI gibt manchmal Rohborsenkuerzel ohne Suffix zurueck.
-        // Fuer Xetra-Aktien Suffix .DE anhaengen, damit Yahoo es findet.
-        const suffix = body.exchCode === 'GS' ? '.DE' : ''
-        return ticker + suffix
-      }
-    } catch {
-      // Fehler bei einem Strategy-Versuch ignorieren, naechsten probieren
-    }
-  }
-  return null
-}
-
-// --- Resolver 2: Yahoo Finance Search (Fallback) ----------------------------------
+// --- Resolver 1: Yahoo Finance Search (primaer) -----------------------------------
+// Yahoo kennt den richtigen boersengehandelten Ticker besser als OpenFIGI,
+// das oft falsche OTC-Symbole zurueckgibt.
 async function resolveTickerFromYahooSearch(isin) {
   try {
-    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=3&newsCount=0&listsCount=0`
+    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=5&newsCount=0&listsCount=0`
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; DividendDashboard/1.0)',
@@ -55,27 +23,59 @@ async function resolveTickerFromYahooSearch(isin) {
       !q.symbol.includes('=') &&
       ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType)
     )
-    return quotes[0]?.symbol || null
+    // Bevorzuge Nicht-OTC: Symbole ohne Punkt sind meist US-listed oder OTC.
+    // Symbole mit Punkt (z.B. CSPX.L, EXS1.DE) sind boersengehandelte ETFs.
+    const exchange = quotes.find(q => q.symbol.includes('.')) || quotes[0]
+    return exchange?.symbol || null
   } catch {
     return null
   }
 }
 
-// --- Kette: OpenFIGI → Yahoo Search ----------------------------------------------
-async function resolveTickerFromIsin(isin) {
-  const figiBased = await resolveTickerFromOpenFigi(isin)
-  if (figiBased) {
-    console.log(`[Resolver] ${isin} via OpenFIGI → ${figiBased}`)
-    return figiBased
-  }
+// --- Resolver 2: OpenFIGI (Fallback fuer US-Aktien ohne Punkt-Suffix) ------------
+async function resolveTickerFromOpenFigi(isin) {
+  // Nur US-ISINs via OpenFIGI aufloesen (US ISINs beginnen mit "US")
+  // Europaeische ISINs werden besser via Yahoo Search gefunden
+  const strategies = isin.startsWith('US')
+    ? [{ idType: 'ID_ISIN', idValue: isin, exchCode: 'US' }]
+    : [{ idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' }]
 
+  for (const body of strategies) {
+    try {
+      const res = await fetch('https://api.openfigi.com/v3/mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([body]),
+      })
+      if (!res.ok) continue
+      const data = await res.json()
+      const ticker = data?.[0]?.data?.[0]?.ticker
+      if (ticker) {
+        const suffix = body.exchCode === 'GS' ? '.DE' : ''
+        return ticker + suffix
+      }
+    } catch {
+      // ignorieren, naechste Strategie
+    }
+  }
+  return null
+}
+
+// --- Kette: Yahoo Search -> OpenFIGI ---------------------------------------------
+async function resolveTickerFromIsin(isin) {
   const yahooBased = await resolveTickerFromYahooSearch(isin)
   if (yahooBased) {
-    console.log(`[Resolver] ${isin} via Yahoo Search → ${yahooBased}`)
+    console.log(`[Resolver] ${isin} via Yahoo Search -> ${yahooBased}`)
     return yahooBased
   }
 
-  console.log(`[Resolver] ${isin} → nicht aufloesbar`)
+  const figiBased = await resolveTickerFromOpenFigi(isin)
+  if (figiBased) {
+    console.log(`[Resolver] ${isin} via OpenFIGI -> ${figiBased}`)
+    return figiBased
+  }
+
+  console.log(`[Resolver] ${isin} -> nicht aufloesbar`)
   return null
 }
 
@@ -95,8 +95,8 @@ async function fetchDividends(symbol) {
   if (!res.ok) return { dividends: [], currency: 'EUR', resolvedTicker: symbol }
 
   const json = await res.json()
-  const meta     = json?.chart?.result?.[0]?.meta ?? {}
-  const rawDivs  = json?.chart?.result?.[0]?.events?.dividends ?? {}
+  const meta    = json?.chart?.result?.[0]?.meta ?? {}
+  const rawDivs = json?.chart?.result?.[0]?.events?.dividends ?? {}
   const currency = meta.currency ?? 'EUR'
 
   const dividends = Object.values(rawDivs).map(d => {
