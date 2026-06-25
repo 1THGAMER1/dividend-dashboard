@@ -175,7 +175,7 @@ async function resolveOneIsin(isin) {
 
 async function resolveIsinsToTickers(isins) {
   const cached  = await loadTickerCache(isins)
-  // missing = ISINs die NICHT im Cache sind (null zaehlt als nicht gecacht)
+  // Fix: !(i in cached) statt !i in cached (Operator-Praezedenz-Bug)
   const missing = isins.filter(i => !(i in cached))
 
   console.log(`[TickerCache] ${Object.keys(cached).length} aus Cache, ${missing.length} muessen aufgeloest werden`)
