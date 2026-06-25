@@ -4,7 +4,19 @@ import { supabase } from './supabaseClient'
 const BASE = '/api'
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 const CACHE_TTL_DAYS = 30
+const BATCH_SIZE = 5
+const BATCH_DELAY_MS = 500
+const RETRY_DELAYS = [1000, 2000, 4000]
+
 let _portfolioId = import.meta.env.VITE_PORTFOLIO_ID || null
+
+// Fortschritts-Callback: wird von aussen gesetzt (z.B. aus App.jsx)
+let _onTickerProgress = null
+export function setTickerProgressCallback(fn) { _onTickerProgress = fn }
+
+function emitProgress(done, total, label) {
+  _onTickerProgress?.({ done, total, label })
+}
 
 export async function getPortfolioId() {
   if (_portfolioId) return _portfolioId
@@ -105,7 +117,7 @@ export async function fetchHoldingNames() {
   return { names, types, tickers }
 }
 
-// ─── ISIN Ticker Cache (Supabase) ────────────────────────────────────────────
+// ─── ISIN Ticker Cache (Supabase) ─────────────────────────────────────────────
 
 async function loadTickerCache(isins) {
   if (isins.length === 0) return {}
@@ -118,14 +130,13 @@ async function loadTickerCache(isins) {
   const map = {}
   for (const row of data) {
     if (new Date(row.updated_at).getTime() > cutoff) {
-      map[row.isin] = row.ticker  // null bedeutet "kein Ticker gefunden"
+      map[row.isin] = row.ticker
     }
   }
   return map
 }
 
 async function saveTickerCache(entries) {
-  // entries: [{ isin, ticker }]
   if (entries.length === 0) return
   await supabase
     .from('isin_ticker_cache')
@@ -135,7 +146,30 @@ async function saveTickerCache(entries) {
     )
 }
 
-// Loest ISINs via Yahoo Search auf, mit Supabase-Cache
+// Einzelner Yahoo-Search-Request mit Exponential Backoff bei 429
+async function resolveOneIsin(isin) {
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+    try {
+      const res = await fetch(`/yahoo-dividends?ticker=${encodeURIComponent(isin)}`)
+      if (res.status === 429) {
+        const wait = RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1]
+        console.warn(`[TickerCache] Rate limit bei ${isin}, warte ${wait}ms (Versuch ${attempt + 1})`)
+        await new Promise(r => setTimeout(r, wait))
+        continue
+      }
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.resolvedTicker || null
+    } catch {
+      if (attempt < RETRY_DELAYS.length) {
+        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]))
+      }
+    }
+  }
+  return null
+}
+
+// Loest ISINs in Batches auf, mit Fortschritts-Callback und Backoff
 async function resolveIsinsToTickers(isins) {
   const cached  = await loadTickerCache(isins)
   const missing = isins.filter(i => !(i in cached))
@@ -144,32 +178,43 @@ async function resolveIsinsToTickers(isins) {
 
   if (missing.length === 0) return cached
 
-  // Yahoo Search fuer fehlende ISINs - mit kleinem Delay um Rate-Limiting zu vermeiden
+  const total      = missing.length
+  let   done       = 0
+  const result     = { ...cached }
   const newEntries = []
-  const result = { ...cached }
 
-  for (let i = 0; i < missing.length; i++) {
-    const isin = missing[i]
-    if (i > 0) await new Promise(r => setTimeout(r, 150)) // 150ms Delay
+  emitProgress(0, total, 'Ticker werden aufgeloest…')
 
-    try {
-      const res = await fetchYahooDividends(isin)
-      // Die Netlify-Funktion gibt jetzt resolvedTicker zurueck
-      const ticker = res._resolvedTicker || null
+  // Batches: je BATCH_SIZE ISINs parallel, dann BATCH_DELAY_MS warten
+  for (let i = 0; i < missing.length; i += BATCH_SIZE) {
+    const batch = missing.slice(i, i + BATCH_SIZE)
+
+    const batchResults = await Promise.allSettled(
+      batch.map(isin => resolveOneIsin(isin))
+    )
+
+    for (let j = 0; j < batch.length; j++) {
+      const isin   = batch[j]
+      const ticker = batchResults[j].status === 'fulfilled' ? batchResults[j].value : null
       result[isin] = ticker
       newEntries.push({ isin, ticker })
+      done++
       console.log(`[TickerCache] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
-    } catch {
-      result[isin] = null
-      newEntries.push({ isin, ticker: null })
+    }
+
+    emitProgress(done, total, `Ticker aufgeloest: ${done}/${total}`)
+
+    if (i + BATCH_SIZE < missing.length) {
+      await new Promise(r => setTimeout(r, BATCH_DELAY_MS))
     }
   }
 
   await saveTickerCache(newEntries)
+  emitProgress(total, total, 'Fertig')
   return result
 }
 
-// ─── Yahoo Dividenden ────────────────────────────────────────────────────────
+// ─── Yahoo Dividenden ─────────────────────────────────────────────────────────
 
 export async function fetchYahooDividends(ticker) {
   if (!ticker) return { dividends: [], currency: 'EUR', _resolvedTicker: null }
@@ -202,23 +247,25 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   console.log(`[Yahoo] ${relevant.length}/${allIsins.length} Holdings werden abgefragt (${skipped} Krypto uebersprungen)`)
 
   // ISINs ohne echten Ticker via Cache aufloesen
-  const isinOnlyKeys = relevant.filter(isin => ISIN_REGEX.test(tickers[isin] || isin) && (tickers[isin] === isin || !tickers[isin]))
-  const tickerMap    = await resolveIsinsToTickers(isinOnlyKeys)
+  const isinOnlyKeys = relevant.filter(
+    isin => !tickers[isin] || ISIN_REGEX.test(tickers[isin])
+  )
+  const tickerMap = await resolveIsinsToTickers(isinOnlyKeys)
 
-  // Endgueltiges Ticker-Mapping zusammenbauen
+  // Endgueltiges Ticker-Mapping
   const resolvedTickers = {}
   for (const isin of relevant) {
     const raw = tickers[isin]
     if (raw && !ISIN_REGEX.test(raw)) {
-      resolvedTickers[isin] = raw          // echter Boersen-Ticker von Parqet
+      resolvedTickers[isin] = raw
     } else {
-      resolvedTickers[isin] = tickerMap[isin] || null  // aus Cache oder null
+      resolvedTickers[isin] = tickerMap[isin] || null
     }
   }
 
-  // Jetzt Dividenden laden - nur fuer ISINs mit bekanntem Ticker
+  // Dividenden laden - nur fuer ISINs mit bekanntem Ticker
   const withTicker = relevant.filter(isin => resolvedTickers[isin])
-  console.log(`[Yahoo] ${withTicker.length}/${relevant.length} haben einen Ticker, rest wird uebersprungen`)
+  console.log(`[Yahoo] ${withTicker.length}/${relevant.length} haben Ticker, rest wird uebersprungen`)
 
   const results = await Promise.allSettled(
     withTicker.map(async isin => {
