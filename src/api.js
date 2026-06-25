@@ -1,6 +1,9 @@
 import { getAccessToken } from './auth'
+import { supabase } from './supabaseClient'
 
 const BASE = '/api'
+const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
+const CACHE_TTL_DAYS = 30
 let _portfolioId = import.meta.env.VITE_PORTFOLIO_ID || null
 
 export async function getPortfolioId() {
@@ -84,13 +87,11 @@ export async function fetchHoldingNames() {
       const name = h.asset?.name || h.asset?.symbol || isin
       if (!isin) continue
 
-      names[isin] = name
-      types[isin] = h.asset?.type || 'security'
+      names[isin]  = name
+      types[isin]  = h.asset?.type || 'security'
 
-      // Echter Börsen-Ticker bevorzugen, sonst ISIN als Fallback damit
-      // fetchYahooDividendsForHoldings die Position überhaupt versucht
       const ticker = h.asset?.ticker || h.asset?.symbol || null
-      tickers[isin] = ticker && ticker !== isin ? ticker : isin
+      tickers[isin] = (ticker && ticker !== isin) ? ticker : isin
     }
 
     cursor = data.cursor || null
@@ -104,29 +105,90 @@ export async function fetchHoldingNames() {
   return { names, types, tickers }
 }
 
-/**
- * Holt Yahoo Finance Dividendenhistorie fuer einen Ticker oder eine ISIN.
- */
+// ─── ISIN Ticker Cache (Supabase) ────────────────────────────────────────────
+
+async function loadTickerCache(isins) {
+  if (isins.length === 0) return {}
+  const { data } = await supabase
+    .from('isin_ticker_cache')
+    .select('isin, ticker, updated_at')
+    .in('isin', isins)
+  if (!data) return {}
+  const cutoff = Date.now() - CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
+  const map = {}
+  for (const row of data) {
+    if (new Date(row.updated_at).getTime() > cutoff) {
+      map[row.isin] = row.ticker  // null bedeutet "kein Ticker gefunden"
+    }
+  }
+  return map
+}
+
+async function saveTickerCache(entries) {
+  // entries: [{ isin, ticker }]
+  if (entries.length === 0) return
+  await supabase
+    .from('isin_ticker_cache')
+    .upsert(
+      entries.map(e => ({ isin: e.isin, ticker: e.ticker, updated_at: new Date().toISOString() })),
+      { onConflict: 'isin' }
+    )
+}
+
+// Loest ISINs via Yahoo Search auf, mit Supabase-Cache
+async function resolveIsinsToTickers(isins) {
+  const cached  = await loadTickerCache(isins)
+  const missing = isins.filter(i => !(i in cached))
+
+  console.log(`[TickerCache] ${Object.keys(cached).length} aus Cache, ${missing.length} muessen aufgeloest werden`)
+
+  if (missing.length === 0) return cached
+
+  // Yahoo Search fuer fehlende ISINs - mit kleinem Delay um Rate-Limiting zu vermeiden
+  const newEntries = []
+  const result = { ...cached }
+
+  for (let i = 0; i < missing.length; i++) {
+    const isin = missing[i]
+    if (i > 0) await new Promise(r => setTimeout(r, 150)) // 150ms Delay
+
+    try {
+      const res = await fetchYahooDividends(isin)
+      // Die Netlify-Funktion gibt jetzt resolvedTicker zurueck
+      const ticker = res._resolvedTicker || null
+      result[isin] = ticker
+      newEntries.push({ isin, ticker })
+      console.log(`[TickerCache] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
+    } catch {
+      result[isin] = null
+      newEntries.push({ isin, ticker: null })
+    }
+  }
+
+  await saveTickerCache(newEntries)
+  return result
+}
+
+// ─── Yahoo Dividenden ────────────────────────────────────────────────────────
+
 export async function fetchYahooDividends(ticker) {
-  if (!ticker) return []
+  if (!ticker) return { dividends: [], currency: 'EUR', _resolvedTicker: null }
   try {
     const res = await fetch(`/yahoo-dividends?ticker=${encodeURIComponent(ticker)}`)
-    if (!res.ok) return []
+    if (!res.ok) return { dividends: [], currency: 'EUR', _resolvedTicker: null }
     const data = await res.json()
-    return data.dividends || []
+    return {
+      dividends:       data.dividends      || [],
+      currency:        data.currency       || 'EUR',
+      _resolvedTicker: data.resolvedTicker || null,
+    }
   } catch {
-    return []
+    return { dividends: [], currency: 'EUR', _resolvedTicker: null }
   }
 }
 
 const NO_DIVIDEND_TYPES = new Set(['crypto', 'cryptocurrency'])
-const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 
-/**
- * Ladet Yahoo-Dividendendaten fuer alle Holdings parallel.
- * Krypto wird übersprungen.
- * Gibt { [isin]: [{month, year, amount}, ...] } zurück.
- */
 export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   const allIsins = Object.keys(tickers)
   if (allIsins.length === 0) return {}
@@ -137,44 +199,44 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   })
 
   const skipped = allIsins.length - relevant.length
-  console.log(`[Yahoo] ${relevant.length}/${allIsins.length} Holdings werden abgefragt (${skipped} Krypto übersprungen)`)
+  console.log(`[Yahoo] ${relevant.length}/${allIsins.length} Holdings werden abgefragt (${skipped} Krypto uebersprungen)`)
+
+  // ISINs ohne echten Ticker via Cache aufloesen
+  const isinOnlyKeys = relevant.filter(isin => ISIN_REGEX.test(tickers[isin] || isin) && (tickers[isin] === isin || !tickers[isin]))
+  const tickerMap    = await resolveIsinsToTickers(isinOnlyKeys)
+
+  // Endgueltiges Ticker-Mapping zusammenbauen
+  const resolvedTickers = {}
+  for (const isin of relevant) {
+    const raw = tickers[isin]
+    if (raw && !ISIN_REGEX.test(raw)) {
+      resolvedTickers[isin] = raw          // echter Boersen-Ticker von Parqet
+    } else {
+      resolvedTickers[isin] = tickerMap[isin] || null  // aus Cache oder null
+    }
+  }
+
+  // Jetzt Dividenden laden - nur fuer ISINs mit bekanntem Ticker
+  const withTicker = relevant.filter(isin => resolvedTickers[isin])
+  console.log(`[Yahoo] ${withTicker.length}/${relevant.length} haben einen Ticker, rest wird uebersprungen`)
 
   const results = await Promise.allSettled(
-    relevant.map(async isin => {
-      const rawTicker = tickers[isin] || null
-
-      const tickerIsReal = rawTicker &&
-        !ISIN_REGEX.test(rawTicker) &&
-        rawTicker !== isin
-
-      // Schritt 1: echter Ticker
-      if (tickerIsReal) {
-        const divs = await fetchYahooDividends(rawTicker)
-        if (divs.length > 0) {
-          console.log(`[Yahoo] ✓ ${rawTicker} (Ticker): ${divs.length} Dividenden`)
-          return { isin, divs }
-        }
-        console.log(`[Yahoo] ~ ${rawTicker} (Ticker): keine Dividenden, versuche ISIN...`)
+    withTicker.map(async isin => {
+      const symbol = resolvedTickers[isin]
+      const { dividends } = await fetchYahooDividends(symbol)
+      if (dividends.length > 0) {
+        console.log(`[Yahoo] ✓ ${symbol} (${isin}): ${dividends.length} Dividenden`)
+      } else {
+        console.log(`[Yahoo] - ${symbol} (${isin}): keine Dividenden`)
       }
-
-      // Schritt 2: ISIN direkt
-      if (ISIN_REGEX.test(isin)) {
-        const divs = await fetchYahooDividends(isin)
-        if (divs.length > 0) {
-          console.log(`[Yahoo] ✓ ${isin} (ISIN): ${divs.length} Dividenden`)
-          return { isin, divs }
-        }
-        console.log(`[Yahoo] - ${isin}: keine Dividenden gefunden`)
-      }
-
-      return { isin, divs: [] }
+      return { isin, dividends }
     })
   )
 
   const map = {}
   for (const r of results) {
-    if (r.status === 'fulfilled' && r.value.divs.length > 0) {
-      map[r.value.isin] = r.value.divs
+    if (r.status === 'fulfilled' && r.value.dividends.length > 0) {
+      map[r.value.isin] = r.value.dividends
     }
   }
   return map
