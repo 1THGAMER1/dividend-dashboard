@@ -9,10 +9,22 @@ const BATCH_SIZE = 5
 const BATCH_DELAY_MS = 500
 const RETRY_DELAYS = [1000, 2000, 4000]
 
-// Ticker-Suffixe die GBX (Pence) bedeuten -> immer neu aufloesen
 const GBX_SUFFIXES = ['.L', '.IL']
+const EUR_SUFFIXES = ['.AS', '.DE', '.F', '.MI', '.PA', '.BR', '.VI', '.MC']
+
 function isGbxTicker(ticker) {
   return ticker ? GBX_SUFFIXES.some(s => ticker.endsWith(s)) : false
+}
+function isEurTicker(ticker) {
+  return ticker ? EUR_SUFFIXES.some(s => ticker.endsWith(s)) : false
+}
+// Ticker der durch den Resolver muss: ISIN, GBX, oder kein EUR-Suffix
+function needsResolution(ticker) {
+  if (!ticker) return true
+  if (ISIN_REGEX.test(ticker)) return true
+  if (isGbxTicker(ticker)) return true
+  if (!isEurTicker(ticker)) return true  // z.B. AAPL, MSFT, VWRL -> durch Resolver
+  return false
 }
 
 let _portfolioId = import.meta.env.VITE_PORTFOLIO_ID || null
@@ -128,31 +140,23 @@ export async function fetchHoldingNames() {
     cursor = data.cursor || null
   } while (cursor)
 
-  console.log('[Holdings] Rohdaten von Parqet:')
-  for (const isin of Object.keys(names)) {
-    console.log(`  ${isin} | type="${types[isin]}" | ticker="${tickers[isin]}" | name="${names[isin]}"`)
-  }
-
   return { names, types, tickers }
 }
 
 // --- Supabase Ticker Cache ---
-// GBX-Ticker (.L/.IL) werden beim Laden automatisch invalidiert und nie aus Cache geladen.
+// GBX-Ticker und non-EUR Ticker werden nie gecacht bzw. beim Laden invalidiert.
 
-async function invalidateGbxTickerCache(isins) {
+async function invalidateNonEurTickerCache(isins) {
   if (isins.length === 0) return
   const { data } = await supabase
     .from('isin_ticker_cache')
     .select('isin, ticker')
     .in('isin', isins)
   if (!data) return
-  const gbxIsins = data.filter(r => isGbxTicker(r.ticker)).map(r => r.isin)
-  if (gbxIsins.length === 0) return
-  console.log(`[TickerCache] Invalidiere ${gbxIsins.length} GBX-Eintraege (.L): ${gbxIsins.join(', ')}`)
-  await supabase
-    .from('isin_ticker_cache')
-    .delete()
-    .in('isin', gbxIsins)
+  const badIsins = data.filter(r => !isEurTicker(r.ticker)).map(r => r.isin)
+  if (badIsins.length === 0) return
+  console.log(`[Cache] Invalidiere ${badIsins.length} non-EUR Eintraege`)
+  await supabase.from('isin_ticker_cache').delete().in('isin', badIsins)
 }
 
 async function loadTickerCache(isins) {
@@ -166,8 +170,7 @@ async function loadTickerCache(isins) {
   const map = {}
   for (const row of data) {
     if (!row.ticker) continue
-    // GBX-Ticker nie aus Cache verwenden
-    if (isGbxTicker(row.ticker)) continue
+    if (!isEurTicker(row.ticker)) continue  // nur EUR-Ticker aus Cache verwenden
     if (new Date(row.updated_at).getTime() > cutoff) {
       map[row.isin] = row.ticker
     }
@@ -176,7 +179,7 @@ async function loadTickerCache(isins) {
 }
 
 async function saveTickerCache(entries) {
-  const valid = entries.filter(e => e.ticker && !isGbxTicker(e.ticker))
+  const valid = entries.filter(e => e.ticker && isEurTicker(e.ticker))
   if (valid.length === 0) return
   await supabase
     .from('isin_ticker_cache')
@@ -192,7 +195,6 @@ async function resolveOneIsin(isin) {
       const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(isin)}`)
       if (res.status === 429) {
         const wait = RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1]
-        console.warn(`[TickerCache] Rate limit bei ${isin}, warte ${wait}ms (Versuch ${attempt + 1})`)
         await new Promise(r => setTimeout(r, wait))
         continue
       }
@@ -209,13 +211,13 @@ async function resolveOneIsin(isin) {
 }
 
 async function resolveIsinsToTickers(isins) {
-  // Zuerst alte GBX-Eintraege aus der DB loeschen
-  await invalidateGbxTickerCache(isins)
+  // Nicht-EUR Eintraege aus Cache loeschen
+  await invalidateNonEurTickerCache(isins)
 
   const cached  = await loadTickerCache(isins)
   const missing = isins.filter(i => !(i in cached))
 
-  console.log(`[TickerCache] ${Object.keys(cached).length} aus Cache, ${missing.length} muessen aufgeloest werden`)
+  console.log(`[Cache] ${Object.keys(cached).length} gecacht, ${missing.length} aufzuloesen`)
 
   if (missing.length === 0) return cached
 
@@ -239,7 +241,7 @@ async function resolveIsinsToTickers(isins) {
       result[isin] = ticker
       if (ticker) newEntries.push({ isin, ticker })
       done++
-      console.log(`[TickerCache] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
+      console.log(`[Resolve] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
     }
 
     emitProgress(done, total, `Ticker aufgeloest: ${done}/${total}`)
@@ -283,51 +285,31 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
     return !NO_DIVIDEND_TYPES.has(t)
   })
 
-  const skipped = allIsins.length - relevant.length
-  console.log(`[Yahoo] ${relevant.length}/${allIsins.length} Holdings werden abgefragt (${skipped} Krypto uebersprungen)`)
+  // Alle Holdings durch Resolver schicken die keinen EUR-Ticker haben
+  const toResolve = relevant.filter(isin => needsResolution(tickers[isin]))
+  console.log(`[Yahoo] ${toResolve.length}/${relevant.length} benoetigen Resolver (non-EUR/ISIN/.L)`)
 
-  // ISINs die ueber den Resolver aufgeloest werden muessen:
-  // 1. Parqet-Ticker ist eine ISIN (kein echter Ticker)
-  // 2. Parqet-Ticker ist ein GBX-Ticker (.L/.IL) -> durch EUR-Aequivalent ersetzen
-  const needsResolution = relevant.filter(
-    isin => !tickers[isin] || ISIN_REGEX.test(tickers[isin]) || isGbxTicker(tickers[isin])
-  )
-  console.log(`[Yahoo] ${needsResolution.length} Holdings benoetigen Ticker-Aufloesung (ISIN oder .L Ticker von Parqet)`)
-
-  const tickerMap = await resolveIsinsToTickers(needsResolution)
+  const tickerMap = await resolveIsinsToTickers(toResolve)
 
   const resolvedTickers = {}
   for (const isin of relevant) {
     const raw = tickers[isin]
-    // Direkt nutzen: nicht-GBX Ticker der kein ISIN-Format hat
-    if (raw && !ISIN_REGEX.test(raw) && !isGbxTicker(raw)) {
+    if (isEurTicker(raw)) {
+      // Parqet hat bereits einen EUR-Ticker geliefert -> direkt verwenden
       resolvedTickers[isin] = raw
     } else {
+      // Resolver-Ergebnis verwenden
       resolvedTickers[isin] = tickerMap[isin] || null
     }
   }
 
-  // Debug: zeige was fuer jeden ISIN verwendet wird
-  for (const isin of relevant) {
-    const raw = tickers[isin]
-    const resolved = resolvedTickers[isin]
-    if (raw !== resolved) {
-      console.log(`[Yahoo] Ticker-Ersatz: ${isin} Parqet="${raw}" -> verwendet="${resolved ?? 'keiner'}"`)
-    }
-  }
-
   const withTicker = relevant.filter(isin => resolvedTickers[isin])
-  console.log(`[Yahoo] ${withTicker.length}/${relevant.length} haben Ticker, rest wird uebersprungen`)
+  console.log(`[Yahoo] ${withTicker.length}/${relevant.length} mit EUR-Ticker`)
 
   const results = await Promise.allSettled(
     withTicker.map(async isin => {
       const symbol = resolvedTickers[isin]
       const { dividends } = await fetchYahooDividends(symbol)
-      if (dividends.length > 0) {
-        console.log(`[Yahoo] ✓ ${symbol} (${isin}): ${dividends.length} Dividenden`)
-      } else {
-        console.log(`[Yahoo] - ${symbol} (${isin}): keine Dividenden`)
-      }
       return { isin, dividends }
     })
   )
