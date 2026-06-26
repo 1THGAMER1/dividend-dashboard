@@ -127,13 +127,15 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
-    // Akkumuliert — forward-fill damit keine Lücken entstehen
+    // Akkumuliert
     const cumLineDataRaw = MONTHS.map((name, i) => {
         const pt = { name }
         years.filter(y => y < cy).forEach(y => {
             pt[String(y)] = +scaleNet(cum[y]?.[i] || 0).toFixed(2)
         })
+        // cy_real: nur bis zum aktuellen Monat (exkl.) — KEIN forward-fill
         pt[`${cy}_real`]     = i <= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
+        // cy_forecast: ab aktuellem Monat (gestrichelt)
         pt[`${cy}_forecast`] = i >= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
         pt[`${ny}_forecast`] = fcNy[i] != null ? +scaleNet(fcNy[i]).toFixed(2) : null
         if (showInflation && inflationLineData && years.length >= 2) {
@@ -155,23 +157,26 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
-    // Forward-fill alle Linien im cumLineData
+    // Forward-fill nur für Vorjahre und Prognose-Linien, NICHT für cy_real
     const cumLineData = (() => {
-        const keys = [
+        const fillKeys = [
             ...years.filter(y => y < cy).map(String),
-            `${cy}_real`,
+            // cy_real wird NICHT forward-gefüllt
             `${cy}_forecast`,
             `${ny}_forecast`,
             ...(showInflation ? ['inflation_target'] : []),
         ]
-        // Extrahiere pro key ein array, forward-fill, schreib zurück
-        const filled = keys.reduce((acc, key) => {
+        const noFillKeys = [`${cy}_real`]
+
+        const filled = fillKeys.reduce((acc, key) => {
             acc[key] = forwardFill(cumLineDataRaw.map(pt => pt[key] ?? null))
             return acc
         }, {})
+
         return cumLineDataRaw.map((pt, i) => {
             const newPt = { name: pt.name }
-            keys.forEach(key => { newPt[key] = filled[key][i] })
+            fillKeys.forEach(key => { newPt[key] = filled[key][i] })
+            noFillKeys.forEach(key => { newPt[key] = pt[key] ?? null })
             return newPt
         })
     })()
@@ -226,8 +231,8 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
 
     const renderLineLegend = value => {
         if (value === 'inflation_target') return <span style={{ color: '#f97316' }}>Inflation (Ziel)</span>
-        const color = value === `${cy}_real`     ? YEAR_COLORS[cy] || '#f472b6'
-            : value === `${cy}_forecast` ? YEAR_COLORS[cy] || '#f472b6'
+        const color = value === `${cy}_real`     ? YEAR_COLORS[cy] || '#c0397a'
+            : value === `${cy}_forecast` ? YEAR_COLORS[cy] || '#c0397a'
                 : value === `${ny}_forecast` ? '#34d399'
                     : YEAR_COLORS[+value]        || '#94a3b8'
         const lbl = value === `${cy}_real`     ? String(cy)
@@ -289,13 +294,13 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                                  radius={[3,3,0,0]} maxBarSize={20} name={String(y)} />
                         ))}
                         <Bar dataKey="prognose" name="Prognose"
-                             fill={YEAR_COLORS[cy] || '#f472b6'} maxBarSize={20}
+                             fill={YEAR_COLORS[cy] || '#c0397a'} maxBarSize={20}
                              shape={(props) => {
                                  const { x, y, width, height } = props
                                  if (!height || height <= 0) return null
                                  return (
                                      <rect x={x} y={y} width={width} height={height}
-                                           fill={YEAR_COLORS[cy] || '#f472b6'}
+                                           fill={YEAR_COLORS[cy] || '#c0397a'}
                                            fillOpacity={0.35} rx={3} />
                                  )
                              }}
@@ -390,11 +395,12 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                             />
                         ))}
                         <Line type="monotone" dataKey={`${cy}_real`}
-                              stroke={YEAR_COLORS[cy] || '#f472b6'} strokeWidth={2}
+                              stroke={YEAR_COLORS[cy] || '#c0397a'} strokeWidth={2}
                               dot={{ r:2 }} activeDot={{ r:5 }}
+                              connectNulls={false}
                         />
                         <Line type="monotone" dataKey={`${cy}_forecast`}
-                              stroke={YEAR_COLORS[cy] || '#f472b6'} strokeWidth={2}
+                              stroke={YEAR_COLORS[cy] || '#c0397a'} strokeWidth={2}
                               strokeDasharray="6 4" dot={false}
                         />
                         <Line type="monotone" dataKey={`${ny}_forecast`}

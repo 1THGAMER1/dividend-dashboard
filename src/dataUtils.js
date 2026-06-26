@@ -5,7 +5,7 @@ export const MONTHS = ['Jan','Feb','Mrz','Apr','Mai','Jun','Jul','Aug','Sep','Ok
 export const YEAR_COLORS = {
   2024: '#60a5fa',
   2025: '#a78bfa',
-  2026: '#f472b6',
+  2026: '#c0397a',
 }
 
 export function groupByYearMonth(activities) {
