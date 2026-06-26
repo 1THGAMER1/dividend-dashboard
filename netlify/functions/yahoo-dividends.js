@@ -88,6 +88,7 @@ async function validateTickerOnYahoo(symbol) {
 }
 
 async function resolveTickerFromOpenFigi(isin) {
+  // Bevorzuge EUR-Boersen: AS=Amsterdam, GS=Frankfurt, PA=Paris, MI=Milan
   const strategies = [
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'AS' },
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' },
