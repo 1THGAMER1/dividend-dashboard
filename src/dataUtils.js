@@ -61,7 +61,11 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   }
 
   function currentShares(isin) {
+    // Prefer buy-activity total (does not account for sells, but best available)
     if (currentSharesFromBuys[isin] > 0) return currentSharesFromBuys[isin]
+    // Fallback: shares recorded in the most recent single dividend payout.
+    // NOTE: this is the share count at payout time, not current holding size.
+    // It may be stale after partial sells. Used only when no buy data exists.
     const years = Object.keys(byIsin[isin] || {}).map(Number).sort()
     for (const y of [...years].reverse()) {
       for (let m = 11; m >= 0; m--) {
@@ -72,6 +76,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     return 0
   }
 
+  // Fix 1+2: compute growth rate per ISIN, include all rates (no r !== 1 filter)
   function dividendGrowthRate(isin) {
     const yearData = byIsin[isin] || {}
     const years    = Object.keys(yearData).map(Number).filter(y => y < cy).sort()
@@ -160,6 +165,12 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
+  // Fix 1: compute per-ISIN growth rates for next-year forecast
+  const growthRateByIsin = {}
+  for (const isin of isins) {
+    growthRateByIsin[isin] = dividendGrowthRate(isin)
+  }
+
   const forecastByHolding = {}
   for (const isin of isins) {
     forecastByHolding[isin] = {}
@@ -193,13 +204,20 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
-  const avgGrowth = (() => {
-    const rates = isins.map(dividendGrowthRate).filter(r => r !== 1)
-    if (rates.length === 0) return 1.05
-    return rates.reduce((a, b) => a + b, 0) / rates.length
-  })()
+  // Fix 1: apply per-ISIN growth rate for next-year forecast
+  const forecastByHoldingNy = {}
+  for (const isin of isins) {
+    const rate = growthRateByIsin[isin] ?? 1
+    forecastByHoldingNy[isin] = {}
+    for (let m = 0; m < 12; m++) {
+      forecastByHoldingNy[isin][m] = +((forecastByHolding[isin][m] || 0) * rate).toFixed(4)
+    }
+  }
 
-  const monthlyNy = monthlyCy.map(v => +(v * avgGrowth).toFixed(4))
+  const monthlyNy = Array(12).fill(0)
+  for (let m = 0; m < 12; m++) {
+    monthlyNy[m] = +isins.reduce((s, isin) => s + (forecastByHoldingNy[isin][m] || 0), 0).toFixed(4)
+  }
 
   const cumCy = Array(12).fill(null)
   let proj = 0
@@ -261,6 +279,10 @@ export function groupByHolding(activities, names = {}, types = {}, purchaseValue
   const now = new Date()
   Object.keys(map).forEach((isin, idx) => {
     map[isin].color = palette[idx % palette.length]
+    // NOTE (Bug 4): purchaseValues sums all historical buy lots including
+    // already-sold positions. Without sell-activity data from Parqet the
+    // correct cost basis cannot be computed. yield/assetYield may be
+    // understated for positions with partial sells.
     const pv       = purchaseValues[isin] ?? 0
     const totalNet = Object.values(map[isin].monthly).flatMap(m => m).reduce((s, v) => s + v, 0)
     map[isin].yield = pv > 0 ? +((totalNet / pv) * 100).toFixed(2) : null
