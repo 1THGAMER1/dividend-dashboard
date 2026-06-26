@@ -30,10 +30,10 @@ export function toCumulative(monthly) {
 }
 
 /**
- * @param {object} yahooByIsin  { [isin]: [{month, year, amount}, ...] }
- *   Dividenden pro Aktie (DPS) von Yahoo Finance – als Fallback für neue Positionen.
+ * @param {object} yahooByIsin   { [isin]: [{month, year, amount}, ...] }
+ * @param {Array}  sellActivities  Parqet sell-activities (zum Berechnen der Netto-Stückzahlen)
  */
-export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}) {
+export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = []) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
   const ny = cy + 1
@@ -54,14 +54,32 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     byIsin[isin][y][m].shares += a.shares ?? 0
   }
 
-  const currentSharesFromBuys = {}
+  // Netto-Stückzahlen: Käufe minus Verkäufe
+  const sharesFromBuys  = {}
+  const sharesFromSells = {}
+
   for (const a of buyActivities) {
     const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
-    currentSharesFromBuys[isin] = (currentSharesFromBuys[isin] || 0) + (a.shares ?? 0)
+    sharesFromBuys[isin] = (sharesFromBuys[isin] || 0) + (a.shares ?? 0)
+  }
+
+  for (const a of sellActivities) {
+    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
+    sharesFromSells[isin] = (sharesFromSells[isin] || 0) + (a.shares ?? 0)
+  }
+
+  // Alle bekannten ISINs aus Käufen
+  const netSharesMap = {}
+  for (const isin of Object.keys(sharesFromBuys)) {
+    const net = (sharesFromBuys[isin] || 0) - (sharesFromSells[isin] || 0)
+    netSharesMap[isin] = net
+    if (net <= 0) {
+      console.log(`[Forecast] ${isin} übersprungen – vollständig verkauft (net=${net.toFixed(4)})`)
+    }
   }
 
   function currentShares(isin) {
-    if (currentSharesFromBuys[isin] > 0) return currentSharesFromBuys[isin]
+    if (isin in netSharesMap) return Math.max(0, netSharesMap[isin])
     const years = Object.keys(byIsin[isin] || {}).map(Number).sort()
     for (const y of [...years].reverse()) {
       for (let m = 11; m >= 0; m--) {
@@ -92,15 +110,9 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
   /**
    * Schätzt DPS für einen Monat.
-   *
-   * Priorität:
-   *   1. Parqet-Daten cy     – bereits erhaltene Dividenden dieses Jahr (exakt)
-   *   2. Yahoo-Daten cy      – Zahlungen die Yahoo für dieses Jahr bereits kennt
-   *   3. Parqet-History      – cy-1 (70%) + cy-2 (30%)
-   *   4. Yahoo-History       – cy-1 oder cy-2 Monatsmatch
-   *   5. Yahoo Monatsdurchschnitt – letzter Fallback für neue Positionen
+   * Gibt zusätzlich die Quelle zurück: 'actual-cy' | 'historic' | 'yahoo-exact' | 'yahoo-avg' | 'zero'
    */
-  function estimateDps(isin, month) {
+  function estimateDpsWithSource(isin, month) {
     const yearData = byIsin[isin] || {}
     const yahooDivs = yahooByIsin[isin] || []
 
@@ -123,37 +135,50 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     })
     if (!points.every(p => p === null)) {
       let weightedSum = 0, weightTotal = 0
+      const detail = []
       points.forEach((v, i) => {
-        if (v !== null) { weightedSum += v * weights[i]; weightTotal += weights[i] }
-      })
-      return weightTotal > 0 ? weightedSum / weightTotal : 0
-    }
-
-    // ── Priorität 4: Yahoo History cy-1 / cy-2 (exakter Monatsmatch) ────
-    if (yahooDivs.length > 0) {
-      for (const refYear of [cy - 1, cy - 2]) {
-        const match = yahooDivs.find(d => d.year === refYear && d.month === month)
-        if (match) return match.amount
-      }
-
-      // ── Priorität 5: Yahoo Monatsdurchschnitt ───────────────────────────
-      const recentDivs = yahooDivs.filter(d => d.year >= cy - 2)
-      if (recentDivs.length > 0) {
-        const payMonths = recentDivs.map(d => d.month)
-        if (payMonths.includes(month)) {
-          const monthMatches = recentDivs.filter(d => d.month === month)
-          return monthMatches.reduce((s, d) => s + d.amount, 0) / monthMatches.length
+        if (v !== null) {
+          weightedSum += v * weights[i]
+          weightTotal += weights[i]
+          detail.push(`${refYears[i]}: DPS=${v.toFixed(6)} (w=${weights[i]})`)
         }
-      }
+      })
+      const dps = weightTotal > 0 ? weightedSum / weightTotal : 0
+      return { dps, source: 'historic', detail: detail.join(', ') }
     }
 
-    return 0
+    // ── Fallback: Yahoo Finance ──────────────────────────────────────────
+    const yahooDivs = yahooByIsin[isin] || []
+    if (yahooDivs.length === 0) return { dps: 0, source: 'zero', detail: 'keine Yahoo-Daten' }
+
+    for (const refYear of [cy - 1, cy - 2]) {
+      const match = yahooDivs.find(d => d.year === refYear && d.month === month)
+      if (match) return { dps: match.amount, source: 'yahoo-exact', detail: `Yahoo ${refYear}-M${month}: ${match.amount.toFixed(6)}` }
+    }
+
+    const recentDivs = yahooDivs.filter(d => d.year >= cy - 2)
+    if (recentDivs.length === 0) return { dps: 0, source: 'zero', detail: 'Yahoo-Daten zu alt' }
+
+    const payMonths = recentDivs.map(d => d.month)
+    if (!payMonths.includes(month)) return { dps: 0, source: 'zero', detail: `Monat ${month} war nie Zahlungsmonat (bekannte Monate: ${[...new Set(payMonths)].sort().join(',')})` }
+
+    const monthMatches = recentDivs.filter(d => d.month === month)
+    const avg = monthMatches.reduce((s, d) => s + d.amount, 0) / monthMatches.length
+    return { dps: avg, source: 'yahoo-avg', detail: `Yahoo-Durchschnitt aus ${monthMatches.length} Einträgen: ${avg.toFixed(6)}` }
   }
 
+  // ISINs aus Dividendenaktivitäten + aktive Positionen aus buyActivities
   const isinsFromDivs = Object.keys(byIsin)
-  const isinsFromBuys = Object.keys(currentSharesFromBuys)
-  const isins = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
+  const isinsFromBuys = Object.keys(sharesFromBuys).filter(isin => (netSharesMap[isin] ?? 0) > 0)
+  const isinsAll      = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
 
+  // Verkaufte Positionen ausschließen
+  const isins = isinsAll.filter(isin => {
+    if (!(isin in netSharesMap)) return true
+    return netSharesMap[isin] > 0
+  })
+
+  // Für neue Positionen (nur in buyActivities, noch nie Dividende erhalten)
   for (const isin of isinsFromBuys) {
     if (!byIsin[isin]) byIsin[isin] = {}
   }
@@ -174,16 +199,57 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   const forecastByHolding = {}
   for (const isin of isins) {
     forecastByHolding[isin] = {}
+
+    // ── DEBUG: Vanguard-ISINs detailliert loggen ──────────────────────────
+    const name = names[isin] || isin
+    const isVanguard = name.toLowerCase().includes('vanguard') || isin === 'IE00B8GKDB10'
+    if (isVanguard) {
+      const shares = currentShares(isin)
+      const buys   = sharesFromBuys[isin]  ?? 'n/a'
+      const sells  = sharesFromSells[isin] ?? 0
+      const net    = netSharesMap[isin]    ?? 'n/a (keine Käufe)'
+      console.group(`%c[Forecast DEBUG] ${name} (${isin})`, 'color:#f472b6;font-weight:bold')
+      console.log(`  Anteile → Käufe: ${typeof buys === 'number' ? buys.toFixed(4) : buys} | Verkäufe: ${typeof sells === 'number' ? sells.toFixed(4) : sells} | Netto: ${typeof net === 'number' ? net.toFixed(4) : net} | currentShares(): ${shares.toFixed(4)}`)
+      console.log(`  Yahoo-Daten vorhanden: ${(yahooByIsin[isin] || []).length} Einträge`)
+      if ((yahooByIsin[isin] || []).length > 0) {
+        console.log('  Yahoo-Dividenden:', yahooByIsin[isin].map(d => `${d.year}-M${d.month}: ${d.amount.toFixed(6)}`).join(' | '))
+      }
+      console.log('  Historische Dividenden (byIsin):')
+      for (const y of Object.keys(byIsin[isin] || {}).sort()) {
+        for (let m = 0; m < 12; m++) {
+          const e = byIsin[isin][y]?.[m]
+          if (e && e.amount > 0) {
+            console.log(`    ${y}-M${m} (${MONTHS[m]}): amount=${e.amount.toFixed(4)}, shares=${e.shares.toFixed(4)}, DPS=${(e.amount/e.shares).toFixed(6)}`)
+          }
+        }
+      }
+      console.log('  Prognose pro Monat:')
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
       if (actual && actual.amount > 0) {
         // Bereits erhaltene Dividende direkt übernehmen (kein DPS×Shares nötig)
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
+        if (isVanguard) {
+          console.log(`    ${MONTHS[m]}: ACTUAL ${actual.amount.toFixed(4)}€ (${actual.shares.toFixed(4)} Anteile, DPS=${(actual.amount/actual.shares).toFixed(6)})`)
+        }
       } else {
-        const dps    = estimateDps(isin, m)
+        const { dps, source, detail } = estimateDpsWithSource(isin, m)
         const shares = currentShares(isin)
-        forecastByHolding[isin][m] = +(dps * shares).toFixed(4)
+        const total  = +(dps * shares).toFixed(4)
+        forecastByHolding[isin][m] = total
+        if (isVanguard) {
+          console.log(`    ${MONTHS[m]}: PROGNOSE ${total.toFixed(4)}€ | DPS=${dps.toFixed(6)} × ${shares.toFixed(4)} Anteile | Quelle: ${source} | ${detail}`)
+        }
       }
+    }
+
+    if (isVanguard) {
+      const jahresSumme = Object.values(forecastByHolding[isin]).reduce((s, v) => s + v, 0)
+      console.log(`  ── Jahressumme Prognose: ${jahresSumme.toFixed(2)}€`)
+      console.groupEnd()
     }
   }
 
