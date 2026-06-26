@@ -5,13 +5,11 @@
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API-Routen → Netlify Functions
-# Müssen VOR dem /*-Wildcard stehen, sonst wird alles zu index.html umgeleitet
+# Muss VOR dem /*-Wildcard stehen, sonst wird alles zu index.html umgeleitet
 # ─────────────────────────────────────────────────────────────────────────────
-[[redirects]]
-  from = "/yahoo-dividends"
-  to = "/.netlify/functions/yahoo-dividends"
-  status = 200
-  force = true
+
+# Fix: /yahoo-dividends?ticker=... verlor Query-Parameter beim Redirect.
+# Direkter Funktionspfad wird jetzt im Frontend verwendet.
 
 [[redirects]]
   from = "/api/*"

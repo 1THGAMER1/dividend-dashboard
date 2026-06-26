@@ -2,6 +2,7 @@ import { getAccessToken } from './auth'
 import { supabase } from './supabaseClient'
 
 const BASE = '/api'
+const YAHOO_FN = '/.netlify/functions/yahoo-dividends'
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 const CACHE_TTL_DAYS = 30
 const BATCH_SIZE = 5
@@ -143,7 +144,6 @@ async function loadTickerCache(isins) {
   const cutoff = Date.now() - CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
   const map = {}
   for (const row of data) {
-    // null oder leere Ticker ignorieren: werden neu aufgeloest
     if (!row.ticker) continue
     if (new Date(row.updated_at).getTime() > cutoff) {
       map[row.isin] = row.ticker
@@ -153,7 +153,6 @@ async function loadTickerCache(isins) {
 }
 
 async function saveTickerCache(entries) {
-  // Nur echte Ticker speichern — null NIE cachen
   const valid = entries.filter(e => e.ticker)
   if (valid.length === 0) return
   await supabase
@@ -167,7 +166,7 @@ async function saveTickerCache(entries) {
 async function resolveOneIsin(isin) {
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
     try {
-      const res = await fetch(`/yahoo-dividends?ticker=${encodeURIComponent(isin)}`)
+      const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(isin)}`)
       if (res.status === 429) {
         const wait = RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1]
         console.warn(`[TickerCache] Rate limit bei ${isin}, warte ${wait}ms (Versuch ${attempt + 1})`)
@@ -188,7 +187,6 @@ async function resolveOneIsin(isin) {
 
 async function resolveIsinsToTickers(isins) {
   const cached  = await loadTickerCache(isins)
-  // missing = ISINs die NICHT im Cache sind (null zaehlt als nicht gecacht)
   const missing = isins.filter(i => !(i in cached))
 
   console.log(`[TickerCache] ${Object.keys(cached).length} aus Cache, ${missing.length} muessen aufgeloest werden`)
@@ -213,7 +211,6 @@ async function resolveIsinsToTickers(isins) {
       const isin   = batch[j]
       const ticker = batchResults[j].status === 'fulfilled' ? batchResults[j].value : null
       result[isin] = ticker
-      // Nur echte Treffer merken
       if (ticker) newEntries.push({ isin, ticker })
       done++
       console.log(`[TickerCache] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
@@ -236,7 +233,7 @@ async function resolveIsinsToTickers(isins) {
 export async function fetchYahooDividends(ticker) {
   if (!ticker) return { dividends: [], currency: 'EUR', _resolvedTicker: null }
   try {
-    const res = await fetch(`/yahoo-dividends?ticker=${encodeURIComponent(ticker)}`)
+    const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(ticker)}`)
     if (!res.ok) return { dividends: [], currency: 'EUR', _resolvedTicker: null }
     const data = await res.json()
     return {

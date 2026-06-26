@@ -14,6 +14,8 @@ import {
 } from '../api'
 import { readCache, writeCache, readStaleCache } from '../cache'
 
+const NO_DIVIDEND_TYPES = new Set(['crypto', 'cryptocurrency'])
+
 export default function useDividendData() {
     const [loggedIn,          setLoggedIn]          = useState(isLoggedIn())
     const [monthly,           setMonthly]           = useState({})
@@ -120,13 +122,14 @@ export default function useDividendData() {
 
         try {
             const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
-            if (Object.keys(yahooByIsin).length === 0) return
 
             const fc = buildForecast(payload.c, rawActs, buyActs, names, yahooByIsin, sellActs)
             setForecastCum(fc.cum)
             setForecastMonthly(fc.monthly)
             setForecastByHolding(fc.forecastByHolding)
 
+            // Immer cachen, auch wenn yahooByIsin leer ist — verhindert
+            // wiederholte Anfragen wenn Yahoo keine Daten liefert
             const updated = { ...payload, fc, yahooByIsin }
             writeCache(updated).catch(err => console.warn('Yahoo-Cache-Update fehlgeschlagen:', err))
         } catch (e) {
@@ -147,9 +150,29 @@ export default function useDividendData() {
                     setCacheInfo({ cachedAt: cached.cachedAt })
                     setLoading(false)
 
-                    const hasYahoo   = cached.payload.yahooByIsin && Object.keys(cached.payload.yahooByIsin).length > 0
-                    const hasRawActs = cached.payload.rawActs && cached.payload.rawActs.length > 0
-                    if (!hasYahoo || !hasRawActs) {
+                    const hasRawActs = (cached.payload.rawActs?.length ?? 0) > 0
+
+                    // Zaehle wie viele nicht-Krypto Holdings gecacht sind
+                    const cachedTypes   = cached.payload.types   || {}
+                    const cachedTickers = cached.payload.tickers  || {}
+                    const nonCryptoIsins = Object.keys(cachedTickers).filter(isin => {
+                        const t = (cachedTypes[isin] || '').toLowerCase()
+                        return !NO_DIVIDEND_TYPES.has(t)
+                    })
+                    const yahooCount    = Object.keys(cached.payload.yahooByIsin || {}).length
+                    const expectedCount = nonCryptoIsins.length
+
+                    // Refresh wenn: kein rawActs, kein yahooByIsin,
+                    // oder Abdeckung unter 50% der erwarteten Holdings
+                    const coverageOk = expectedCount === 0 || (yahooCount / expectedCount) >= 0.5
+                    const needsYahooRefresh = !hasRawActs || !coverageOk
+
+                    console.log(
+                        `[Cache] yahooByIsin: ${yahooCount}/${expectedCount} Holdings`,
+                        needsYahooRefresh ? '→ Yahoo-Refresh wird gestartet' : '→ Cache vollstaendig'
+                    )
+
+                    if (needsYahooRefresh) {
                         refreshYahooForCached(cached).catch(() => {})
                     }
                     return
