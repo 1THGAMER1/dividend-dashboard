@@ -68,7 +68,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     sharesFromSells[isin] = (sharesFromSells[isin] || 0) + (a.shares ?? 0)
   }
 
-  // Alle bekannten ISINs aus Käufen
   const netSharesMap = {}
   for (const isin of Object.keys(sharesFromBuys)) {
     const net = (sharesFromBuys[isin] || 0) - (sharesFromSells[isin] || 0)
@@ -110,26 +109,17 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
   /**
    * Schätzt DPS für einen Monat.
-   * Gibt zusätzlich die Quelle zurück: 'actual-cy' | 'historic' | 'yahoo-exact' | 'yahoo-avg' | 'zero'
+   * Gibt { dps, source, detail } zurück.
+   * Quellen: 'historic' | 'yahoo-exact' | 'yahoo-avg' | 'zero'
    */
   function estimateDpsWithSource(isin, month) {
-    const yearData = byIsin[isin] || {}
+    const yearData  = byIsin[isin] || {}
     const yahooDivs = yahooByIsin[isin] || []
+    const refYears  = [cy - 1, cy - 2]
+    const weights   = [0.7, 0.3]
 
-    // ── Priorität 1: Parqet actual cy ───────────────────────────────────
-    const actualCy = yearData[cy]?.[month]
-    if (actualCy && actualCy.amount > 0 && actualCy.shares > 0) {
-      return actualCy.amount / actualCy.shares
-    }
-
-    // ── Priorität 2: Yahoo cy ────────────────────────────────────────────
-    const yahooCy = yahooDivs.find(d => d.year === cy && d.month === month)
-    if (yahooCy) return yahooCy.amount
-
-    // ── Priorität 3: Parqet-History cy-1 / cy-2 ─────────────────────────
-    const refYears = [cy - 1, cy - 2]
-    const weights  = [0.7, 0.3]
-    const points   = refYears.map(y => {
+    // Priorität 1: Parqet-History cy-1 / cy-2
+    const points = refYears.map(y => {
       const e = yearData[y]?.[month]
       return (e && e.shares > 0) ? e.amount / e.shares : null
     })
@@ -147,20 +137,22 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
       return { dps, source: 'historic', detail: detail.join(', ') }
     }
 
-    // ── Fallback: Yahoo Finance ──────────────────────────────────────────
-    const yahooDivs = yahooByIsin[isin] || []
+    // Priorität 2: Yahoo exakter Monats-Match cy-1 / cy-2
     if (yahooDivs.length === 0) return { dps: 0, source: 'zero', detail: 'keine Yahoo-Daten' }
 
-    for (const refYear of [cy - 1, cy - 2]) {
+    for (const refYear of refYears) {
       const match = yahooDivs.find(d => d.year === refYear && d.month === month)
       if (match) return { dps: match.amount, source: 'yahoo-exact', detail: `Yahoo ${refYear}-M${month}: ${match.amount.toFixed(6)}` }
     }
 
+    // Priorität 3: Yahoo Durchschnitt für diesen Monat
     const recentDivs = yahooDivs.filter(d => d.year >= cy - 2)
     if (recentDivs.length === 0) return { dps: 0, source: 'zero', detail: 'Yahoo-Daten zu alt' }
 
     const payMonths = recentDivs.map(d => d.month)
-    if (!payMonths.includes(month)) return { dps: 0, source: 'zero', detail: `Monat ${month} war nie Zahlungsmonat (bekannte Monate: ${[...new Set(payMonths)].sort().join(',')})` }
+    if (!payMonths.includes(month)) {
+      return { dps: 0, source: 'zero', detail: `Monat ${month} war nie Zahlungsmonat (bekannte Monate: ${[...new Set(payMonths)].sort().join(',')})` }
+    }
 
     const monthMatches = recentDivs.filter(d => d.month === month)
     const avg = monthMatches.reduce((s, d) => s + d.amount, 0) / monthMatches.length
@@ -189,11 +181,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     if (d.getFullYear() === cy) {
       curYearActuals[d.getMonth()] += a.amountNet ?? a.amount ?? 0
     }
-  }
-
-  const growthRateByIsin = {}
-  for (const isin of isins) {
-    growthRateByIsin[isin] = dividendGrowthRate(isin)
   }
 
   const forecastByHolding = {}
@@ -230,7 +217,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
       if (actual && actual.amount > 0) {
-        // Bereits erhaltene Dividende direkt übernehmen (kein DPS×Shares nötig)
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
         if (isVanguard) {
           console.log(`    ${MONTHS[m]}: ACTUAL ${actual.amount.toFixed(4)}€ (${actual.shares.toFixed(4)} Anteile, DPS=${(actual.amount/actual.shares).toFixed(6)})`)
@@ -271,19 +257,13 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
-  const forecastByHoldingNy = {}
-  for (const isin of isins) {
-    const rate = growthRateByIsin[isin] ?? 1
-    forecastByHoldingNy[isin] = {}
-    for (let m = 0; m < 12; m++) {
-      forecastByHoldingNy[isin][m] = +((forecastByHolding[isin][m] || 0) * rate).toFixed(4)
-    }
-  }
+  const avgGrowth = (() => {
+    const rates = isins.map(dividendGrowthRate).filter(r => r !== 1)
+    if (rates.length === 0) return 1.05
+    return rates.reduce((a, b) => a + b, 0) / rates.length
+  })()
 
-  const monthlyNy = Array(12).fill(0)
-  for (let m = 0; m < 12; m++) {
-    monthlyNy[m] = +isins.reduce((s, isin) => s + (forecastByHoldingNy[isin][m] || 0), 0).toFixed(4)
-  }
+  const monthlyNy = monthlyCy.map(v => +(v * avgGrowth).toFixed(4))
 
   const cumCy = Array(12).fill(null)
   let proj = 0
