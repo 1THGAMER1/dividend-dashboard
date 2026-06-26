@@ -144,20 +144,8 @@ export async function fetchHoldingNames() {
 }
 
 // --- Supabase Ticker Cache ---
-// GBX-Ticker und non-EUR Ticker werden nie gecacht bzw. beim Laden invalidiert.
-
-async function invalidateNonEurTickerCache(isins) {
-  if (isins.length === 0) return
-  const { data } = await supabase
-    .from('isin_ticker_cache')
-    .select('isin, ticker')
-    .in('isin', isins)
-  if (!data) return
-  const badIsins = data.filter(r => !isEurTicker(r.ticker)).map(r => r.isin)
-  if (badIsins.length === 0) return
-  console.log(`[Cache] Invalidiere ${badIsins.length} non-EUR Eintraege`)
-  await supabase.from('isin_ticker_cache').delete().in('isin', badIsins)
-}
+// Speichert alle vom Resolver gefundenen Ticker (EUR und non-EUR).
+// Der Resolver gibt bereits den besten verfuegbaren EUR-Ticker zurueck.
 
 async function loadTickerCache(isins) {
   if (isins.length === 0) return {}
@@ -170,7 +158,6 @@ async function loadTickerCache(isins) {
   const map = {}
   for (const row of data) {
     if (!row.ticker) continue
-    if (!isEurTicker(row.ticker)) continue  // nur EUR-Ticker aus Cache verwenden
     if (new Date(row.updated_at).getTime() > cutoff) {
       map[row.isin] = row.ticker
     }
@@ -179,12 +166,11 @@ async function loadTickerCache(isins) {
 }
 
 async function saveTickerCache(entries) {
-  const valid = entries.filter(e => e.ticker && isEurTicker(e.ticker))
-  if (valid.length === 0) return
+  if (entries.length === 0) return
   await supabase
     .from('isin_ticker_cache')
     .upsert(
-      valid.map(e => ({ isin: e.isin, ticker: e.ticker, updated_at: new Date().toISOString() })),
+      entries.map(e => ({ isin: e.isin, ticker: e.ticker, updated_at: new Date().toISOString() })),
       { onConflict: 'isin' }
     )
 }
@@ -211,9 +197,6 @@ async function resolveOneIsin(isin) {
 }
 
 async function resolveIsinsToTickers(isins) {
-  // Nicht-EUR Eintraege aus Cache loeschen
-  await invalidateNonEurTickerCache(isins)
-
   const cached  = await loadTickerCache(isins)
   const missing = isins.filter(i => !(i in cached))
 
