@@ -5,11 +5,14 @@
 
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 
+// Suffix-Prioritaet: EUR-Boersen (AS, DE, PA, MI, MC) vor GBP (L) vor US (kein Suffix)
+// VHYL.L handelt in GBX (Pence), VHYL.AS handelt in EUR -> EUR bevorzugen
+const SUFFIX_PRIORITY = ['.AS', '.DE', '.PA', '.MI', '.MC', '.SW', '', '.L', '.TO']
+
 // --- Resolver: Yahoo Finance Search (primaer) ------------------------------------
-// Yahoo Search gibt direkt Yahoo-kompatible Ticker zurueck.
 async function resolveTickerFromYahooSearch(isin) {
   try {
-    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=5&newsCount=0&listsCount=0`
+    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=10&newsCount=0&listsCount=0`
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; DividendDashboard/1.0)',
@@ -24,9 +27,22 @@ async function resolveTickerFromYahooSearch(isin) {
       ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType)
     )
     if (quotes.length === 0) return null
-    // Bevorzuge Ticker ohne Punkt (US-Boerse) oder mit bekannten Suffixen
-    const preferred = quotes.find(q => !q.symbol.includes('.')) || quotes[0]
-    return preferred.symbol
+
+    // Sortiere nach Suffix-Praeferenz: EUR-Boersen zuerst, GBX (London) zuletzt
+    const ranked = quotes.slice().sort((a, b) => {
+      const suffixOf = sym => {
+        const dot = sym.lastIndexOf('.')
+        return dot >= 0 ? sym.slice(dot) : ''
+      }
+      const ia = SUFFIX_PRIORITY.indexOf(suffixOf(a.symbol))
+      const ib = SUFFIX_PRIORITY.indexOf(suffixOf(b.symbol))
+      const ra = ia === -1 ? SUFFIX_PRIORITY.length : ia
+      const rb = ib === -1 ? SUFFIX_PRIORITY.length : ib
+      return ra - rb
+    })
+
+    console.log(`[Resolver] ${isin} Yahoo-Kandidaten: ${ranked.map(q => q.symbol).join(', ')}`)
+    return ranked[0].symbol
   } catch {
     return null
   }
@@ -52,13 +68,16 @@ async function validateTickerOnYahoo(symbol) {
 
 // --- Resolver: OpenFIGI (Fallback) -----------------------------------------------
 async function resolveTickerFromOpenFigi(isin) {
+  // Bevorzuge EUR-Boersen: AS (Amsterdam), GS (Xetra), dann LN (London)
   const strategies = [
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'AS' },
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' },
+    { idType: 'ID_ISIN', idValue: isin, exchCode: 'PA' },
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'US' },
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'LN' },
-    { idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' },
     { idType: 'ID_ISIN', idValue: isin },
   ]
-  const suffixMap = { GS: '.DE', LN: '.L', PA: '.PA', AS: '.AS', SW: '.SW' }
+  const suffixMap = { GS: '.DE', LN: '.L', PA: '.PA', AS: '.AS', SW: '.SW', MI: '.MI' }
 
   for (const body of strategies) {
     try {
@@ -98,6 +117,16 @@ async function resolveTickerFromIsin(isin) {
   return null
 }
 
+// --- Waehrungskorrektur ----------------------------------------------------------
+// GBX (Pence) muss durch 100 dividiert werden um GBP zu erhalten.
+// Alle anderen Waehrungen werden unveraendert durchgereicht.
+function normalizeDividendAmount(amount, currency) {
+  if (currency === 'GBp' || currency === 'GBX' || currency === 'GBx') {
+    return { amount: amount / 100, currency: 'GBP' }
+  }
+  return { amount, currency }
+}
+
 // --- Yahoo Finance Dividendenhistorie --------------------------------------------
 async function fetchDividends(symbol) {
   const period1 = Math.floor((Date.now() - 5 * 365 * 24 * 60 * 60 * 1000) / 1000)
@@ -116,19 +145,26 @@ async function fetchDividends(symbol) {
   const json = await res.json()
   const meta    = json?.chart?.result?.[0]?.meta ?? {}
   const rawDivs = json?.chart?.result?.[0]?.events?.dividends ?? {}
-  const currency = meta.currency ?? 'EUR'
+  const rawCurrency = meta.currency ?? 'EUR'
 
   const dividends = Object.values(rawDivs).map(d => {
     const date = new Date(d.date * 1000)
+    const { amount, currency } = normalizeDividendAmount(d.amount, rawCurrency)
     return {
-      date:   date.toISOString(),
-      amount: d.amount,
-      month:  date.getMonth(),
-      year:   date.getFullYear(),
+      date:     date.toISOString(),
+      amount,
+      currency,
+      month:    date.getMonth(),
+      year:     date.getFullYear(),
     }
   }).sort((a, b) => new Date(a.date) - new Date(b.date))
 
-  return { dividends, currency, resolvedTicker: symbol }
+  // Normalisierte Waehrung aus erstem Eintrag, sonst rawCurrency
+  const normalizedCurrency = dividends.length > 0 ? dividends[0].currency : normalizeDividendAmount(0, rawCurrency).currency
+
+  console.log(`[Yahoo] ${symbol}: ${dividends.length} Dividenden, Waehrung ${rawCurrency}${rawCurrency !== normalizedCurrency ? ' -> ' + normalizedCurrency : ''}`)
+
+  return { dividends, currency: normalizedCurrency, resolvedTicker: symbol }
 }
 
 // --- Handler ---------------------------------------------------------------------
