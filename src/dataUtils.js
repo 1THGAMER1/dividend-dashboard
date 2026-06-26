@@ -61,11 +61,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   }
 
   function currentShares(isin) {
-    // Prefer buy-activity total (does not account for sells, but best available)
     if (currentSharesFromBuys[isin] > 0) return currentSharesFromBuys[isin]
-    // Fallback: shares recorded in the most recent single dividend payout.
-    // NOTE: this is the share count at payout time, not current holding size.
-    // It may be stale after partial sells. Used only when no buy data exists.
     const years = Object.keys(byIsin[isin] || {}).map(Number).sort()
     for (const y of [...years].reverse()) {
       for (let m = 11; m >= 0; m--) {
@@ -76,7 +72,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     return 0
   }
 
-  // Fix 1+2: compute growth rate per ISIN, include all rates (no r !== 1 filter)
   function dividendGrowthRate(isin) {
     const yearData = byIsin[isin] || {}
     const years    = Object.keys(yearData).map(Number).filter(y => y < cy).sort()
@@ -97,22 +92,36 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
   /**
    * Schätzt DPS für einen Monat.
+   *
    * Priorität:
-   *   1. Eigene historische Daten (cy-1, cy-2) – gewichtet 70/30
-   *   2. Yahoo Finance Fallback – DPS direkt aus Yahoo-Daten
+   *   1. Parqet-Daten cy     – bereits erhaltene Dividenden dieses Jahr (exakt)
+   *   2. Yahoo-Daten cy      – Zahlungen die Yahoo für dieses Jahr bereits kennt
+   *   3. Parqet-History      – cy-1 (70%) + cy-2 (30%)
+   *   4. Yahoo-History       – cy-1 oder cy-2 Monatsmatch
+   *   5. Yahoo Monatsdurchschnitt – letzter Fallback für neue Positionen
    */
   function estimateDps(isin, month) {
     const yearData = byIsin[isin] || {}
+    const yahooDivs = yahooByIsin[isin] || []
+
+    // ── Priorität 1: Parqet actual cy ───────────────────────────────────
+    const actualCy = yearData[cy]?.[month]
+    if (actualCy && actualCy.amount > 0 && actualCy.shares > 0) {
+      return actualCy.amount / actualCy.shares
+    }
+
+    // ── Priorität 2: Yahoo cy ────────────────────────────────────────────
+    const yahooCy = yahooDivs.find(d => d.year === cy && d.month === month)
+    if (yahooCy) return yahooCy.amount
+
+    // ── Priorität 3: Parqet-History cy-1 / cy-2 ─────────────────────────
     const refYears = [cy - 1, cy - 2]
     const weights  = [0.7, 0.3]
-
-    const points = refYears.map(y => {
+    const points   = refYears.map(y => {
       const e = yearData[y]?.[month]
       return (e && e.shares > 0) ? e.amount / e.shares : null
     })
-
     if (!points.every(p => p === null)) {
-      // Eigene historische Daten vorhanden – normale Gewichtung
       let weightedSum = 0, weightTotal = 0
       points.forEach((v, i) => {
         if (v !== null) { weightedSum += v * weights[i]; weightTotal += weights[i] }
@@ -120,39 +129,31 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
       return weightTotal > 0 ? weightedSum / weightTotal : 0
     }
 
-    // ── Fallback: Yahoo Finance ──────────────────────────────────────────
-    // Suche nach einer Dividendenzahlung für diesen Monat in cy-1 oder cy-2
-    const yahooDivs = yahooByIsin[isin] || []
-    if (yahooDivs.length === 0) return 0
+    // ── Priorität 4: Yahoo History cy-1 / cy-2 (exakter Monatsmatch) ────
+    if (yahooDivs.length > 0) {
+      for (const refYear of [cy - 1, cy - 2]) {
+        const match = yahooDivs.find(d => d.year === refYear && d.month === month)
+        if (match) return match.amount
+      }
 
-    // Bevorzuge cy-1, dann cy-2
-    for (const refYear of [cy - 1, cy - 2]) {
-      const match = yahooDivs.find(d => d.year === refYear && d.month === month)
-      if (match) return match.amount  // Yahoo liefert bereits DPS
+      // ── Priorität 5: Yahoo Monatsdurchschnitt ───────────────────────────
+      const recentDivs = yahooDivs.filter(d => d.year >= cy - 2)
+      if (recentDivs.length > 0) {
+        const payMonths = recentDivs.map(d => d.month)
+        if (payMonths.includes(month)) {
+          const monthMatches = recentDivs.filter(d => d.month === month)
+          return monthMatches.reduce((s, d) => s + d.amount, 0) / monthMatches.length
+        }
+      }
     }
 
-    // Kein exakter Monats-Treffer: prüfe ob die Aktie überhaupt in diesem
-    // Monat zahlt (Quartals-/Monatszahler erkennen) anhand der letzten 2 Jahre
-    const recentDivs = yahooDivs.filter(d => d.year >= cy - 2)
-    if (recentDivs.length === 0) return 0
-
-    // Durchschnittliche Anzahl Zahlungen pro Jahr bestimmen
-    const payMonths = recentDivs.map(d => d.month)
-    if (!payMonths.includes(month)) return 0  // Dieser Monat war nie ein Zahlungsmonat
-
-    // Durchschnittliche DPS für diesen Monat über verfügbare Jahre
-    const monthMatches = recentDivs.filter(d => d.month === month)
-    const avg = monthMatches.reduce((s, d) => s + d.amount, 0) / monthMatches.length
-    return avg
+    return 0
   }
 
-  // ISINs aus Dividendenaktivitäten + neue Positionen aus buyActivities
   const isinsFromDivs = Object.keys(byIsin)
   const isinsFromBuys = Object.keys(currentSharesFromBuys)
   const isins = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
 
-  // Für neue Positionen (nur in buyActivities, noch nie Dividende erhalten)
-  // byIsin-Eintrag initialisieren damit estimateDps funktioniert
   for (const isin of isinsFromBuys) {
     if (!byIsin[isin]) byIsin[isin] = {}
   }
@@ -165,7 +166,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
-  // Fix 1: compute per-ISIN growth rates for next-year forecast
   const growthRateByIsin = {}
   for (const isin of isins) {
     growthRateByIsin[isin] = dividendGrowthRate(isin)
@@ -177,6 +177,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
       if (actual && actual.amount > 0) {
+        // Bereits erhaltene Dividende direkt übernehmen (kein DPS×Shares nötig)
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
       } else {
         const dps    = estimateDps(isin, m)
@@ -204,7 +205,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
-  // Fix 1: apply per-ISIN growth rate for next-year forecast
   const forecastByHoldingNy = {}
   for (const isin of isins) {
     const rate = growthRateByIsin[isin] ?? 1
@@ -279,10 +279,6 @@ export function groupByHolding(activities, names = {}, types = {}, purchaseValue
   const now = new Date()
   Object.keys(map).forEach((isin, idx) => {
     map[isin].color = palette[idx % palette.length]
-    // NOTE (Bug 4): purchaseValues sums all historical buy lots including
-    // already-sold positions. Without sell-activity data from Parqet the
-    // correct cost basis cannot be computed. yield/assetYield may be
-    // understated for positions with partial sells.
     const pv       = purchaseValues[isin] ?? 0
     const totalNet = Object.values(map[isin].monthly).flatMap(m => m).reduce((s, v) => s + v, 0)
     map[isin].yield = pv > 0 ? +((totalNet / pv) * 100).toFixed(2) : null
