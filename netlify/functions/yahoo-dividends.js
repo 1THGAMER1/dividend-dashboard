@@ -5,9 +5,47 @@
 
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 
-// Suffix-Prioritaet: EUR-Boersen (AS, DE, PA, MI, MC) vor GBP (L) vor US (kein Suffix)
-// VHYL.L handelt in GBX (Pence), VHYL.AS handelt in EUR -> EUR bevorzugen
-const SUFFIX_PRIORITY = ['.AS', '.DE', '.PA', '.MI', '.MC', '.SW', '', '.L', '.TO']
+// Suffix-Prioritaet: EUR-Boersen zuerst, GBX (London .L) ans Ende
+const SUFFIX_PRIORITY = ['.AS', '.DE', '.PA', '.MI', '.MC', '.SW', '.F', '', '.L', '.TO']
+
+// EUR-Alternativ-Suffixe zum Ausprobieren wenn GBp-Ticker gefunden wird
+const EUR_SUFFIXES = ['.AS', '.DE', '.F', '.MI', '.PA']
+
+// --- Hilfsfunktion: Waehrung eines Tickers direkt abfragen ----------------------
+async function fetchTickerMeta(symbol) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=1700000000&period2=1750000000&interval=1d`
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    const meta = json?.chart?.result?.[0]?.meta
+    if (!meta) return null
+    return { currency: meta.currency, symbol: meta.symbol || symbol }
+  } catch {
+    return null
+  }
+}
+
+// --- Nach GBp-Ticker: versuche EUR-Equivalent zu finden -------------------------
+// z.B. VHYL.L -> probiere VHYL.AS, VHYL.DE, VHYL.F, VHYL.MI, VHYL.PA
+async function findEurAlternative(gbpTicker) {
+  const base = gbpTicker.includes('.') ? gbpTicker.slice(0, gbpTicker.lastIndexOf('.')) : gbpTicker
+  for (const suffix of EUR_SUFFIXES) {
+    const candidate = base + suffix
+    const meta = await fetchTickerMeta(candidate)
+    if (meta && meta.currency !== 'GBp' && meta.currency !== 'GBX' && meta.currency !== 'GBx') {
+      console.log(`[Resolver] GBp-Swap: ${gbpTicker} -> ${candidate} (${meta.currency})`)
+      return candidate
+    }
+  }
+  console.log(`[Resolver] Kein EUR-Aequivalent fuer ${gbpTicker} gefunden, behalte Original`)
+  return gbpTicker
+}
 
 // --- Resolver: Yahoo Finance Search (primaer) ------------------------------------
 async function resolveTickerFromYahooSearch(isin) {
@@ -101,20 +139,31 @@ async function resolveTickerFromOpenFigi(isin) {
   return null
 }
 
-// --- Hauptkette: Yahoo Search -> OpenFIGI ----------------------------------------
+// --- Hauptkette: Yahoo Search -> EUR-Pruefung -> OpenFIGI -----------------------
 async function resolveTickerFromIsin(isin) {
-  const yahooResult = await resolveTickerFromYahooSearch(isin)
-  if (yahooResult) {
-    console.log(`[Resolver] ${isin} via Yahoo Search -> ${yahooResult}`)
-    return yahooResult
+  let symbol = await resolveTickerFromYahooSearch(isin)
+
+  if (!symbol) {
+    symbol = await resolveTickerFromOpenFigi(isin)
   }
-  const figiResult = await resolveTickerFromOpenFigi(isin)
-  if (figiResult) {
-    console.log(`[Resolver] ${isin} via OpenFIGI -> ${figiResult}`)
-    return figiResult
+
+  if (!symbol) {
+    console.log(`[Resolver] ${isin} -> nicht aufloesbar`)
+    return null
   }
-  console.log(`[Resolver] ${isin} -> nicht aufloesbar`)
-  return null
+
+  // Pruefe ob der gefundene Ticker in GBp handelt -> versuche EUR-Boerse
+  const meta = await fetchTickerMeta(symbol)
+  const currency = meta?.currency ?? ''
+  if (currency === 'GBp' || currency === 'GBX' || currency === 'GBx') {
+    console.log(`[Resolver] ${symbol} ist GBp -> suche EUR-Alternative`)
+    const eurSymbol = await findEurAlternative(symbol)
+    console.log(`[Resolver] ${isin} final -> ${eurSymbol}`)
+    return eurSymbol
+  }
+
+  console.log(`[Resolver] ${isin} -> ${symbol} (${currency})`)
+  return symbol
 }
 
 // --- Waehrungskorrektur ----------------------------------------------------------
@@ -201,6 +250,14 @@ exports.handler = async function (event) {
         }
       }
       symbol = resolved
+    } else {
+      // Direkt eingegebener Ticker: pruefe ob GBp und tausche wenn moeglich
+      const meta = await fetchTickerMeta(ticker)
+      const currency = meta?.currency ?? ''
+      if (currency === 'GBp' || currency === 'GBX' || currency === 'GBx') {
+        console.log(`[Handler] Direkter Ticker ${ticker} ist GBp -> suche EUR-Alternative`)
+        symbol = await findEurAlternative(ticker)
+      }
     }
 
     const result = await fetchDividends(symbol)
