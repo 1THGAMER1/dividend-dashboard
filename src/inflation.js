@@ -8,8 +8,8 @@ export const INFLATION_RATES = {
     2022: 0.079,
     2023: 0.059,
     2024: 0.022,
-    2025: 0.023,
-    2026: 0.020, // Schätzung (Bundesbank Prognose)
+    2025: 0.022, // Destatis VPI Jahresdurchschnitt 2025 (korrigiert von 0.023)
+    2026: 0.020, // Prognose (Bundesbank, Juni 2026)
 }
 
 /**

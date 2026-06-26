@@ -31,7 +31,6 @@ function toGross(netValue, taxRate) {
     return netValue / (1 - taxRate)
 }
 
-// Berechnet die ideale Balkenbreite basierend auf der Anzahl Datenpunkte
 function calcBarSize(totalPoints) {
     if (totalPoints <= 12)  return 20
     if (totalPoints <= 24)  return 14
@@ -40,16 +39,14 @@ function calcBarSize(totalPoints) {
     return 5
 }
 
-// Berechnet sinnvollen X-Achsen-Intervall damit Labels nicht überlappen
 function calcXInterval(totalPoints) {
-    if (totalPoints <= 12)  return 0        // alle Labels
-    if (totalPoints <= 24)  return 1        // jeden 2. (Jan, Jan, ...)
+    if (totalPoints <= 12)  return 0
+    if (totalPoints <= 24)  return 1
     if (totalPoints <= 36)  return 2
-    if (totalPoints <= 60)  return 5        // jeden 6.
-    return Math.ceil(totalPoints / 12) - 1 // ~12 Labels gesamt
+    if (totalPoints <= 60)  return 5
+    return Math.ceil(totalPoints / 12) - 1
 }
 
-// Forward-fill: füllt null-Werte mit dem letzten bekannten Wert auf
 function forwardFill(arr) {
     let last = null
     return arr.map(v => {
@@ -94,7 +91,10 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
     const scaleNet  = (v)       => showGross ? toGross(v, globalTaxRate) : v
     const scaleIsin = (v, isin) => showGross ? toGross(v, taxRates[isin] ?? globalTaxRate) : v
 
-    // ── Inflationslinie für Akkumuliert-Modus ──────────────────────────────────
+    // ── Kaufkraftziel-Linie für Akkumuliert-Modus ─────────────────────────────
+    // Zeigt: Wie hoch müsste die kumulierte Dividende sein, um die Kaufkraft
+    // seit dem Startjahr zu erhalten? (Benchmark auf Basis Destatis VPI)
+    // HINWEIS: Für das laufende Jahr ist dies eine Schätzung (linearer Jahresanteil).
     const inflationLineData = useMemo(() => {
         if (!years.length || years.length < 2) return null
         const firstYearTotal = (monthly[baseYear] || []).reduce((s, v) => s + (v || 0), 0)
@@ -114,7 +114,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
 
     const inflationRefValue = inflationLineData?.[cy] ?? null
 
-    // Monatlich
     const monthlyBarData = MONTHS.map((name, i) => {
         const pt = { name }
         years.forEach(y => {
@@ -127,15 +126,12 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
-    // Akkumuliert
     const cumLineDataRaw = MONTHS.map((name, i) => {
         const pt = { name }
         years.filter(y => y < cy).forEach(y => {
             pt[String(y)] = +scaleNet(cum[y]?.[i] || 0).toFixed(2)
         })
-        // cy_real: nur bis zum aktuellen Monat (exkl.) — KEIN forward-fill
         pt[`${cy}_real`]     = i <= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
-        // cy_forecast: ab aktuellem Monat (gestrichelt)
         pt[`${cy}_forecast`] = i >= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
         pt[`${ny}_forecast`] = fcNy[i] != null ? +scaleNet(fcNy[i]).toFixed(2) : null
         if (showInflation && inflationLineData && years.length >= 2) {
@@ -157,22 +153,18 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
-    // Forward-fill nur für Vorjahre und Prognose-Linien, NICHT für cy_real
     const cumLineData = (() => {
         const fillKeys = [
             ...years.filter(y => y < cy).map(String),
-            // cy_real wird NICHT forward-gefüllt
             `${cy}_forecast`,
             `${ny}_forecast`,
             ...(showInflation ? ['inflation_target'] : []),
         ]
         const noFillKeys = [`${cy}_real`]
-
         const filled = fillKeys.reduce((acc, key) => {
             acc[key] = forwardFill(cumLineDataRaw.map(pt => pt[key] ?? null))
             return acc
         }, {})
-
         return cumLineDataRaw.map((pt, i) => {
             const newPt = { name: pt.name }
             fillKeys.forEach(key => { newPt[key] = filled[key][i] })
@@ -181,7 +173,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         })
     })()
 
-    // Nach Aktie
     const isins = Object.keys(byHolding || {}).filter(isin => {
         const h = byHolding[isin]
         return Object.values(h.monthly || {}).some(months =>
@@ -216,7 +207,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
-    // Dynamische Werte für stacked Chart
     const stackedBarSize = calcBarSize(totalMonths)
     const stackedXInterval = calcXInterval(totalMonths)
 
@@ -230,7 +220,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
     const fmtTip = v => `${(+v).toFixed(2)} € (${label})`
 
     const renderLineLegend = value => {
-        if (value === 'inflation_target') return <span style={{ color: '#f97316' }}>Inflation (Ziel)</span>
+        if (value === 'inflation_target') return <span style={{ color: '#f97316' }}>Kaufkraftziel (VPI)</span>
         const color = value === `${cy}_real`     ? YEAR_COLORS[cy] || '#c0397a'
             : value === `${cy}_forecast` ? YEAR_COLORS[cy] || '#c0397a'
                 : value === `${ny}_forecast` ? '#34d399'
@@ -254,12 +244,10 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:8 }}>
                 <h2 style={{ fontSize:15, fontWeight:600, color:'#c8d4e0' }}>Jahresverlauf</h2>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-                    {/* Netto / Brutto */}
                     <div style={{ display:'flex', gap:4, padding:'2px', background:'#0f1420', borderRadius:22, border:'1px solid #1e2a3a' }}>
                         <button onClick={() => setShowGross(false)} style={!showGross ? pillActive : pillBase}>Netto</button>
                         <button onClick={() => setShowGross(true)}  style={ showGross ? grossActive : pillBase}>Brutto</button>
                     </div>
-                    {/* Ansichts-Tabs */}
                     <div style={{ display:'flex', gap:4 }}>
                         {MODES.map(({ key }) => (
                             <button key={key} onClick={() => setMode(key)} style={mode === key ? pillActive : pillBase}>
@@ -267,10 +255,9 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                             </button>
                         ))}
                     </div>
-                    {/* Inflation-Toggle — nur im Akkumuliert-Modus */}
                     {canShowInflation && (
                         <button onClick={() => setShowInflation(v => !v)} style={showInflation ? inflActive : pillBase}>
-                            📉 Inflation
+                            📉 Kaufkraftziel
                         </button>
                     )}
                 </div>
@@ -381,7 +368,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                             contentStyle={{ background:'#1a2233', border:'1px solid #222d3d', borderRadius:8 }}
                             labelStyle={{ color:'#c8d4e0' }}
                             formatter={(v, n) => {
-                                if (n === 'inflation_target') return [`${(+v).toFixed(2)} € (Ziel)`, '📉 Inflation']
+                                if (n === 'inflation_target') return [`${(+v).toFixed(2)} € (Ziel)`, '📉 Kaufkraftziel']
                                 const lbl = n === `${cy}_real` ? `${cy}` : n.endsWith('_forecast') ? 'Prognose' : n
                                 return [fmtTip(v), lbl]
                             }}
@@ -425,7 +412,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
             {mode === 'cumulative' && (
                 <p style={{ color:'#4a6080', fontSize:11, marginTop:10 }}>
                     ⋯ Prognose = Ø Dividende pro Anteil × aktuelle Anteile · organisches DPS-Wachstum für {ny}
-                    {showInflation && <span style={{ color:'#f97316' }}> · 📉 Orangene Linie = nötige Dividende um Kaufkraft seit {baseYear} zu erhalten (Destatis VPI)</span>}
+                    {showInflation && <span style={{ color:'#f97316' }}> · 📉 Kaufkraftziel: wie viel kumulierte Dividende nötig wäre um Kaufkraft seit {baseYear} zu erhalten (Destatis VPI · laufendes Jahr = Schätzung)</span>}
                     {showGross && <span style={{ color:'#fb923c' }}> · Brutto basiert auf ø Steuerquote je Aktie</span>}
                 </p>
             )}
