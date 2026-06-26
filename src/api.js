@@ -9,6 +9,12 @@ const BATCH_SIZE = 5
 const BATCH_DELAY_MS = 500
 const RETRY_DELAYS = [1000, 2000, 4000]
 
+// Ticker-Suffixe die GBX (Pence) bedeuten und bevorzugt ersetzt werden sollen
+const GBX_SUFFIXES = ['.L', '.IL']
+function isGbxTicker(ticker) {
+  return ticker ? GBX_SUFFIXES.some(s => ticker.endsWith(s)) : false
+}
+
 let _portfolioId = import.meta.env.VITE_PORTFOLIO_ID || null
 
 let _onTickerProgress = null
@@ -131,8 +137,24 @@ export async function fetchHoldingNames() {
 }
 
 // --- Supabase Ticker Cache ---
-// WICHTIG: null-Eintraege werden nicht gecacht und nicht als bekannt behandelt.
-// Nur echte Ticker (non-null, non-empty strings) kommen in den Cache.
+// GBX-Ticker (.L) werden beim Laden automatisch invalidiert und neu aufgeloest.
+
+async function invalidateGbxTickerCache(isins) {
+  if (isins.length === 0) return
+  // Alle gecachten .L-Eintraege fuer diese ISINs loeschen
+  const { data } = await supabase
+    .from('isin_ticker_cache')
+    .select('isin, ticker')
+    .in('isin', isins)
+  if (!data) return
+  const gbxIsins = data.filter(r => isGbxTicker(r.ticker)).map(r => r.isin)
+  if (gbxIsins.length === 0) return
+  console.log(`[TickerCache] Invalidiere ${gbxIsins.length} GBX-Eintraege (.L): ${gbxIsins.join(', ')}`)
+  await supabase
+    .from('isin_ticker_cache')
+    .delete()
+    .in('isin', gbxIsins)
+}
 
 async function loadTickerCache(isins) {
   if (isins.length === 0) return {}
@@ -145,6 +167,8 @@ async function loadTickerCache(isins) {
   const map = {}
   for (const row of data) {
     if (!row.ticker) continue
+    // GBX-Ticker nie aus Cache laden – immer neu aufloesen
+    if (isGbxTicker(row.ticker)) continue
     if (new Date(row.updated_at).getTime() > cutoff) {
       map[row.isin] = row.ticker
     }
@@ -186,6 +210,9 @@ async function resolveOneIsin(isin) {
 }
 
 async function resolveIsinsToTickers(isins) {
+  // Zuerst alte GBX-Eintraege aus der DB loeschen
+  await invalidateGbxTickerCache(isins)
+
   const cached  = await loadTickerCache(isins)
   const missing = isins.filter(i => !(i in cached))
 
