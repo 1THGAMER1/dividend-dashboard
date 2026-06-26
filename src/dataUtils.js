@@ -110,13 +110,33 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   /**
    * Schätzt DPS für einen Monat.
    * Gibt { dps, source, detail } zurück.
-   * Quellen: 'historic' | 'yahoo-exact' | 'yahoo-avg' | 'zero'
+   *
+   * Prioritäten:
+   *   0a) Parqet cy       – echte Buchung dieses Jahres für diesen Monat
+   *   0b) Yahoo cy        – Yahoo hat bereits eine cy-Zahlung für diesen Monat
+   *   1)  Parqet cy-1/2   – historische gewichtete Schätzung aus Parqet
+   *   2)  Yahoo exact     – exakter Monats-Match cy-1 / cy-2
+   *   3)  Yahoo avg       – Durchschnitt über mehrere Jahre für diesen Monat
+   *   4)  zero
    */
   function estimateDpsWithSource(isin, month) {
     const yearData  = byIsin[isin] || {}
     const yahooDivs = yahooByIsin[isin] || []
     const refYears  = [cy - 1, cy - 2]
     const weights   = [0.7, 0.3]
+
+    // Priorität 0a: Parqet hat echte cy-Buchung für diesen Monat
+    const parqetCy = yearData[cy]?.[month]
+    if (parqetCy && parqetCy.shares > 0) {
+      const dps = parqetCy.amount / parqetCy.shares
+      return { dps, source: 'parqet-cy', detail: `Parqet ${cy}-M${month}: ${dps.toFixed(6)}` }
+    }
+
+    // Priorität 0b: Yahoo hat bereits eine cy-Zahlung für diesen Monat
+    const yahooCy = yahooDivs.find(d => d.year === cy && d.month === month)
+    if (yahooCy) {
+      return { dps: yahooCy.amount, source: 'yahoo-cy', detail: `Yahoo ${cy}-M${month}: ${yahooCy.amount.toFixed(6)}` }
+    }
 
     // Priorität 1: Parqet-History cy-1 / cy-2
     const points = refYears.map(y => {
@@ -145,7 +165,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
       if (match) return { dps: match.amount, source: 'yahoo-exact', detail: `Yahoo ${refYear}-M${month}: ${match.amount.toFixed(6)}` }
     }
 
-    // Priorität 3: Yahoo Durchschnitt für diesen Monat
+    // Priorität 3: Yahoo Durchschnitt für diesen Monat (alle Jahre)
     const recentDivs = yahooDivs.filter(d => d.year >= cy - 2)
     if (recentDivs.length === 0) return { dps: 0, source: 'zero', detail: 'Yahoo-Daten zu alt' }
 
