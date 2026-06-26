@@ -72,6 +72,22 @@ async function generateCodeChallenge(verifier) {
   return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/[+/=]/g, c => ({ '+': '-', '/': '_', '=': '' }[c]))
 }
 
+// Cookie-Hilfsfunktionen: tab-übergreifend persistent (behebt State mismatch
+// wenn Samsung Browser / externe Apps den Callback in einem neuen Tab öffnen)
+function setCookie(name, value, maxAgeSec = 300) {
+  const secure = location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSec}; SameSite=Lax${secure}`
+}
+
+function getCookie(name) {
+  const match = document.cookie.split('; ').find(r => r.startsWith(name + '='))
+  return match ? decodeURIComponent(match.split('=')[1]) : null
+}
+
+function deleteCookie(name) {
+  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`
+}
+
 export async function startOAuthFlow() {
   const clientId = await getClientId()
   if (!clientId) throw new Error('Keine Parqet Client ID hinterlegt')
@@ -80,8 +96,9 @@ export async function startOAuthFlow() {
   const challenge = await generateCodeChallenge(verifier)
   const state     = crypto.randomUUID()
 
-  sessionStorage.setItem('pkce_verifier', verifier)
-  sessionStorage.setItem('oauth_state', state)
+  // Cookies statt sessionStorage: überleben Tab-Wechsel und externe Browser-Sprünge
+  setCookie('pkce_verifier', verifier)
+  setCookie('oauth_state', state)
 
   const params = new URLSearchParams({
     response_type:         'code',
@@ -106,9 +123,11 @@ export async function handleCallback() {
 
   if (error) throw new Error(`OAuth Fehler: ${error}`)
   if (!code) throw new Error('Kein Authorization Code erhalten')
-  if (state !== sessionStorage.getItem('oauth_state')) throw new Error('State mismatch')
 
-  const verifier = sessionStorage.getItem('pkce_verifier')
+  const savedState = getCookie('oauth_state')
+  if (state !== savedState) throw new Error('State mismatch')
+
+  const verifier = getCookie('pkce_verifier')
   const body = new URLSearchParams({
     grant_type:    'authorization_code',
     code,
@@ -134,8 +153,8 @@ export async function handleCallback() {
     localStorage.setItem('parqet_refresh_token', tokens.refresh_token)
   }
 
-  sessionStorage.removeItem('pkce_verifier')
-  sessionStorage.removeItem('oauth_state')
+  deleteCookie('pkce_verifier')
+  deleteCookie('oauth_state')
   window.history.replaceState({}, '', '/')
   return tokens.access_token
 }
@@ -183,6 +202,8 @@ export async function logout() {
   localStorage.removeItem('parqet_refresh_token')
   localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_expires_at')
+  deleteCookie('pkce_verifier')
+  deleteCookie('oauth_state')
   clearCachedKey()
 
   await supabase.auth.signOut()
