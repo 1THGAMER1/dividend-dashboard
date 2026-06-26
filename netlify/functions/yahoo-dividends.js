@@ -75,7 +75,7 @@ async function resolveTickerFromOpenFigi(isin) {
       if (!item?.ticker) continue
       const candidate = item.ticker + (suffixMap[body.exchCode] || '')
       if (isGbxTicker(candidate)) continue
-      // Nur EUR-Ticker akzeptieren – Waehrung via Yahoo pruefen
+      // Nur EUR-Ticker akzeptieren - Waehrung via Yahoo pruefen
       const currency = await probeYahooTicker(candidate)
       if (currency === 'EUR') return candidate
     } catch { continue }
@@ -152,7 +152,8 @@ function normalizeDividendAmount(amount, currency) {
 
 async function fetchDividends(symbol) {
   const period1 = Math.floor((Date.now() - 5 * 365 * 24 * 60 * 60 * 1000) / 1000)
-  const period2 = Math.floor(Date.now() / 1000)
+  // +6 Monate in die Zukunft um angekuendigte Dividenden zu laden
+  const period2 = Math.floor((Date.now() + 180 * 24 * 60 * 60 * 1000) / 1000)
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1mo&events=dividends&includePrePost=false`,
     { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DividendDashboard/1.0)', 'Accept': 'application/json' } }
