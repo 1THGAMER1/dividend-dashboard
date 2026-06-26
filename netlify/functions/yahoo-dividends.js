@@ -1,15 +1,10 @@
 // netlify/functions/yahoo-dividends.js
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 const GBX_SUFFIXES = ['.L', '.IL']
-const EUR_SUFFIXES = ['.AS', '.DE', '.F', '.MI', '.PA', '.BR', '.VI', '.MC']
-const EUR_CURRENCY = 'EUR'
+const EUR_SUFFIXES = ['.AS', '.DE', '.F', '.MI', '.PA']
 
 function isGbxTicker(symbol) {
   return symbol ? GBX_SUFFIXES.some(s => symbol.endsWith(s)) : false
-}
-
-function isEurSuffixTicker(symbol) {
-  return symbol ? EUR_SUFFIXES.some(s => symbol.endsWith(s)) : false
 }
 
 // Prueft ob ein Ticker bei Yahoo existiert und gibt Waehrung zurueck (oder null)
@@ -34,32 +29,23 @@ async function probeYahooTicker(symbol) {
   }
 }
 
-// Sucht EUR-Ticker fuer beliebigen Basis-Ticker (nicht nur .L)
-// Gibt { symbol, currency } zurueck oder null
-async function findEurTicker(baseTicker) {
-  // Basis extrahieren: bekannte Suffixe abschneiden
-  let base = baseTicker
-  for (const suffix of [...GBX_SUFFIXES, ...EUR_SUFFIXES]) {
-    if (baseTicker.endsWith(suffix)) {
-      base = baseTicker.slice(0, -suffix.length)
-      break
-    }
-  }
-
-  console.log(`[Resolver] Suche EUR-Ticker fuer ${baseTicker} (base: ${base})`)
+// Wenn .L gefunden: probiere EUR-Suffixe direkt ohne Waehrungs-API-Call
+async function findEurAlternative(gbxTicker) {
+  const base = gbxTicker.slice(0, gbxTicker.lastIndexOf('.'))
+  console.log(`[Resolver] .L-Ticker ${gbxTicker} -> probiere EUR-Alternativen: ${EUR_SUFFIXES.map(s => base+s).join(', ')}`)
   for (const suffix of EUR_SUFFIXES) {
     const candidate = base + suffix
     const currency = await probeYahooTicker(candidate)
-    if (currency === EUR_CURRENCY) {
-      console.log(`[Resolver] EUR-Ticker gefunden: ${baseTicker} -> ${candidate} (EUR)`)
-      return { symbol: candidate, currency: EUR_CURRENCY }
+    if (currency !== null && currency !== 'GBp' && currency !== 'GBX' && currency !== 'GBx') {
+      console.log(`[Resolver] EUR-Swap: ${gbxTicker} -> ${candidate} (${currency})`)
+      return candidate
     }
   }
-  console.log(`[Resolver] Kein EUR-Ticker fuer ${baseTicker} gefunden`)
-  return null
+  console.log(`[Resolver] Kein EUR-Aequivalent fuer ${gbxTicker}, behalte .L`)
+  return gbxTicker
 }
 
-// Yahoo Finance Search - gibt bevorzugt EUR-Ticker zurueck
+// Yahoo Finance Search
 async function resolveTickerFromYahooSearch(isin) {
   try {
     const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(isin)}&quotesCount=10&newsCount=0&listsCount=0`
@@ -77,18 +63,10 @@ async function resolveTickerFromYahooSearch(isin) {
     )
     if (quotes.length === 0) return null
     console.log(`[Resolver] ${isin} Yahoo-Kandidaten: ${quotes.map(q => q.symbol).join(', ')}`)
-
-    // Bevorzuge direkt EUR-Suffix-Ticker aus den Suchergebnissen
-    const eurSuffixMatch = quotes.find(q => isEurSuffixTicker(q.symbol))
-    if (eurSuffixMatch) {
-      console.log(`[Resolver] EUR-Suffix direkt in Suchergebnissen: ${eurSuffixMatch.symbol}`)
-      return eurSuffixMatch.symbol
-    }
-
-    // Kein EUR-Suffix direkt: Nicht-.L Ticker als Basis fuer EUR-Probe merken
+    // Bevorzuge Nicht-.L Ticker direkt aus den Suchergebnissen
     const nonGbx = quotes.find(q => !isGbxTicker(q.symbol))
     if (nonGbx) return nonGbx.symbol
-
+    // Nur .L vorhanden
     return quotes[0].symbol
   } catch {
     return null
@@ -115,7 +93,6 @@ async function resolveTickerFromOpenFigi(isin) {
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'AS' },
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'GS' },
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'PA' },
-    { idType: 'ID_ISIN', idValue: isin, exchCode: 'MI' },
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'US' },
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'LN' },
     { idType: 'ID_ISIN', idValue: isin },
@@ -134,7 +111,7 @@ async function resolveTickerFromOpenFigi(isin) {
       if (!item?.ticker) continue
       const suffix = suffixMap[body.exchCode] || ''
       const candidate = item.ticker + suffix
-      if (isGbxTicker(candidate)) continue
+      if (isGbxTicker(candidate)) continue  // .L aus OpenFIGI auch ueberspringen
       const valid = await validateTickerOnYahoo(candidate)
       if (valid) return candidate
     } catch { continue }
@@ -142,52 +119,28 @@ async function resolveTickerFromOpenFigi(isin) {
   return null
 }
 
-// Hauptkette: immer EUR-Ticker anstreben
-// 1. Yahoo Search -> bevorzuge EUR-Suffix direkt aus Ergebnissen
-// 2. Falls nicht-EUR Ticker (z.B. AAPL/USD): EUR-Suffix-Probe
-// 3. Falls .L: EUR-Probe
-// 4. OpenFIGI (EUR-Boersen zuerst)
-// -> Wenn kein EUR-Ticker gefunden: null zurueckgeben
+// Hauptkette: Search -> falls .L -> EUR-Probe -> OpenFIGI
 async function resolveTickerFromIsin(isin) {
   let symbol = await resolveTickerFromYahooSearch(isin)
 
-  if (symbol) {
-    // Bereits EUR-Suffix -> fertig
-    if (isEurSuffixTicker(symbol)) {
-      console.log(`[Resolver] ${isin} -> ${symbol} (EUR-Suffix direkt)`)
-      return symbol
-    }
-
-    // .L oder sonstiger non-EUR Ticker -> EUR-Variante suchen
-    const eur = await findEurTicker(symbol)
-    if (eur) {
-      console.log(`[Resolver] ${isin} -> ${eur.symbol} (${isGbxTicker(symbol) ? 'GBX' : 'non-EUR'}->EUR)`)
-      return eur.symbol
-    }
-
-    console.log(`[Resolver] ${isin}: kein EUR-Ticker via Search, versuche OpenFIGI`)
+  // Falls Yahoo Search nur .L liefert: EUR-Alternative suchen
+  if (symbol && isGbxTicker(symbol)) {
+    symbol = await findEurAlternative(symbol)
   }
 
-  // OpenFIGI (EUR-Boersen bevorzugt)
-  const figi = await resolveTickerFromOpenFigi(isin)
-  if (figi) {
-    if (isEurSuffixTicker(figi)) {
-      console.log(`[Resolver] ${isin} -> ${figi} (OpenFIGI EUR)`)
-      return figi
-    }
-    const eur = await findEurTicker(figi)
-    if (eur) {
-      console.log(`[Resolver] ${isin} -> ${eur.symbol} (OpenFIGI->EUR)`)
-      return eur.symbol
-    }
-    // OpenFIGI hat keinen EUR-Ticker gefunden -> trotzdem zurueckgeben,
-    // fetchDividends verwirft dann nicht-EUR Werte
-    console.log(`[Resolver] ${isin} -> ${figi} (OpenFIGI, kein EUR-Suffix)`)
-    return figi
+  // Falls immer noch .L oder gar nichts: OpenFIGI probieren
+  if (!symbol || isGbxTicker(symbol)) {
+    const figi = await resolveTickerFromOpenFigi(isin)
+    if (figi) symbol = figi
   }
 
-  console.log(`[Resolver] ${isin} -> nicht aufloesbar`)
-  return null
+  if (!symbol) {
+    console.log(`[Resolver] ${isin} -> nicht aufloesbar`)
+    return null
+  }
+
+  console.log(`[Resolver] ${isin} -> ${symbol}`)
+  return symbol
 }
 
 function normalizeDividendAmount(amount, currency) {
@@ -219,15 +172,7 @@ async function fetchDividends(symbol) {
     return { date: date.toISOString(), amount, currency, month: date.getMonth(), year: date.getFullYear() }
   }).sort((a, b) => new Date(a.date) - new Date(b.date))
   const normalizedCurrency = dividends.length > 0 ? dividends[0].currency : normalizeDividendAmount(0, rawCurrency).currency
-
-  // Sicherheitsnetz: Nicht-EUR Dividenden verwerfen
-  // (Fallback auf Parqet-History in estimateDpsWithSource)
-  if (normalizedCurrency !== EUR_CURRENCY) {
-    console.log(`[Yahoo] ${symbol}: ${normalizedCurrency} Dividenden verworfen (nur EUR erlaubt)`)
-    return { dividends: [], currency: normalizedCurrency, resolvedTicker: symbol, discarded: true }
-  }
-
-  console.log(`[Yahoo] ${symbol}: ${dividends.length} Dividenden in EUR`)
+  console.log(`[Yahoo] ${symbol}: ${dividends.length} Dividenden, Waehrung ${rawCurrency}${rawCurrency !== normalizedCurrency ? ' -> ' + normalizedCurrency : ''}`)
   return { dividends, currency: normalizedCurrency, resolvedTicker: symbol }
 }
 
@@ -256,11 +201,10 @@ exports.handler = async function (event) {
         body: JSON.stringify({ dividends: [], currency: 'EUR', resolvedTicker: null }),
       }
       symbol = resolved
-    } else if (!isEurSuffixTicker(ticker)) {
-      // Direkt uebergebener non-EUR Ticker (z.B. AAPL, AAPL.L) -> EUR-Variante suchen
-      console.log(`[Handler] Non-EUR Ticker ${ticker} -> suche EUR-Alternative`)
-      const eur = await findEurTicker(ticker)
-      if (eur) symbol = eur.symbol
+    } else if (isGbxTicker(ticker)) {
+      // Direkt .L Ticker -> EUR-Alternative suchen
+      console.log(`[Handler] Direkter .L Ticker ${ticker} -> suche EUR-Alternative`)
+      symbol = await findEurAlternative(ticker)
     }
     const result = await fetchDividends(symbol)
     return {
