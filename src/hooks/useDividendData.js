@@ -4,6 +4,7 @@ import { groupByYearMonth, toCumulative, buildForecast, groupByHolding } from '.
 import {
     fetchDividendActivities,
     fetchBuyActivities,
+    fetchSellActivities,
     calcKpiFromActivities,
     fetchHoldingNames,
     fetchPurchaseValue,
@@ -63,9 +64,10 @@ export default function useDividendData() {
     }, [])
 
     const fetchFromParqet = useCallback(async () => {
-        const [acts, buyActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
+        const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
             fetchDividendActivities(),
             fetchBuyActivities(),
+            fetchSellActivities(),
             fetchHoldingNames(),
             fetchPurchaseValue(),
             fetchPurchaseValuePerHolding(),
@@ -74,13 +76,11 @@ export default function useDividendData() {
 
         const { names, types, tickers } = holdingData
 
-        // types muss an fetchYahooDividendsForHoldings uebergeben werden
-        // damit Krypto korrekt herausgefiltert wird
         const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
 
         const m  = groupByYearMonth(acts)
         const c  = toCumulative(m)
-        const fc = buildForecast(c, acts, buyActsData, names, yahooByIsin)
+        const fc = buildForecast(c, acts, buyActsData, names, yahooByIsin, sellActsData)
         const bh = groupByHolding(acts, names, types, purchaseValuePerHolding, tickers)
 
         const kpiAll = calcKpiFromActivities(acts, 'all')
@@ -92,6 +92,7 @@ export default function useDividendData() {
             kpiAll, kpiYtd, kpi12m,
             purchaseValue, currentVal,
             buyActsData,
+            sellActsData,
             rawActs: acts,
             names,
             types,
@@ -106,22 +107,22 @@ export default function useDividendData() {
      * Rebuild forecast mit frischen Yahoo-Daten, ohne Parqet neu abzufragen.
      */
     const refreshYahooForCached = useCallback(async (cached) => {
-        const payload  = cached.payload
-        const tickers  = payload.tickers  || {}
-        const types    = payload.types    || {}
-        const rawActs  = payload.rawActs  || []
-        const buyActs  = payload.buyActsData || []
-        const names    = payload.names    || {}
+        const payload      = cached.payload
+        const tickers      = payload.tickers      || {}
+        const types        = payload.types        || {}
+        const rawActs      = payload.rawActs      || []
+        const buyActs      = payload.buyActsData  || []
+        const sellActs     = payload.sellActsData || []
+        const names        = payload.names        || {}
 
         if (Object.keys(tickers).length === 0) return
         if (rawActs.length === 0) return
 
         try {
-            // types uebergeben damit Krypto korrekt gefiltert wird
             const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
             if (Object.keys(yahooByIsin).length === 0) return
 
-            const fc = buildForecast(payload.c, rawActs, buyActs, names, yahooByIsin)
+            const fc = buildForecast(payload.c, rawActs, buyActs, names, yahooByIsin, sellActs)
             setForecastCum(fc.cum)
             setForecastMonthly(fc.monthly)
             setForecastByHolding(fc.forecastByHolding)

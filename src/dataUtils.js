@@ -30,10 +30,10 @@ export function toCumulative(monthly) {
 }
 
 /**
- * @param {object} yahooByIsin  { [isin]: [{month, year, amount}, ...] }
- *   Dividenden pro Aktie (DPS) von Yahoo Finance – als Fallback für neue Positionen.
+ * @param {object} yahooByIsin   { [isin]: [{month, year, amount}, ...] }
+ * @param {Array}  sellActivities  Parqet sell-activities (zum Berechnen der Netto-Stückzahlen)
  */
-export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}) {
+export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = []) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
   const ny = cy + 1
@@ -54,14 +54,34 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     byIsin[isin][y][m].shares += a.shares ?? 0
   }
 
-  const currentSharesFromBuys = {}
+  // Netto-Stückzahlen: Käufe minus Verkäufe
+  const sharesFromBuys  = {}
+  const sharesFromSells = {}
+
   for (const a of buyActivities) {
     const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
-    currentSharesFromBuys[isin] = (currentSharesFromBuys[isin] || 0) + (a.shares ?? 0)
+    sharesFromBuys[isin] = (sharesFromBuys[isin] || 0) + (a.shares ?? 0)
+  }
+
+  for (const a of sellActivities) {
+    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
+    sharesFromSells[isin] = (sharesFromSells[isin] || 0) + (a.shares ?? 0)
+  }
+
+  // Alle bekannten ISINs aus Käufen
+  const netSharesMap = {}
+  for (const isin of Object.keys(sharesFromBuys)) {
+    const net = (sharesFromBuys[isin] || 0) - (sharesFromSells[isin] || 0)
+    netSharesMap[isin] = net
+    if (net <= 0) {
+      console.log(`[Forecast] ${isin} übersprungen – vollständig verkauft (net=${net.toFixed(4)})`)
+    }
   }
 
   function currentShares(isin) {
-    if (currentSharesFromBuys[isin] > 0) return currentSharesFromBuys[isin]
+    // Wenn wir Kauf-/Verkaufsdaten haben: Netto-Stückzahl verwenden
+    if (isin in netSharesMap) return Math.max(0, netSharesMap[isin])
+    // Fallback: letzte bekannte Stückzahl aus Dividendenhistorie
     const years = Object.keys(byIsin[isin] || {}).map(Number).sort()
     for (const y of [...years].reverse()) {
       for (let m = 11; m >= 0; m--) {
@@ -107,7 +127,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     })
 
     if (!points.every(p => p === null)) {
-      // Eigene historische Daten vorhanden – normale Gewichtung
       let weightedSum = 0, weightTotal = 0
       points.forEach((v, i) => {
         if (v !== null) { weightedSum += v * weights[i]; weightTotal += weights[i] }
@@ -116,38 +135,38 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
 
     // ── Fallback: Yahoo Finance ──────────────────────────────────────────
-    // Suche nach einer Dividendenzahlung für diesen Monat in cy-1 oder cy-2
     const yahooDivs = yahooByIsin[isin] || []
     if (yahooDivs.length === 0) return 0
 
-    // Bevorzuge cy-1, dann cy-2
     for (const refYear of [cy - 1, cy - 2]) {
       const match = yahooDivs.find(d => d.year === refYear && d.month === month)
-      if (match) return match.amount  // Yahoo liefert bereits DPS
+      if (match) return match.amount
     }
 
-    // Kein exakter Monats-Treffer: prüfe ob die Aktie überhaupt in diesem
-    // Monat zahlt (Quartals-/Monatszahler erkennen) anhand der letzten 2 Jahre
     const recentDivs = yahooDivs.filter(d => d.year >= cy - 2)
     if (recentDivs.length === 0) return 0
 
-    // Durchschnittliche Anzahl Zahlungen pro Jahr bestimmen
     const payMonths = recentDivs.map(d => d.month)
-    if (!payMonths.includes(month)) return 0  // Dieser Monat war nie ein Zahlungsmonat
+    if (!payMonths.includes(month)) return 0
 
-    // Durchschnittliche DPS für diesen Monat über verfügbare Jahre
     const monthMatches = recentDivs.filter(d => d.month === month)
     const avg = monthMatches.reduce((s, d) => s + d.amount, 0) / monthMatches.length
     return avg
   }
 
-  // ISINs aus Dividendenaktivitäten + neue Positionen aus buyActivities
+  // ISINs aus Dividendenaktivitäten + aktive Positionen aus buyActivities
+  // Vollständig verkaufte Positionen (netShares <= 0) werden herausgefiltert
   const isinsFromDivs = Object.keys(byIsin)
-  const isinsFromBuys = Object.keys(currentSharesFromBuys)
-  const isins = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
+  const isinsFromBuys = Object.keys(sharesFromBuys).filter(isin => (netSharesMap[isin] ?? 0) > 0)
+  const isinsAll      = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
+
+  // Verkaufte Positionen ausschließen
+  const isins = isinsAll.filter(isin => {
+    if (!(isin in netSharesMap)) return true  // keine Kauf-Daten → Dividendenhistorie vorhanden, behalten
+    return netSharesMap[isin] > 0
+  })
 
   // Für neue Positionen (nur in buyActivities, noch nie Dividende erhalten)
-  // byIsin-Eintrag initialisieren damit estimateDps funktioniert
   for (const isin of isinsFromBuys) {
     if (!byIsin[isin]) byIsin[isin] = {}
   }
