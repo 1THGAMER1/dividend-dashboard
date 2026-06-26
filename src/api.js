@@ -5,6 +5,8 @@ const BASE = '/api'
 const YAHOO_FN = '/.netlify/functions/yahoo-dividends'
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 const CACHE_TTL_DAYS = 30
+const NOT_FOUND_TTL_DAYS = 7   // Negativ-Cache: nach 7 Tagen nochmal versuchen
+const NOT_FOUND_SENTINEL = 'NOT_FOUND'
 const BATCH_SIZE = 5
 const BATCH_DELAY_MS = 500
 const RETRY_DELAYS = [1000, 2000, 4000]
@@ -144,7 +146,8 @@ export async function fetchHoldingNames() {
 }
 
 // --- Supabase Ticker Cache ---
-// GBX-Ticker und non-EUR Ticker werden nie gecacht bzw. beim Laden invalidiert.
+// Speichert sowohl gefundene EUR-Ticker als auch NOT_FOUND-Eintraege.
+// NOT_FOUND-Eintraege verfallen nach NOT_FOUND_TTL_DAYS (7 Tage).
 
 async function invalidateNonEurTickerCache(isins) {
   if (isins.length === 0) return
@@ -153,7 +156,8 @@ async function invalidateNonEurTickerCache(isins) {
     .select('isin, ticker')
     .in('isin', isins)
   if (!data) return
-  const badIsins = data.filter(r => !isEurTicker(r.ticker)).map(r => r.isin)
+  // Nur echte EUR-Ticker die falsch gecacht wurden loeschen (nicht NOT_FOUND)
+  const badIsins = data.filter(r => r.ticker !== NOT_FOUND_SENTINEL && !isEurTicker(r.ticker)).map(r => r.isin)
   if (badIsins.length === 0) return
   console.log(`[Cache] Invalidiere ${badIsins.length} non-EUR Eintraege`)
   await supabase.from('isin_ticker_cache').delete().in('isin', badIsins)
@@ -166,27 +170,38 @@ async function loadTickerCache(isins) {
     .select('isin, ticker, updated_at')
     .in('isin', isins)
   if (!data) return {}
-  const cutoff = Date.now() - CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
+  const eurCutoff      = Date.now() - CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
+  const notFoundCutoff = Date.now() - NOT_FOUND_TTL_DAYS * 24 * 60 * 60 * 1000
   const map = {}
   for (const row of data) {
     if (!row.ticker) continue
-    if (!isEurTicker(row.ticker)) continue  // nur EUR-Ticker aus Cache verwenden
-    if (new Date(row.updated_at).getTime() > cutoff) {
-      map[row.isin] = row.ticker
+    const ts = new Date(row.updated_at).getTime()
+    if (row.ticker === NOT_FOUND_SENTINEL) {
+      // Negativ-Cache: nur verwenden wenn juenger als 7 Tage
+      if (ts > notFoundCutoff) {
+        map[row.isin] = null  // gecacht als nicht gefunden
+      }
+    } else {
+      // Positiv-Cache: nur EUR-Ticker, juenger als 30 Tage
+      if (isEurTicker(row.ticker) && ts > eurCutoff) {
+        map[row.isin] = row.ticker
+      }
     }
   }
   return map
 }
 
 async function saveTickerCache(entries) {
-  const valid = entries.filter(e => e.ticker && isEurTicker(e.ticker))
-  if (valid.length === 0) return
+  if (entries.length === 0) return
+  // Sowohl EUR-Ticker als auch NOT_FOUND speichern
+  const rows = entries.map(e => ({
+    isin:       e.isin,
+    ticker:     e.ticker ?? NOT_FOUND_SENTINEL,
+    updated_at: new Date().toISOString(),
+  }))
   await supabase
     .from('isin_ticker_cache')
-    .upsert(
-      valid.map(e => ({ isin: e.isin, ticker: e.ticker, updated_at: new Date().toISOString() })),
-      { onConflict: 'isin' }
-    )
+    .upsert(rows, { onConflict: 'isin' })
 }
 
 async function resolveOneIsin(isin) {
@@ -211,13 +226,16 @@ async function resolveOneIsin(isin) {
 }
 
 async function resolveIsinsToTickers(isins) {
-  // Nicht-EUR Eintraege aus Cache loeschen
+  // Nicht-EUR Eintraege aus Cache loeschen (aber NOT_FOUND behalten)
   await invalidateNonEurTickerCache(isins)
 
   const cached  = await loadTickerCache(isins)
+  // "missing" = noch gar nicht im Cache (weder positiv noch negativ)
   const missing = isins.filter(i => !(i in cached))
 
-  console.log(`[Cache] ${Object.keys(cached).length} gecacht, ${missing.length} aufzuloesen`)
+  const cachedFound    = Object.values(cached).filter(v => v !== null).length
+  const cachedNotFound = Object.values(cached).filter(v => v === null).length
+  console.log(`[Cache] ${cachedFound} gecacht, ${cachedNotFound} gecacht (nicht gefunden), ${missing.length} aufzuloesen`)
 
   if (missing.length === 0) return cached
 
@@ -226,7 +244,7 @@ async function resolveIsinsToTickers(isins) {
   const result     = { ...cached }
   const newEntries = []
 
-  emitProgress(0, total, 'Ticker werden aufgeloest…')
+  emitProgress(0, total, 'Ticker werden aufgeloest\u2026')
 
   for (let i = 0; i < missing.length; i += BATCH_SIZE) {
     const batch = missing.slice(i, i + BATCH_SIZE)
@@ -239,7 +257,8 @@ async function resolveIsinsToTickers(isins) {
       const isin   = batch[j]
       const ticker = batchResults[j].status === 'fulfilled' ? batchResults[j].value : null
       result[isin] = ticker
-      if (ticker) newEntries.push({ isin, ticker })
+      // Immer cachen: gefundene Ticker UND nicht gefundene (als NOT_FOUND)
+      newEntries.push({ isin, ticker })
       done++
       console.log(`[Resolve] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
     }
@@ -298,7 +317,7 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
       // Parqet hat bereits einen EUR-Ticker geliefert -> direkt verwenden
       resolvedTickers[isin] = raw
     } else {
-      // Resolver-Ergebnis verwenden
+      // Resolver-Ergebnis verwenden (kann null sein wenn nicht gefunden)
       resolvedTickers[isin] = tickerMap[isin] || null
     }
   }
