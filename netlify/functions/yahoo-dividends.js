@@ -52,17 +52,6 @@ async function searchYahoo(query) {
   } catch { return [] }
 }
 
-async function validateTickerOnYahoo(symbol) {
-  try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=0&period2=1&interval=1d`,
-      { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DividendDashboard/1.0)', 'Accept': 'application/json' } }
-    )
-    if (!res.ok) return false
-    return !!(await res.json())?.chart?.result?.[0]
-  } catch { return false }
-}
-
 async function resolveTickerFromOpenFigi(isin) {
   const strategies = [
     { idType: 'ID_ISIN', idValue: isin, exchCode: 'AS' },
@@ -86,7 +75,9 @@ async function resolveTickerFromOpenFigi(isin) {
       if (!item?.ticker) continue
       const candidate = item.ticker + (suffixMap[body.exchCode] || '')
       if (isGbxTicker(candidate)) continue
-      if (await validateTickerOnYahoo(candidate)) return candidate
+      // Nur EUR-Ticker akzeptieren – Waehrung via Yahoo pruefen
+      const currency = await probeYahooTicker(candidate)
+      if (currency === 'EUR') return candidate
     } catch { continue }
   }
   return null
@@ -129,7 +120,6 @@ async function fetchEurUsdRates(period1, period2) {
     const rates = {}
     for (let i = 0; i < timestamps.length; i++) {
       if (closes[i] != null) {
-        // Schluessel = YYYY-MM-DD
         const d = new Date(timestamps[i] * 1000)
         const key = d.toISOString().slice(0, 10)
         rates[key] = closes[i]
@@ -143,7 +133,6 @@ async function fetchEurUsdRates(period1, period2) {
 function findRate(rates, dateStr) {
   if (!rates) return null
   if (rates[dateStr]) return rates[dateStr]
-  // Suche naechsten Kurs innerhalb +-7 Tage
   const base = new Date(dateStr)
   for (let delta = 1; delta <= 7; delta++) {
     for (const sign of [-1, 1]) {
@@ -176,7 +165,6 @@ async function fetchDividends(symbol) {
 
   const { currency: normalizedCurrency } = normalizeDividendAmount(0, rawCurrency)
 
-  // GBP ebenfalls verwerfen (separate Logik koennte folgen)
   if (normalizedCurrency === 'GBP') {
     console.log(`[${symbol}] GBP -> verworfen`)
     return { dividends: [], currency: 'GBP', resolvedTicker: symbol }
@@ -188,18 +176,16 @@ async function fetchDividends(symbol) {
     return { date: date.toISOString(), amount, currency, month: date.getMonth(), year: date.getFullYear(), timestamp: d.date }
   }).sort((a, b) => new Date(a.date) - new Date(b.date))
 
-  // Falls Dividenden in USD: historische EUR/USD Kurse laden und umrechnen
   if (normalizedCurrency === 'USD' && divEntries.length > 0) {
     console.log(`[${symbol}] USD-Dividenden -> konvertiere zu EUR`)
     const eurUsdRates = await fetchEurUsdRates(period1, period2)
-    // Aktuellen Kurs als Fallback (letzter bekannter Kurs)
     const sortedKeys = eurUsdRates ? Object.keys(eurUsdRates).sort() : []
     const latestRate = sortedKeys.length > 0 ? eurUsdRates[sortedKeys[sortedKeys.length - 1]] : null
 
     divEntries = divEntries.map(d => {
       const dateKey = d.date.slice(0, 10)
       const rate = (eurUsdRates && findRate(eurUsdRates, dateKey)) || latestRate
-      if (!rate) return { ...d, currency: 'EUR' } // kein Kurs -> unveraendert
+      if (!rate) return { ...d, currency: 'EUR' }
       return {
         ...d,
         amount: +(d.amount / rate).toFixed(6),
