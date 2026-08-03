@@ -313,3 +313,111 @@ export function groupByHolding(activities, names = {}, types = {}, purchaseValue
 
   return map
 }
+
+/**
+ * FIX: Baut eine eindeutige Kalender-Event-Liste für EIN Jahr.
+ *
+ * Behebt den Bug, dass der Kalender Prognose und alte (echte) Daten
+ * vermischt, z. B. eine historische September-Zahlung aus einem Vorjahr
+ * zusammen mit einer prognostizierten September-Zahlung des aktuell
+ * angezeigten Jahres anzeigt.
+ *
+ * Regeln:
+ *  1. Nur echte Aktivitäten aus `selectedYear` werden als 'actual' übernommen.
+ *     Zahlungen aus anderen Jahren fließen weiterhin in buildForecast() als
+ *     Berechnungsgrundlage ein, erscheinen aber NICHT im Kalender.
+ *  2. Für jede ISIN + Monat wird höchstens ein Forecast-Eintrag erzeugt,
+ *     und nur dann, wenn im selben Jahr/Monat noch keine echte Zahlung
+ *     existiert.
+ *  3. Ergebnis: pro ISIN + Jahr + Monat existiert garantiert nur ein
+ *     einziger Eintrag.
+ *
+ * @param {Object} params
+ * @param {Array}  params.activities   - Rohdaten aller Dividenden-Buchungen
+ * @param {Object} params.forecast     - Rückgabewert von buildForecast()
+ * @param {Object} params.names        - { isin: name }
+ * @param {number} params.selectedYear - Jahr, das im Kalender angezeigt wird
+ * @returns {Array<{year:number, month:number, isin:string, name:string, amount:number, type:'actual'|'forecast'}>}
+ */
+export function buildCalendarEvents({ activities, forecast, names = {}, selectedYear }) {
+  const mergeMap = buildIsinMergeMap(activities, names)
+  const resolve  = makeResolver(mergeMap)
+
+  const actualMap = new Map() // key: `${isin}-${month}` -> amount
+
+  for (const a of activities) {
+    const d = new Date(a.datetime)
+    if (d.getFullYear() !== selectedYear) continue
+
+    const isin  = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
+    const month = d.getMonth()
+    const key   = `${isin}-${month}`
+    const amount = a.amountNet ?? a.amount ?? 0
+
+    actualMap.set(key, (actualMap.get(key) || 0) + amount)
+  }
+
+  const events = []
+
+  for (const [key, amount] of actualMap.entries()) {
+    const [isin, monthStr] = key.split(/-(?=[0-9]+$)/)
+    const month = Number(monthStr)
+    if (amount === 0) continue
+
+    events.push({
+      year: selectedYear,
+      month,
+      isin,
+      name: names[isin] || isin,
+      amount: +amount.toFixed(4),
+      type: 'actual',
+    })
+  }
+
+  const forecastByHolding = forecast?.forecastByHolding || {}
+
+  for (const [isin, byMonth] of Object.entries(forecastByHolding)) {
+    for (let month = 0; month < 12; month++) {
+      const amount = byMonth[month] || 0
+      if (amount <= 0) continue
+
+      const key = `${isin}-${month}`
+      if (actualMap.has(key)) continue // schon eine echte Zahlung -> kein Forecast anzeigen
+
+      events.push({
+        year: selectedYear,
+        month,
+        isin,
+        name: names[isin] || isin,
+        amount: +amount.toFixed(4),
+        type: 'forecast',
+      })
+    }
+  }
+
+  return events
+}
+
+/**
+ * FIX: Gruppiert Kalender-Events nach Monat.
+ * Ergebnis: [ [...events Jan], [...events Feb], ... [...events Dez] ]
+ */
+export function groupCalendarEventsByMonth(events) {
+  const byMonth = Array.from({ length: 12 }, () => [])
+  for (const ev of events) {
+    byMonth[ev.month].push(ev)
+  }
+  return byMonth
+}
+
+/**
+ * FIX: Summiert den Betrag pro Monat (actual + forecast zusammen),
+ * z. B. für die Kopfzeile "SEP 2026  23,08 €" im Kalender.
+ */
+export function sumCalendarEventsByMonth(events) {
+  const sums = Array(12).fill(0)
+  for (const ev of events) {
+    sums[ev.month] += ev.amount
+  }
+  return sums.map(v => +v.toFixed(2))
+}
