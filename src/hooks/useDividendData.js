@@ -49,7 +49,8 @@ export default function useDividendData() {
     }, [])
 
     const applyData = useCallback((payload) => {
-        const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData = [], sellActsData = [], names = {}, types = {}, tickers = {} } = payload;
+        // Hinzugefügt: purchaseValuePerHolding wird aus dem Payload entpackt
+        const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData = [], sellActsData = [], names = {}, types = {}, tickers = {}, purchaseValuePerHolding = [] } = payload;
         
         setMonthly(m);
         setCum(c);
@@ -66,12 +67,44 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         });
 
-        // 1. MATHEMATISCH EXAKTE BERECHNUNG DER ANTEILE AUS DER KAUFHISTORIE
+        // 1. ÜBERSETZUNGS-LEXIKON BAUEN (Sucht nach fehlenden Krypto-Namen im Portfolio-Endpunkt)
+        const idDictionary = {};
+        const holdingsArray = Array.isArray(purchaseValuePerHolding) ? purchaseValuePerHolding : Object.values(purchaseValuePerHolding || {});
+        
+        holdingsArray.forEach(pos => {
+            if (pos.holdingId) {
+                idDictionary[pos.holdingId] = {
+                    isin: pos.asset?.ticker || pos.asset?.isin || pos.isin,
+                    name: pos.asset?.name || pos.name,
+                    type: pos.asset?.assetType || pos.type
+                };
+            }
+        });
+
+        // Notfall-Mapping für deine spezifischen Krypto-IDs, falls die API sie im Payload komplett versteckt
+        const fallbackCryptoMap = {
+            'hld_676dbf20702d3154a867af52': { isin: 'SOL', name: 'Solana', type: 'crypto' },
+            'hld_676dc9e64f32b693fa44858c': { isin: 'DOGE', name: 'Dogecoin', type: 'crypto' }
+        };
+
+        // 2. BERECHNUNG DER ANTEILE MIT AUTOMATISCHER ÜBERSETZUNG
         const tracker = {};
 
-        // Alle Käufe addieren
+        const getAssetId = (act) => {
+            let id = act.asset?.ticker || act.asset?.isin;
+            
+            // Wenn der Ticker fehlt, versuche die ID zu übersetzen
+            if (!id && act.holdingId) {
+                const dictInfo = idDictionary[act.holdingId] || fallbackCryptoMap[act.holdingId];
+                if (dictInfo && dictInfo.isin) {
+                    id = dictInfo.isin; // Übersetzt z.B. hld_676dbf... zu SOL
+                }
+            }
+            return id || act.holdingId;
+        };
+
         (buyActsData || []).forEach(act => {
-            const isin = act.asset?.isin || act.holdingId || act.asset?.ticker;
+            const isin = getAssetId(act);
             if (!isin) return;
             if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0 };
             
@@ -79,9 +112,8 @@ export default function useDividendData() {
             tracker[isin].val += parseFloat(String(act.amount || act.total || 0).replace(',', '.')) || 0;
         });
 
-        // Alle Verkäufe abziehen (und Einstandswert proportional senken)
         (sellActsData || []).forEach(act => {
-            const isin = act.asset?.isin || act.holdingId || act.asset?.ticker;
+            const isin = getAssetId(act);
             if (!isin || !tracker[isin]) return;
             
             const soldShares = parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
@@ -92,30 +124,22 @@ export default function useDividendData() {
             }
         });
 
-       // 2. DASHBOARD LISTE ZUSAMMENBAUEN
-        // Erstelle eine Liste aller IDs: Kombiniere die bekannten Namen mit allen IDs, die im Tracker gelandet sind (z.B. "BTC").
+        // 3. DASHBOARD LISTE ZUSAMMENBAUEN
         const allIds = Array.from(new Set([...Object.keys(names), ...Object.keys(tracker)]));
 
-        const list = allIds.map(id => {
-            const isin = tickers[id] || id; 
-            const name = names[id] || id; // Fallback auf die ID (z.B. "BTC"), falls kein Name vorhanden ist
-            const type = types[id] || (['BTC', 'ETH', 'SOL', 'DOGE', 'ADA'].includes(id) ? 'crypto' : 'Wertpapier');
+        const list = allIds.map(rawId => {
+            const dict = idDictionary[rawId] || fallbackCryptoMap[rawId] || Object.values(idDictionary).find(x => x.isin === rawId) || {};
+            
+            const isin = tickers[rawId] || dict.isin || rawId; 
+            const name = names[rawId] || dict.name || rawId;
+            const isCrypto = ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA'].includes(isin) || (types[rawId] || dict.type || '').toLowerCase().includes('crypto');
+            const type = types[rawId] || dict.type || (isCrypto ? 'crypto' : 'Wertpapier');
 
-            let shares = tracker[isin] ? tracker[isin].shares : 0;
-            let val = tracker[isin] ? tracker[isin].val : 0;
-
-            // KRYPTO-FALLBACK
-            if (shares === 0 && (type.toLowerCase().includes('crypto') || ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA'].includes(id))) {
-                const cryptoData = bh[id] || Object.values(bh).find(x => x.ticker === id || x.name === name) || {};
-                const fallbackShares = parseFloat(String(cryptoData.shares || cryptoData.amount || '0').replace(',', '.')) || 0;
-                if (fallbackShares > 0) {
-                    shares = fallbackShares;
-                    val = parseFloat(String(cryptoData.value || cryptoData.totalValue || cryptoData.purchaseValue || '0').replace(',', '.')) || 0;
-                }
-            }
+            let shares = tracker[rawId] ? tracker[rawId].shares : (tracker[isin] ? tracker[isin].shares : 0);
+            let val = tracker[rawId] ? tracker[rawId].val : (tracker[isin] ? tracker[isin].val : 0);
 
             return {
-                id,
+                id: rawId,
                 name,
                 isin,
                 type,
@@ -124,8 +148,10 @@ export default function useDividendData() {
             };
         });
 
-        // setHoldings(list.filter(item => item.shares > 0));
-        setHoldings(list);
+        // Doppelte Einträge (z.B. wenn hld_ ID und Ticker gleichzeitig auftauchen) herausfiltern
+        const uniqueList = Array.from(new Map(list.map(item => [item.isin, item])).values());
+        
+        setHoldings(uniqueList);
     }, []);
 
     const fetchFromParqet = useCallback(async () => {
