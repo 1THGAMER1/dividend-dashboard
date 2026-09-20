@@ -9,7 +9,7 @@ export default function useDividendData() {
   const [forecastMonthly, setForecastMonthly] = useState({})
   const [byHolding, setByHolding] = useState({})
   const [forecastByHolding, setForecastByHolding] = useState({})
-  const [holdings, setHoldings] = useState([])
+  const [holdings, setHoldings] = useState([]) // Echte Parqet Holdings
   const [kpi, setKpi] = useState({})
   const [dividendYield, setDividendYield] = useState({})
   const [currentValue, setCurrentValue] = useState(0)
@@ -19,13 +19,17 @@ export default function useDividendData() {
   const [dataSource, setDataSource] = useState('cache')
   const [error, setError] = useState(null)
 
-  const processParqetData = (data) => {
-    if (!data) return
+  const processParqetData = (raw) => {
+    if (!raw) return
+
+    // Unterstützt verschiedene Parqet-Cache-Formate
+    const data = raw.data || raw
 
     if (data.totalValue || data.currentValue) {
-      setCurrentValue(data.totalValue || data.currentValue)
+      setCurrentValue(data.totalValue || data.currentValue || 0)
     }
 
+    // Holdings-Array extrahieren (enthält alle Assets inkl. Growth/Crypto)
     if (Array.isArray(data.holdings)) {
       setHoldings(data.holdings)
     } else if (Array.isArray(data.positions)) {
@@ -69,8 +73,8 @@ export default function useDividendData() {
 
       if (cacheErr) throw cacheErr
 
-      if (data?.data) {
-        processParqetData(data.data)
+      if (data && (data.data || data.payload)) {
+        processParqetData(data.data || data.payload)
         if (data.updated_at) {
           setLastUpdated(new Date(data.updated_at))
         }
@@ -79,7 +83,7 @@ export default function useDividendData() {
         setDataSource('empty')
       }
     } catch (err) {
-      console.error('Fehler beim Laden der Daten:', err)
+      console.error('Fehler beim Laden der Parqet-Daten:', err)
       setError(err.message)
       setDataSource('error')
     } finally {
