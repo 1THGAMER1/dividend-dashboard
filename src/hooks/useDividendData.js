@@ -92,17 +92,19 @@ export default function useDividendData() {
             }
         });
 
-        // 2. DASHBOARD LISTE ZUSAMMENBAUEN
-        const list = Object.keys(names).map(id => {
-            const isin = tickers[id] || id;
-            const name = names[id] || id;
-            const type = types[id] || 'Wertpapier';
+       // 2. DASHBOARD LISTE ZUSAMMENBAUEN
+        // Erstelle eine Liste aller IDs: Kombiniere die bekannten Namen mit allen IDs, die im Tracker gelandet sind (z.B. "BTC").
+        const allIds = Array.from(new Set([...Object.keys(names), ...Object.keys(tracker)]));
 
-            // Zuweisung der berechneten echten Werte
+        const list = allIds.map(id => {
+            const isin = tickers[id] || id; 
+            const name = names[id] || id; // Fallback auf die ID (z.B. "BTC"), falls kein Name vorhanden ist
+            const type = types[id] || (['BTC', 'ETH', 'SOL', 'DOGE', 'ADA'].includes(id) ? 'crypto' : 'Wertpapier');
+
             let shares = tracker[isin] ? tracker[isin].shares : 0;
             let val = tracker[isin] ? tracker[isin].val : 0;
 
-            // KRYPTO-FALLBACK: Falls Krypto nicht über buyActs kommt, sondern direkt aus byHolding
+            // KRYPTO-FALLBACK
             if (shares === 0 && (type.toLowerCase().includes('crypto') || ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA'].includes(id))) {
                 const cryptoData = bh[id] || Object.values(bh).find(x => x.ticker === id || x.name === name) || {};
                 const fallbackShares = parseFloat(String(cryptoData.shares || cryptoData.amount || '0').replace(',', '.')) || 0;
@@ -122,8 +124,8 @@ export default function useDividendData() {
             };
         });
 
+        // setHoldings(list.filter(item => item.shares > 0));
         setHoldings(list);
-    }, []);
 
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
