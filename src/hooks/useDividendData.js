@@ -9,7 +9,7 @@ export default function useDividendData() {
   const [forecastMonthly, setForecastMonthly] = useState({})
   const [byHolding, setByHolding] = useState({})
   const [forecastByHolding, setForecastByHolding] = useState({})
-  const [holdings, setHoldings] = useState([]) // Echte Parqet Positions-Holdings
+  const [holdings, setHoldings] = useState([])
   const [kpi, setKpi] = useState({})
   const [dividendYield, setDividendYield] = useState({})
   const [currentValue, setCurrentValue] = useState(0)
@@ -19,26 +19,17 @@ export default function useDividendData() {
   const [dataSource, setDataSource] = useState('cache')
   const [error, setError] = useState(null)
 
-  const processParqetData = (rawPayload) => {
-    if (!rawPayload) return false
+  const processParqetData = (payload) => {
+    if (!payload) return false
 
-    // Verschiedene Parqet Cache-Ebenen auflösen
-    const data = rawPayload.data || rawPayload.payload || rawPayload
-
-    // Prüfe ob mindestens monatliche Daten ODER Holdings da sind
-    const hasMonthly = data.monthly && Object.keys(data.monthly).length > 0
-    const hasHoldings = Array.isArray(data.holdings) && data.holdings.length > 0
-    const hasByHolding = data.byHolding && Object.keys(data.byHolding).length > 0
-
-    if (!hasMonthly && !hasHoldings && !hasByHolding) {
-      return false
-    }
+    // Parqet Cache Ebenen auflösen
+    const data = payload.data || payload.payload || payload
 
     if (data.totalValue || data.currentValue) {
       setCurrentValue(data.totalValue || data.currentValue || 0)
     }
 
-    // Echte Holdings für den Portfolio Tracker auslesen
+    // Echte Holdings für das Portfolio Dashboard auslesen
     if (Array.isArray(data.holdings)) {
       setHoldings(data.holdings)
     } else if (Array.isArray(data.positions)) {
@@ -76,7 +67,6 @@ export default function useDividendData() {
       setLoggedIn(true)
       setAuthLoading(false)
 
-      // Parqet Cache aus Supabase abfragen
       const { data: cacheRow, error: cacheErr } = await supabase
         .from('parqet_cache')
         .select('*')
@@ -86,18 +76,12 @@ export default function useDividendData() {
       if (cacheErr) throw cacheErr
 
       if (cacheRow) {
-        // Versuche die Daten zu verarbeiten (Prüfung auf payload oder data Spalte)
         const content = cacheRow.data || cacheRow.payload || cacheRow
-        const success = processParqetData(content)
-
-        if (success) {
-          if (cacheRow.updated_at) {
-            setLastUpdated(new Date(cacheRow.updated_at))
-          }
-          setDataSource('cache')
-        } else {
-          setDataSource('empty')
+        processParqetData(content)
+        if (cacheRow.updated_at) {
+          setLastUpdated(new Date(cacheRow.updated_at))
         }
+        setDataSource('cache')
       } else {
         setDataSource('empty')
       }
