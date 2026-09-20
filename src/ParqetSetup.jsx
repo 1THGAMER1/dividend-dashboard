@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { supabase } from '../supabaseClient'
+import { supabase } from './supabaseClient'
 
-export default function ParqetSetup({ user, onComplete }) {
+export default function ParqetSetup({ onDone }) {
   const [clientId, setClientId] = useState('')
   const [loading, setLoading]  = useState(false)
   const [error, setError]      = useState(null)
@@ -14,8 +14,12 @@ export default function ParqetSetup({ user, onComplete }) {
     setError(null)
 
     try {
-      // Speichere die parqet_client_id in deiner 'profiles' Tabelle
-      const { error } = await supabase
+      // 1. Authentifizierten Supabase-User holen
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) throw new Error('Nicht authentifiziert.')
+
+      // 2. Parqet Client ID in deiner 'profiles'-Tabelle speichern
+      const { error: dbError } = await supabase
         .from('profiles')
         .upsert({
           id: user.id,
@@ -23,10 +27,10 @@ export default function ParqetSetup({ user, onComplete }) {
           updated_at: new Date().toISOString(),
         })
 
-      if (error) throw error
+      if (dbError) throw dbError
 
-      // Onboarding abgeschlossen: Übergib die ID an die Haupt-App
-      onComplete(clientId.trim())
+      // 3. Callback aus App.jsx aufrufen (schaltet clientIdReady auf true)
+      onDone()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -47,7 +51,7 @@ export default function ParqetSetup({ user, onComplete }) {
           🚀 Parqet verbinden
         </h1>
         <p style={{ color: '#7a8ba0', fontSize: 14, marginBottom: 24, lineHeight: '1.5' }}>
-          Bitte gib deine Parqet Client ID ein, um dein Portfolio und deine Dividenden automatisch zu laden.
+          Bitte gib deine Parqet Client ID ein, um dein Portfolio und deine Dividenden im Dashboard zu laden.
         </p>
 
         {error && (
