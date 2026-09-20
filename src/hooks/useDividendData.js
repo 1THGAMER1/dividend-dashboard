@@ -49,67 +49,81 @@ export default function useDividendData() {
     }, [])
 
     const applyData = useCallback((payload) => {
-        const { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData, names = {}, types = {}, purchaseValuePerHolding = {} } = payload
-        setMonthly(m)
-        setCum(c)
-        setCurrentValue(currentVal)
-        setForecastCum(fc.cum)
-        setForecastMonthly(fc.monthly)
-        setByHolding(bh)
-        setForecastByHolding(fc.forecastByHolding)
-        setBuyActs(buyActsData ?? [])
-        setKpi({ all: kpiAll, ytd: kpiYtd, '12m': kpi12m })
+        const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData = [], sellActsData = [], names = {}, types = {}, tickers = {} } = payload;
+        
+        setMonthly(m);
+        setCum(c);
+        setCurrentValue(currentVal);
+        setForecastCum(fc.cum);
+        setForecastMonthly(fc.monthly);
+        setByHolding(bh);
+        setForecastByHolding(fc.forecastByHolding);
+        setBuyActs(buyActsData ?? []);
+        setKpi({ all: kpiAll, ytd: kpiYtd, '12m': kpi12m });
         setDividendYield({
             all:   purchaseValue > 0 ? +((kpiAll.net / purchaseValue) * 100).toFixed(2) : 0,
             ytd:   purchaseValue > 0 ? +((kpiYtd.net / purchaseValue) * 100).toFixed(2) : 0,
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
-        })
+        });
 
-        // --- HIER BAUEN WIR DIE HOLDINGS SICHER ZUSAMMEN ---
-        // 1. Alle regulären Dividenden-Holdings aus bh
-        const list = Object.entries(bh || {}).map(([key, data]) => {
-            const shares = parseFloat(String(data?.shares || '0').replace(',', '.')) || 0
-            const val = parseFloat(String(data?.value || data?.totalValue || purchaseValuePerHolding[key] || '0').replace(',', '.')) || 0
+        // 1. MATHEMATISCH EXAKTE BERECHNUNG DER ANTEILE AUS DER KAUFHISTORIE
+        const tracker = {};
+
+        // Alle Käufe addieren
+        (buyActsData || []).forEach(act => {
+            const isin = act.asset?.isin || act.holdingId || act.asset?.ticker;
+            if (!isin) return;
+            if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0 };
+            
+            tracker[isin].shares += parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
+            tracker[isin].val += parseFloat(String(act.amount || act.total || 0).replace(',', '.')) || 0;
+        });
+
+        // Alle Verkäufe abziehen (und Einstandswert proportional senken)
+        (sellActsData || []).forEach(act => {
+            const isin = act.asset?.isin || act.holdingId || act.asset?.ticker;
+            if (!isin || !tracker[isin]) return;
+            
+            const soldShares = parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
+            if (tracker[isin].shares > 0) {
+                const avgPrice = tracker[isin].val / tracker[isin].shares;
+                tracker[isin].shares = Math.max(0, tracker[isin].shares - soldShares);
+                tracker[isin].val = Math.max(0, tracker[isin].shares * avgPrice);
+            }
+        });
+
+        // 2. DASHBOARD LISTE ZUSAMMENBAUEN
+        const list = Object.keys(names).map(id => {
+            const isin = tickers[id] || id;
+            const name = names[id] || id;
+            const type = types[id] || 'Wertpapier';
+
+            // Zuweisung der berechneten echten Werte
+            let shares = tracker[isin] ? tracker[isin].shares : 0;
+            let val = tracker[isin] ? tracker[isin].val : 0;
+
+            // KRYPTO-FALLBACK: Falls Krypto nicht über buyActs kommt, sondern direkt aus byHolding
+            if (shares === 0 && (type.toLowerCase().includes('crypto') || ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA'].includes(id))) {
+                const cryptoData = bh[id] || Object.values(bh).find(x => x.ticker === id || x.name === name) || {};
+                const fallbackShares = parseFloat(String(cryptoData.shares || cryptoData.amount || '0').replace(',', '.')) || 0;
+                if (fallbackShares > 0) {
+                    shares = fallbackShares;
+                    val = parseFloat(String(cryptoData.value || cryptoData.totalValue || cryptoData.purchaseValue || '0').replace(',', '.')) || 0;
+                }
+            }
 
             return {
-                id: key,
-                name: data?.name || names[key] || key,
-                isin: data?.ticker || key,
-                type: data?.type || types[key] || 'security',
-                shares: shares,
-                value: val,
-            }
-        })
+                id,
+                name,
+                isin,
+                type,
+                shares: shares > 0.0001 ? shares : 0, 
+                value: shares > 0.0001 ? val : 0 
+            };
+        });
 
-        // 2. Krypto-Sicherheitsnetz: Falls Krypto in bh fehlt (weil keine Dividenden), 
-        // holen wir sie direkt aus den bekannten names/types/buyActs, falls als 'crypto' definiert.
-        Object.keys(names).forEach(id => {
-            const type = (types[id] || '').toLowerCase()
-            const isCrypto = type.includes('crypto') || id === 'BTC' || id === 'SOL' || id === 'DOGE' || id === 'ADA' || id === 'ETH'
-            
-            // Wenn es Krypto ist und noch nicht in der Liste existiert, fügen wir es hinzu
-            if (isCrypto && !list.some(item => item.id === id || item.isin === id)) {
-                // Anteile aus Kaufaktivitäten suchen falls vorhanden
-                let cryptoShares = 0
-                ;(buyActsData || []).forEach(act => {
-                    if (act.asset?.isin === id || act.asset?.ticker === id || act.holdingId === id) {
-                        cryptoShares += parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
-                    }
-                })
-
-                list.push({
-                    id,
-                    name: names[id] || id,
-                    isin: id,
-                    type: 'crypto',
-                    shares: cryptoShares > 0 ? cryptoShares : 0.01, // Fallback falls Menge unklar
-                    value: purchaseValuePerHolding[id] || 0,
-                })
-            }
-        })
-
-        setHoldings(list)
-    }, [])
+        setHoldings(list);
+    }, []);
 
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
