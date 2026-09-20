@@ -137,7 +137,7 @@ export default function useDividendData() {
                 value
             }
         })
-
+        console.log("🔍 ERMITTELTE HOLDINGS:", allHoldings);
         setHoldings(allHoldings)
     }, [])
 
@@ -151,6 +151,8 @@ export default function useDividendData() {
             fetchPurchaseValuePerHolding(),
             fetchCurrentValue(),
         ])
+        console.log("🔍 ALLES AUS HOLDING DATA (Namen/Typen/Tickers):", holdingData);
+        console.log("🔍 ALLE BUY ACTS:", buyActsData);
 
         const { names, types, tickers } = holdingData
 
