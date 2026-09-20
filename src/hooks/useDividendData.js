@@ -26,7 +26,7 @@ export default function useDividendData() {
     const [forecastByHolding, setForecastByHolding] = useState({})
     const [dividendYield,     setDividendYield]     = useState({ all: 0, ytd: 0, '12m': 0 })
     const [buyActs,           setBuyActs]           = useState([])
-    const [holdings,          setHoldings]          = useState([]) // <--- NEU: Für das Portfolio-Dashboard
+    const [holdings,          setHoldings]          = useState([])
     const [kpi,               setKpi]               = useState({
         all:   { net:0, gross:0, tax:0, avgMonthly:0 },
         ytd:   { net:0, gross:0, tax:0, avgMonthly:0 },
@@ -48,7 +48,7 @@ export default function useDividendData() {
             .catch(e  => { setError(e.message); setAuthLoading(false) })
     }, [])
 
-    const applyData = useCallback((payload) => {
+   const applyData = useCallback((payload) => {
         const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData = [], sellActsData = [], names = {}, types = {}, tickers = {}, purchaseValuePerHolding = [] } = payload;
         
         setMonthly(m);
@@ -66,58 +66,53 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         });
 
-        // 1. ÜBERSETZUNGS-LEXIKON BAUEN
+        // 1. DYNAMISCHES ÜBERSETZUNGS-LEXIKON BAUEN
         const idDictionary = {};
-        const holdingsArray = Array.isArray(purchaseValuePerHolding) ? purchaseValuePerHolding : Object.values(purchaseValuePerHolding || {});
         
-        holdingsArray.forEach(pos => {
-            if (pos.holdingId) {
-                idDictionary[pos.holdingId] = {
-                    isin: pos.asset?.ticker || pos.asset?.isin || pos.isin,
-                    name: pos.asset?.name || pos.name,
-                    type: pos.asset?.assetType || pos.type
-                };
-            }
-        });
-
-        // Notfall-Mapping für hartnäckige Geister-IDs in der Historie (siehe dein Screenshot)
-        const fallbackCryptoMap = {
-            'hld_676dbf514f32b693fa447c74': { isin: 'CUSTOM1', name: 'Krypto Name 1', type: 'crypto' },
-            'hld_676dbf6e702d3154a867b008': { isin: 'CUSTOM2', name: 'Krypto Name 2', type: 'crypto' },
-            'hld_676dbf20702d3154a867af52': { isin: 'SOL', name: 'Solana', type: 'crypto' },
-            'hld_676dc9e64f32b693fa44858c': { isin: 'DOGE', name: 'Dogecoin', type: 'crypto' }
+        const addToDict = (holdingId, assetObj) => {
+            if (!holdingId || !assetObj) return;
+            if (!idDictionary[holdingId]) idDictionary[holdingId] = {};
+            
+            if (assetObj.ticker && !idDictionary[holdingId].isin) idDictionary[holdingId].isin = assetObj.ticker;
+            if (assetObj.isin && !idDictionary[holdingId].isin) idDictionary[holdingId].isin = assetObj.isin;
+            if (assetObj.name && !idDictionary[holdingId].name) idDictionary[holdingId].name = assetObj.name;
+            if (assetObj.assetType && !idDictionary[holdingId].type) idDictionary[holdingId].type = assetObj.assetType;
         };
 
+        // Alle Arrays scannen, um jede Erwähnung der holdingId abzufangen
+        const allActivities = [...(buyActsData || []), ...(sellActsData || []), ...(payload.rawActs || [])];
+        allActivities.forEach(act => addToDict(act.holdingId, act.asset));
+
+        const holdingsArray = Array.isArray(purchaseValuePerHolding) ? purchaseValuePerHolding : Object.values(purchaseValuePerHolding || {});
+        holdingsArray.forEach(pos => addToDict(pos.holdingId, pos.asset || pos));
+
+        Object.entries(bh || {}).forEach(([key, val]) => addToDict(key, val));
+
+        // 2. KÄUFE UND VERKÄUFE BERECHNEN
         const tracker = {};
 
         const getAssetId = (act) => {
             let id = act.asset?.ticker || act.asset?.isin;
             if (!id && act.holdingId) {
-                const dictInfo = idDictionary[act.holdingId] || fallbackCryptoMap[act.holdingId];
-                if (dictInfo && dictInfo.isin) {
-                    id = dictInfo.isin;
-                }
+                id = idDictionary[act.holdingId]?.isin;
             }
             return id || act.holdingId;
         };
 
-        // 2. KÄUFE EINTRAGEN
         (buyActsData || []).forEach(act => {
             const isin = getAssetId(act);
             if (!isin) return;
-            // Neue Startwerte für soldValue und realizedGains hinzufügen
+            
             if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0, soldValue: 0, realizedGains: 0 };
             
             tracker[isin].shares += parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
             tracker[isin].val += parseFloat(String(act.amount || act.total || 0).replace(',', '.')) || 0;
         });
 
-        // 3. VERKÄUFE ABZIEHEN & GEWINNE BERECHNEN
         (sellActsData || []).forEach(act => {
             const isin = getAssetId(act);
             if (!isin) return;
             
-            // Falls das Asset vor 2023 gekauft wurde und nicht in den buyActs auftaucht, initialisieren wir es hier
             if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0, soldValue: 0, realizedGains: 0 };
             
             const soldShares = parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
@@ -127,16 +122,15 @@ export default function useDividendData() {
                 tracker[isin].val = Math.max(0, tracker[isin].shares * avgPrice);
             }
 
-            // NEU: Verkaufsbetrag und Gewinn aufsummieren
             tracker[isin].soldValue += parseFloat(String(act.amountNet || act.amount || 0).replace(',', '.')) || 0;
             tracker[isin].realizedGains += parseFloat(String(act.realizedGainsNet || act.realizedGains || 0).replace(',', '.')) || 0;
         });
 
-        // 4. DASHBOARD LISTE ZUSAMMENBAUEN
+        // 3. DASHBOARD LISTE ZUSAMMENBAUEN
         const allIds = Array.from(new Set([...Object.keys(names), ...Object.keys(tracker)]));
 
         const list = allIds.map(rawId => {
-            const dict = idDictionary[rawId] || fallbackCryptoMap[rawId] || Object.values(idDictionary).find(x => x.isin === rawId) || {};
+            const dict = idDictionary[rawId] || Object.values(idDictionary).find(x => x.isin === rawId) || {};
             
             const isin = tickers[rawId] || dict.isin || rawId; 
             const name = names[rawId] || dict.name || rawId;
@@ -146,9 +140,18 @@ export default function useDividendData() {
             let shares = tracker[rawId] ? tracker[rawId].shares : (tracker[isin] ? tracker[isin].shares : 0);
             let val = tracker[rawId] ? tracker[rawId].val : (tracker[isin] ? tracker[isin].val : 0);
             
-            // NEU: Werte für das Dashboard extrahieren
             let soldValue = tracker[rawId] ? tracker[rawId].soldValue : (tracker[isin] ? tracker[isin].soldValue : 0);
             let realizedGains = tracker[rawId] ? tracker[rawId].realizedGains : (tracker[isin] ? tracker[isin].realizedGains : 0);
+
+            // Letzter Krypto-Fallback, falls Tracker leer blieb, aber byHolding Daten hat
+            if (shares === 0 && isCrypto) {
+                const cryptoData = bh[rawId] || Object.values(bh).find(x => x.ticker === isin || x.name === name) || {};
+                const fallbackShares = parseFloat(String(cryptoData.shares || cryptoData.amount || '0').replace(',', '.')) || 0;
+                if (fallbackShares > 0) {
+                    shares = fallbackShares;
+                    val = parseFloat(String(cryptoData.value || cryptoData.totalValue || cryptoData.purchaseValue || '0').replace(',', '.')) || 0;
+                }
+            }
 
             return {
                 id: rawId,
@@ -157,11 +160,12 @@ export default function useDividendData() {
                 type,
                 shares: shares > 0.0001 ? shares : 0, 
                 value: shares > 0.0001 ? val : 0,
-                soldValue,         // <--- Wird nun exportiert
-                realizedGains      // <--- Wird nun exportiert
+                soldValue,
+                realizedGains
             };
         });
 
+        // Doppelte Einträge durch unterschiedliche ID-Typen (z.B. hld_ und Ticker) bereinigen
         const uniqueList = Array.from(new Map(list.map(item => [item.isin, item])).values());
         
         setHoldings(uniqueList);
