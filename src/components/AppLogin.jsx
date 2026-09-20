@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { storePassword } from '../passwordStore'
 
 export default function AppLogin() {
   const [email,    setEmail]    = useState('')
@@ -19,20 +18,17 @@ export default function AppLogin() {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        // Store password in RAM so auth.js can derive the AES key for the Client ID.
-        // Never written to localStorage / sessionStorage / cookies.
-        storePassword(password)
       } else if (mode === 'register') {
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
-        setInfo('Registrierung erfolgreich! Bitte bestätige deine E-Mail und logge dich dann ein.')
+        setInfo('Registrierung erfolgreich! Bitte prüfe deine E-Mails zum Bestätigen.')
         setMode('login')
       } else if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
         })
         if (error) throw error
-        setInfo('E-Mail gesendet! Bitte prüfe deinen Posteingang und klicke auf den Link zum Zurücksetzen.')
+        setInfo('E-Mail gesendet! Bitte prüfe deinen Posteingang.')
         setMode('login')
       }
     } catch (err) {
@@ -64,7 +60,7 @@ export default function AppLogin() {
   }
 
   const linkBtn = (onClick, label) => (
-    <button onClick={onClick} style={{
+    <button type="button" onClick={onClick} style={{
       background: 'none', border: 'none', color: '#009991',
       cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: 0,
     }}>{label}</button>
@@ -128,7 +124,6 @@ export default function AppLogin() {
           </button>
         </form>
 
-        {/* Google OAuth Login Button */}
         {mode !== 'forgot' && (
           <>
             <div style={{
@@ -147,7 +142,7 @@ export default function AppLogin() {
                 width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 gap: 10, padding: '10px 0', borderRadius: 8, border: '1px solid #2a3a50',
                 background: '#0f1420', color: '#e0e6f0', fontSize: 14, fontWeight: 600,
-                cursor: 'pointer', transition: 'background 0.2s',
+                cursor: 'pointer',
               }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24">
