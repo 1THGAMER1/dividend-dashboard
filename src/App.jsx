@@ -33,7 +33,7 @@ const KPI_RANGES = [
   { key: '12m', label: '12M'   },
 ]
 
-// 2-in-1 Dual Navigations-Tabs
+// 2-in-1 Navigations-Tabs je nach aktivem System
 const DIVIDEND_TABS = [
   { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
   { id: 'calendar',   emoji: '🗓',  label: 'Kalender'   },
@@ -152,13 +152,12 @@ export default function App() {
     loggedIn,
     monthly, cum, forecastCum, forecastMonthly,
     byHolding, forecastByHolding,
-    holdings, // 👈 Jetzt aus useDividendData ausgelesen
+    holdings,
     kpi, dividendYield,
     loading, authLoading,
     lastUpdated, dataSource, error,
     loadData,
     currentValue,
-    buyActs,
   } = useDividendData()
 
   const [appMode,         setAppMode]         = useState('dividends') // 'dividends' | 'portfolio'
@@ -276,10 +275,10 @@ export default function App() {
   const calcKpi = () => {
     const k = kpi[kpiRange] || kpi['all']
     return {
-      net:   fmt(k.net),
-      gross: fmt(k.gross),
-      tax:   fmt(k.tax),
-      avg:   fmt(k.avgMonthly ?? 0),
+      net:   fmt(k?.net ?? 0),
+      gross: fmt(k?.gross ?? 0),
+      tax:   fmt(k?.tax ?? 0),
+      avg:   fmt(k?.avgMonthly ?? 0),
     }
   }
   const k = calcKpi()
@@ -295,7 +294,7 @@ export default function App() {
   }
 
   const calcTrueCagr = () => {
-    const years = Object.keys(monthly).map(Number).filter(y => y < cy).sort()
+    const years = Object.keys(monthly || {}).map(Number).filter(y => y < cy).sort()
     if (years.length < 2) return null
     const firstYear = years[0]
     const lastYear  = years[years.length - 1]
@@ -327,10 +326,10 @@ export default function App() {
   const nominalTotal = kpi?.['all']?.net ?? 0
   const realTotal    = calcRealTotal(monthly)
   const inflation    = nominalTotal - realTotal
-  const hasRealData  = nominalTotal > 0 && Object.keys(monthly).length > 1
+  const hasRealData  = nominalTotal > 0 && Object.keys(monthly || {}).length > 1
 
   const statusIndicator = getStatusIndicator(dataSource)
-  const hasData      = Object.keys(monthly).length > 0
+  const hasData      = Object.keys(monthly || {}).length > 0
   const showSkeleton = loading && !hasData
   const showEmpty    = !loading && !hasData
 
@@ -559,7 +558,7 @@ export default function App() {
                       )}
                       <KpiCard label="YoY-Wachstum" value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'} color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'} sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'} />
                       {hasRealData && (
-                        <KpiCard label="Real (inflationsber.)" value={fmt(realTotal)} color="#f59e0b" detail={{ label: 'Kaufkraftverlust', value: fmt(inflation), color: '#ef4444' }} sub={`Gesamt · Basis: ${Object.keys(monthly).map(Number).sort()[0]}`} />
+                        <KpiCard label="Real (inflationsber.)" value={fmt(realTotal)} color="#f59e0b" detail={{ label: 'Kaufkraftverlust', value: fmt(inflation), color: '#ef4444' }} sub={`Gesamt · Basis: ${Object.keys(monthly || {}).map(Number).sort()[0]}`} />
                       )}
                     </div>
 
