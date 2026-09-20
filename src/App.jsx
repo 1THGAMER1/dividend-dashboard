@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { startOAuthFlow, logout, getClientId, clearCachedClientId } from './auth'
 import { supabase } from './supabaseClient'
 import useDividendData from './hooks/useDividendData'
@@ -16,6 +16,7 @@ import DividendDonut      from './components/DividendDonut'
 import DividendCalculator from './pages/DividendCalculator'
 import DripSimulator      from './pages/DripSimulator'
 import RoadmapPage        from './pages/RoadmapPage'
+import ProfilePage        from './pages/ProfilePage'
 import UpcomingDividends  from './components/UpcomingDividends'
 import DividendCalendar   from './components/DividendCalendar'
 import SkeletonDashboard  from './components/SkeletonDashboard'
@@ -30,8 +31,6 @@ const KPI_RANGES = [
   { key: 'ytd', label: 'YTD'   },
   { key: '12m', label: '12M'   },
 ]
-
-const [userMenuOpen, setUserMenuOpen] = useState(false)
 
 const NAV_TABS = [
   { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
@@ -111,7 +110,7 @@ function LoadingScreen({ text, progress }) {
             }} />
           </div>
           <span style={{ color: '#556070', fontSize: 12 }}>
-            {progress.label} ({pct} %)
+            {progress.label} ({pct} %)
           </span>
         </div>
       ) : (
@@ -160,6 +159,21 @@ export default function App() {
   const [profileLoading, setProfileLoading] = useState(true)
   const [tooltipVisible, setTooltipVisible] = useState(false)
   const [tickerProgress, setTickerProgress] = useState(null)
+
+  // State & Ref für das User Profile Dropdown Menu
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  // Schließt das Dropdown-Menü beim Klick außerhalb
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Ticker-Fortschritts-Callback registrieren
   useEffect(() => {
@@ -373,86 +387,87 @@ export default function App() {
             <span>{loading ? '⟳' : '↻'}</span>
             <span className="nav-full-label" style={{ marginLeft: 4 }}>{loading ? 'Lade…' : 'Aktualisieren'}</span>
           </button>
+
           {/* Profil Avatar & Dropdown */}
-<div style={{ position: 'relative' }}>
-  <button
-    onClick={() => setUserMenuOpen(!userMenuOpen)}
-    style={{
-      background: '#1e2a3a',
-      border: '1px solid #2a3a50',
-      borderRadius: '50%',
-      width: 34,
-      height: 34,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      cursor: 'pointer',
-      padding: 0,
-      overflow: 'hidden',
-    }}
-  >
-    {appUser?.user_metadata?.avatar_url ? (
-      <img
-        src={appUser.user_metadata.avatar_url}
-        alt="Profil"
-        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-      />
-    ) : (
-      <span style={{ color: '#93c5fd', fontSize: 13, fontWeight: 700 }}>
-        {appUser?.email?.[0]?.toUpperCase() ?? '👤'}
-      </span>
-    )}
-  </button>
+          <div style={{ position: 'relative' }} ref={menuRef}>
+            <button
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              style={{
+                background: '#1e2a3a',
+                border: '1px solid #2a3a50',
+                borderRadius: '50%',
+                width: 34,
+                height: 34,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                padding: 0,
+                overflow: 'hidden',
+              }}
+            >
+              {appUser?.user_metadata?.avatar_url ? (
+                <img
+                  src={appUser.user_metadata.avatar_url}
+                  alt="Profil"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <span style={{ color: '#93c5fd', fontSize: 13, fontWeight: 700 }}>
+                  {appUser?.email?.[0]?.toUpperCase() ?? '👤'}
+                </span>
+              )}
+            </button>
 
-  {/* Dropdown Menu */}
-  {userMenuOpen && (
-    <div
-      style={{
-        position: 'absolute',
-        top: 'calc(100% + 8px)',
-        right: 0,
-        background: '#161b27',
-        border: '1px solid #2a3a50',
-        borderRadius: 12,
-        padding: '8px 0',
-        width: 200,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-        zIndex: 200,
-      }}
-    >
-      <div style={{ padding: '8px 16px', borderBottom: '1px solid #1e2a3a', marginBottom: 4 }}>
-        <p style={{ margin: 0, color: '#e0e6f0', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {appUser?.user_metadata?.full_name || 'Benutzer'}
-        </p>
-        <p style={{ margin: '2px 0 0', color: '#7a8ba0', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {appUser?.email}
-        </p>
-      </div>
+            {/* Dropdown Menu */}
+            {userMenuOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  background: '#161b27',
+                  border: '1px solid #2a3a50',
+                  borderRadius: 12,
+                  padding: '8px 0',
+                  width: 200,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                  zIndex: 200,
+                }}
+              >
+                <div style={{ padding: '8px 16px', borderBottom: '1px solid #1e2a3a', marginBottom: 4 }}>
+                  <p style={{ margin: 0, color: '#e0e6f0', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {appUser?.user_metadata?.full_name || 'Benutzer'}
+                  </p>
+                  <p style={{ margin: '2px 0 0', color: '#7a8ba0', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {appUser?.email}
+                  </p>
+                </div>
 
-      <button
-        onClick={() => { setPage('profile'); setUserMenuOpen(false); }}
-        style={{
-          width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
-          color: '#e0e6f0', padding: '8px 16px', fontSize: 13, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}
-      >
-        <span>⚙️</span> Mein Profil
-      </button>
+                <button
+                  onClick={() => { setPage('profile'); setUserMenuOpen(false); }}
+                  style={{
+                    width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
+                    color: '#e0e6f0', padding: '8px 16px', fontSize: 13, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}
+                >
+                  <span>⚙️</span> Mein Profil
+                </button>
 
-      <button
-        onClick={() => { logout(); setUserMenuOpen(false); }}
-        style={{
-          width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
-          color: '#fca5a5', padding: '8px 16px', fontSize: 13, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid #1e2a3a', marginTop: 4,
-        }}
-      >
-        <span>🚪</span> Abmelden
-      </button>
-    </div>
-  )}
-</div>
+                <button
+                  onClick={() => { logout(); setUserMenuOpen(false); }}
+                  style={{
+                    width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
+                    color: '#fca5a5', padding: '8px 16px', fontSize: 13, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid #1e2a3a', marginTop: 4,
+                  }}
+                >
+                  <span>🚪</span> Abmelden
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -460,6 +475,7 @@ export default function App() {
         {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
         {page === 'drip'       && <DripSimulator      portfolioData={portfolioData} />}
         {page === 'roadmap'    && <RoadmapPage />}
+        {page === 'profile'    && <ProfilePage appUser={appUser} onParqetUpdated={loadData} />}
 
         {page === 'calendar' && (
           <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
