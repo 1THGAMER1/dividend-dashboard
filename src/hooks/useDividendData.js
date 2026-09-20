@@ -49,7 +49,6 @@ export default function useDividendData() {
     }, [])
 
     const applyData = useCallback((payload) => {
-        // Hinzugefügt: purchaseValuePerHolding wird aus dem Payload entpackt
         const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData = [], sellActsData = [], names = {}, types = {}, tickers = {}, purchaseValuePerHolding = [] } = payload;
         
         setMonthly(m);
@@ -67,7 +66,7 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         });
 
-        // 1. ÜBERSETZUNGS-LEXIKON BAUEN (Sucht nach fehlenden Krypto-Namen im Portfolio-Endpunkt)
+        // 1. ÜBERSETZUNGS-LEXIKON BAUEN
         const idDictionary = {};
         const holdingsArray = Array.isArray(purchaseValuePerHolding) ? purchaseValuePerHolding : Object.values(purchaseValuePerHolding || {});
         
@@ -81,40 +80,45 @@ export default function useDividendData() {
             }
         });
 
-        // Notfall-Mapping für deine spezifischen Krypto-IDs, falls die API sie im Payload komplett versteckt
+        // Notfall-Mapping für hartnäckige Geister-IDs in der Historie (siehe dein Screenshot)
         const fallbackCryptoMap = {
+            'hld_676dbf514f32b693fa447c74': { isin: 'CUSTOM1', name: 'Krypto Name 1', type: 'crypto' },
+            'hld_676dbf6e702d3154a867b008': { isin: 'CUSTOM2', name: 'Krypto Name 2', type: 'crypto' },
             'hld_676dbf20702d3154a867af52': { isin: 'SOL', name: 'Solana', type: 'crypto' },
             'hld_676dc9e64f32b693fa44858c': { isin: 'DOGE', name: 'Dogecoin', type: 'crypto' }
         };
 
-        // 2. BERECHNUNG DER ANTEILE MIT AUTOMATISCHER ÜBERSETZUNG
         const tracker = {};
 
         const getAssetId = (act) => {
             let id = act.asset?.ticker || act.asset?.isin;
-            
-            // Wenn der Ticker fehlt, versuche die ID zu übersetzen
             if (!id && act.holdingId) {
                 const dictInfo = idDictionary[act.holdingId] || fallbackCryptoMap[act.holdingId];
                 if (dictInfo && dictInfo.isin) {
-                    id = dictInfo.isin; // Übersetzt z.B. hld_676dbf... zu SOL
+                    id = dictInfo.isin;
                 }
             }
             return id || act.holdingId;
         };
 
+        // 2. KÄUFE EINTRAGEN
         (buyActsData || []).forEach(act => {
             const isin = getAssetId(act);
             if (!isin) return;
-            if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0 };
+            // Neue Startwerte für soldValue und realizedGains hinzufügen
+            if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0, soldValue: 0, realizedGains: 0 };
             
             tracker[isin].shares += parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
             tracker[isin].val += parseFloat(String(act.amount || act.total || 0).replace(',', '.')) || 0;
         });
 
+        // 3. VERKÄUFE ABZIEHEN & GEWINNE BERECHNEN
         (sellActsData || []).forEach(act => {
             const isin = getAssetId(act);
-            if (!isin || !tracker[isin]) return;
+            if (!isin) return;
+            
+            // Falls das Asset vor 2023 gekauft wurde und nicht in den buyActs auftaucht, initialisieren wir es hier
+            if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0, soldValue: 0, realizedGains: 0 };
             
             const soldShares = parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
             if (tracker[isin].shares > 0) {
@@ -122,9 +126,13 @@ export default function useDividendData() {
                 tracker[isin].shares = Math.max(0, tracker[isin].shares - soldShares);
                 tracker[isin].val = Math.max(0, tracker[isin].shares * avgPrice);
             }
+
+            // NEU: Verkaufsbetrag und Gewinn aufsummieren
+            tracker[isin].soldValue += parseFloat(String(act.amountNet || act.amount || 0).replace(',', '.')) || 0;
+            tracker[isin].realizedGains += parseFloat(String(act.realizedGainsNet || act.realizedGains || 0).replace(',', '.')) || 0;
         });
 
-        // 3. DASHBOARD LISTE ZUSAMMENBAUEN
+        // 4. DASHBOARD LISTE ZUSAMMENBAUEN
         const allIds = Array.from(new Set([...Object.keys(names), ...Object.keys(tracker)]));
 
         const list = allIds.map(rawId => {
@@ -137,6 +145,10 @@ export default function useDividendData() {
 
             let shares = tracker[rawId] ? tracker[rawId].shares : (tracker[isin] ? tracker[isin].shares : 0);
             let val = tracker[rawId] ? tracker[rawId].val : (tracker[isin] ? tracker[isin].val : 0);
+            
+            // NEU: Werte für das Dashboard extrahieren
+            let soldValue = tracker[rawId] ? tracker[rawId].soldValue : (tracker[isin] ? tracker[isin].soldValue : 0);
+            let realizedGains = tracker[rawId] ? tracker[rawId].realizedGains : (tracker[isin] ? tracker[isin].realizedGains : 0);
 
             return {
                 id: rawId,
@@ -144,16 +156,17 @@ export default function useDividendData() {
                 isin,
                 type,
                 shares: shares > 0.0001 ? shares : 0, 
-                value: shares > 0.0001 ? val : 0 
+                value: shares > 0.0001 ? val : 0,
+                soldValue,         // <--- Wird nun exportiert
+                realizedGains      // <--- Wird nun exportiert
             };
         });
 
-        // Doppelte Einträge (z.B. wenn hld_ ID und Ticker gleichzeitig auftauchen) herausfiltern
         const uniqueList = Array.from(new Map(list.map(item => [item.isin, item])).values());
         
         setHoldings(uniqueList);
     }, []);
-
+    
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
             fetchDividendActivities(),
