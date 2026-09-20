@@ -9,7 +9,7 @@ export default function useDividendData() {
   const [forecastMonthly, setForecastMonthly] = useState({})
   const [byHolding, setByHolding] = useState({})
   const [forecastByHolding, setForecastByHolding] = useState({})
-  const [holdings, setHoldings] = useState([]) // 👈 Echte Depot-Holdings
+  const [holdings, setHoldings] = useState([])
   const [kpi, setKpi] = useState({})
   const [dividendYield, setDividendYield] = useState({})
   const [currentValue, setCurrentValue] = useState(0)
@@ -26,14 +26,14 @@ export default function useDividendData() {
       setCurrentValue(data.totalValue || data.currentValue)
     }
 
-    // 1. Echte Holdings (alle Positionen inkl. Growth/Crypto)
     if (Array.isArray(data.holdings)) {
       setHoldings(data.holdings)
     } else if (Array.isArray(data.positions)) {
       setHoldings(data.positions)
+    } else {
+      setHoldings([])
     }
 
-    // 2. Dividenden-spezifische Auswertungen
     if (data.monthly) setMonthly(data.monthly)
     if (data.cum) setCum(data.cum)
     if (data.forecastCum) setForecastCum(data.forecastCum)
@@ -79,7 +79,7 @@ export default function useDividendData() {
         setDataSource('empty')
       }
     } catch (err) {
-      console.error('Fehler beim Laden der Dividenden-Daten:', err)
+      console.error('Fehler beim Laden der Daten:', err)
       setError(err.message)
       setDataSource('error')
     } finally {
@@ -99,7 +99,7 @@ export default function useDividendData() {
     forecastMonthly,
     byHolding,
     forecastByHolding,
-    holdings, // 👈 Jetzt für das Portfolio-Dashboard verfügbar
+    holdings,
     kpi,
     dividendYield,
     currentValue,
