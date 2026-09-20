@@ -59,7 +59,7 @@ export default function AppLogin() {
     setError(null)
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'twitter',
+        provider: 'x',
         options: {
           redirectTo: window.location.origin,
         },
