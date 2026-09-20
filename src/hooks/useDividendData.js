@@ -26,7 +26,7 @@ export default function useDividendData() {
     const [forecastByHolding, setForecastByHolding] = useState({})
     const [dividendYield,     setDividendYield]     = useState({ all: 0, ytd: 0, '12m': 0 })
     const [buyActs,           setBuyActs]           = useState([])
-    const [holdings,          setHoldings]          = useState([]) // NEU: Speichert alle Assets
+    const [holdings,          setHoldings]          = useState([]) // <--- NEU: Für das Portfolio-Dashboard
     const [kpi,               setKpi]               = useState({
         all:   { net:0, gross:0, tax:0, avgMonthly:0 },
         ytd:   { net:0, gross:0, tax:0, avgMonthly:0 },
@@ -49,7 +49,7 @@ export default function useDividendData() {
     }, [])
 
     const applyData = useCallback((payload) => {
-        const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData = [], sellActsData = [], names = {}, types = {}, tickers = {} } = payload
+        const { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData, names = {}, types = {}, purchaseValuePerHolding = {} } = payload
         setMonthly(m)
         setCum(c)
         setCurrentValue(currentVal)
@@ -65,28 +65,52 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         })
 
-        // Direkter Aufbau der Holdings aus bh (da bh exakt alle Bestände mit shares liefert)
-        const allHoldings = Object.entries(bh).map(([key, data]) => {
-            const name = data.name || names[key] || key
-            const isin = data.ticker || tickers[key] || key
-            const type = data.type || types[key] || 'security'
-
-            const shares = parseFloat(String(data.shares || data.amount || '0').replace(',', '.')) || 0
-            const value  = parseFloat(String(data.value || data.totalValue || data.purchaseValue || '0').replace(',', '.')) || 0
+        // --- HIER BAUEN WIR DIE HOLDINGS SICHER ZUSAMMEN ---
+        // 1. Alle regulären Dividenden-Holdings aus bh
+        const list = Object.entries(bh || {}).map(([key, data]) => {
+            const shares = parseFloat(String(data?.shares || '0').replace(',', '.')) || 0
+            const val = parseFloat(String(data?.value || data?.totalValue || purchaseValuePerHolding[key] || '0').replace(',', '.')) || 0
 
             return {
                 id: key,
-                name,
-                isin,
-                type,
-                shares,
-                value
+                name: data?.name || names[key] || key,
+                isin: data?.ticker || key,
+                type: data?.type || types[key] || 'security',
+                shares: shares,
+                value: val,
             }
         })
 
-        setHoldings(allHoldings)
+        // 2. Krypto-Sicherheitsnetz: Falls Krypto in bh fehlt (weil keine Dividenden), 
+        // holen wir sie direkt aus den bekannten names/types/buyActs, falls als 'crypto' definiert.
+        Object.keys(names).forEach(id => {
+            const type = (types[id] || '').toLowerCase()
+            const isCrypto = type.includes('crypto') || id === 'BTC' || id === 'SOL' || id === 'DOGE' || id === 'ADA' || id === 'ETH'
+            
+            // Wenn es Krypto ist und noch nicht in der Liste existiert, fügen wir es hinzu
+            if (isCrypto && !list.some(item => item.id === id || item.isin === id)) {
+                // Anteile aus Kaufaktivitäten suchen falls vorhanden
+                let cryptoShares = 0
+                ;(buyActsData || []).forEach(act => {
+                    if (act.asset?.isin === id || act.asset?.ticker === id || act.holdingId === id) {
+                        cryptoShares += parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
+                    }
+                })
+
+                list.push({
+                    id,
+                    name: names[id] || id,
+                    isin: id,
+                    type: 'crypto',
+                    shares: cryptoShares > 0 ? cryptoShares : 0.01, // Fallback falls Menge unklar
+                    value: purchaseValuePerHolding[id] || 0,
+                })
+            }
+        })
+
+        setHoldings(list)
     }, [])
-    
+
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
             fetchDividendActivities(),
@@ -97,8 +121,6 @@ export default function useDividendData() {
             fetchPurchaseValuePerHolding(),
             fetchCurrentValue(),
         ])
-        console.log("🔍 ALLES AUS HOLDING DATA (Namen/Typen/Tickers):", holdingData);
-        console.log("🔍 ALLE BUY ACTS:", buyActsData);
 
         const { names, types, tickers } = holdingData
 
@@ -123,7 +145,7 @@ export default function useDividendData() {
             names,
             types,
             tickers,
-            purchaseValuePerHolding, // Wichtig für applyData
+            purchaseValuePerHolding,
             yahooByIsin,
         }
         writeCache(dataset).catch(err => console.warn('Cache-Schreiben fehlgeschlagen:', err))
@@ -184,11 +206,6 @@ export default function useDividendData() {
                     const coverageOk = expectedCount === 0 || (yahooCount / expectedCount) >= 0.5
                     const needsYahooRefresh = !hasRawActs || !coverageOk
 
-                    console.log(
-                        `[Cache] yahooByIsin: ${yahooCount}/${expectedCount} Holdings`,
-                        needsYahooRefresh ? '→ Yahoo-Refresh wird gestartet' : '→ Cache vollstaendig'
-                    )
-
                     if (needsYahooRefresh) {
                         refreshYahooForCached(cached).catch(() => {})
                     }
@@ -239,7 +256,7 @@ export default function useDividendData() {
         kpi, dividendYield,
         currentValue,
         buyActs,
-        holdings, // NEU: Exportiert das vollständige Array an App.jsx
+        holdings, // <--- Exportiert das korrekte Holdings-Array
         loading, authLoading,
         lastUpdated, dataSource, error,
         cacheInfo,
