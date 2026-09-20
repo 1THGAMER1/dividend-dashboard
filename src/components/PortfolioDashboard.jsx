@@ -8,7 +8,7 @@ export default function PortfolioDashboard({
   forecast12m, 
   byHolding 
 }) {
-  // Holdings aus byHolding extrahieren und vorhandene Kennzahlen mappen
+  // Holdings aus byHolding aufbereiten & mappen
   const holdingsList = Object.entries(byHolding || {}).map(([key, data]) => {
     const sharesNum = parseFloat(String(data.shares || '0').replace(',', '.')) || 0
     const netValue = parseFloat(String(data.net || '0')) || 0
