@@ -3,14 +3,14 @@ import KpiCard from './KpiCard'
 const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
 export default function PortfolioDashboard({ 
-  currentValue, 
+  currentValue = 0, 
   forecast12m, 
   holdings = [],
   byHolding = {} 
 }) {
   let list = []
 
-  // 1. Primär: Echte Parqet Holdings verwenden (falls vorhanden)
+  // 1. Echte Holdings (falls Parqet-Array vorhanden)
   if (Array.isArray(holdings) && holdings.length > 0) {
     list = holdings
       .filter(Boolean)
@@ -23,33 +23,33 @@ export default function PortfolioDashboard({
           name: h?.asset?.name || h?.name || h?.isin || 'Unbekannt',
           isin: h?.asset?.isin || h?.isin || '',
           type: h?.asset?.type || h?.type || 'Wertpapier',
-          shares: shares,
+          shares,
           value: val,
         }
       })
   } else if (byHolding && typeof byHolding === 'object') {
-    // 2. Fallback: byHolding
+    // 2. Fallback über byHolding
     list = Object.entries(byHolding)
       .filter(([_, data]) => Boolean(data))
       .map(([key, data]) => {
-        const sharesNum = parseFloat(String(data?.shares || '0').replace(',', '.')) || 0
+        const shares = parseFloat(String(data?.shares || '0').replace(',', '.')) || 0
         const val = parseFloat(String(data?.value || data?.totalValue || 0).replace(',', '.')) || 0
 
         return {
           name: data?.name || data?.asset?.name || key,
           isin: data?.isin || key,
           type: data?.type || 'Wertpapier',
-          shares: sharesNum,
+          shares,
           value: val,
         }
       })
   }
 
-  // Sicheres Sortieren absteigend nach Wert
+  // Sortierung absteigend nach Wert
   list.sort((a, b) => (b?.value || 0) - (a?.value || 0))
 
-  const computedTotalValue = list.reduce((sum, item) => sum + (item?.value || 0), 0)
-  const finalTotalValue = currentValue > 0 ? currentValue : computedTotalValue
+  const calculatedTotal = list.reduce((sum, item) => sum + (item?.value || 0), 0)
+  const finalTotalValue = currentValue > 0 ? currentValue : calculatedTotal
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
