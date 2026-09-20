@@ -8,44 +8,47 @@ export default function PortfolioDashboard({
   holdings = [],
   byHolding = {} 
 }) {
-  // Liste aller Assets zusammenstellen
   let list = []
 
+  // 1. Primär: Echte Parqet Holdings verwenden (falls vorhanden)
   if (Array.isArray(holdings) && holdings.length > 0) {
-    // Verwendung der echten Parqet-Holdings (enthaelt ALLE Assets)
-    list = holdings.map(h => {
-      const shares = parseFloat(String(h.shares || h.amount || 0).replace(',', '.')) || 0
-      const price = parseFloat(String(h.price || h.currentPrice || 0).replace(',', '.')) || 0
-      const val = parseFloat(String(h.value || h.marketValue || (shares * price)).replace(',', '.')) || 0
+    list = holdings
+      .filter(Boolean)
+      .map(h => {
+        const shares = parseFloat(String(h?.shares || h?.amount || 0).replace(',', '.')) || 0
+        const price = parseFloat(String(h?.price || h?.currentPrice || 0).replace(',', '.')) || 0
+        const val = parseFloat(String(h?.value || h?.marketValue || (shares * price)).replace(',', '.')) || 0
 
-      return {
-        name: h.asset?.name || h.name || h.isin || 'Unbekannt',
-        isin: h.asset?.isin || h.isin || '',
-        type: h.asset?.type || h.type || 'Wertpapier',
-        shares: shares,
-        value: val,
-      }
-    })
-  } else {
-    // Fallback auf byHolding
-    list = Object.entries(byHolding || {}).map(([key, data]) => {
-      const sharesNum = parseFloat(String(data.shares || '0').replace(',', '.')) || 0
-      const val = parseFloat(String(data.value || data.totalValue || 0).replace(',', '.')) || 0
+        return {
+          name: h?.asset?.name || h?.name || h?.isin || 'Unbekannt',
+          isin: h?.asset?.isin || h?.isin || '',
+          type: h?.asset?.type || h?.type || 'Wertpapier',
+          shares: shares,
+          value: val,
+        }
+      })
+  } else if (byHolding && typeof byHolding === 'object') {
+    // 2. Fallback: byHolding
+    list = Object.entries(byHolding)
+      .filter(([_, data]) => Boolean(data))
+      .map(([key, data]) => {
+        const sharesNum = parseFloat(String(data?.shares || '0').replace(',', '.')) || 0
+        const val = parseFloat(String(data?.value || data?.totalValue || 0).replace(',', '.')) || 0
 
-      return {
-        name: data.name || data.asset?.name || key,
-        isin: data.isin || key,
-        type: data.type || 'Wertpapier',
-        shares: sharesNum,
-        value: val,
-      }
-    })
+        return {
+          name: data?.name || data?.asset?.name || key,
+          isin: data?.isin || key,
+          type: data?.type || 'Wertpapier',
+          shares: sharesNum,
+          value: val,
+        }
+      })
   }
 
-  // Nach Marktwert / Wert absteigend sortieren
-  list.sort((a, b) => b.value - a.value)
+  // Sicheres Sortieren absteigend nach Wert
+  list.sort((a, b) => (b?.value || 0) - (a?.value || 0))
 
-  const computedTotalValue = list.reduce((sum, item) => sum + item.value, 0)
+  const computedTotalValue = list.reduce((sum, item) => sum + (item?.value || 0), 0)
   const finalTotalValue = currentValue > 0 ? currentValue : computedTotalValue
 
   return (
