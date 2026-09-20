@@ -5,7 +5,7 @@ import useDividendData from './hooks/useDividendData'
 import { calcRealTotal } from './inflation'
 import { setTickerProgressCallback } from './api'
 
-import KpiCard            from './components/KpiCard'
+import KpiCard           from './components/KpiCard'
 import LoginScreen        from './components/LoginScreen'
 import AppLogin           from './components/AppLogin'
 import ParqetSetup        from './components/ParqetSetup'
@@ -13,6 +13,7 @@ import DividendChart      from './components/DividendChart'
 import DividendHeatmap    from './components/DividendHeatmap'
 import PositionsTable     from './components/PositionsTable'
 import DividendDonut      from './components/DividendDonut'
+import PortfolioDashboard from './components/PortfolioDashboard' // 👈 NEUER IMPORT
 import DividendCalculator from './pages/DividendCalculator'
 import DripSimulator      from './pages/DripSimulator'
 import RoadmapPage        from './pages/RoadmapPage'
@@ -40,10 +41,10 @@ const NAV_TABS = [
 ]
 
 const STATUS_INFO = {
-  live:  { color: '#22c55e', text: '● Live',     tooltip: 'Frische Daten direkt von Parqet.' },
-  cache: { color: '#60a5fa', text: '● Cache',    tooltip: 'Gespeicherte Daten. Klicke Aktualisieren.' },
+  live:  { color: '#22c55e', text: '● Live',    tooltip: 'Frische Daten direkt von Parqet.' },
+  cache: { color: '#60a5fa', text: '● Cache',   tooltip: 'Gespeicherte Daten. Klicke Aktualisieren.' },
   stale: { color: '#fb923c', text: '◑ Veraltet', tooltip: 'Älter als 24h. Bitte aktualisieren.' },
-  error: { color: '#fb923c', text: '○ Fehler',   tooltip: 'Laden fehlgeschlagen.' },
+  error: { color: '#fb923c', text: '○ Fehler',  tooltip: 'Laden fehlgeschlagen.' },
 }
 
 function getStatusIndicator(dataSource) {
@@ -152,12 +153,13 @@ export default function App() {
     buyActs,
   } = useDividendData()
 
-  const [kpiRange,       setKpiRange]       = useState('all')
-  const [page,           setPage]           = useState('dashboard')
-  const [appUser,        setAppUser]        = useState(undefined)
-  const [clientIdReady,  setClientIdReady]  = useState(false)
-  const [profileLoading, setProfileLoading] = useState(true)
-  const [tooltipVisible, setTooltipVisible] = useState(false)
+  const [kpiRange,        setKpiRange]        = useState('all')
+  const [page,            setPage]            = useState('dashboard')
+  const [dashboardView,   setDashboardView]   = useState('dividends') // 👈 State für View Switch ('dividends' | 'portfolio')
+  const [appUser,         setAppUser]         = useState(undefined)
+  const [clientIdReady,   setClientIdReady]   = useState(false)
+  const [profileLoading,  setProfileLoading]  = useState(true)
+  const [tooltipVisible,  setTooltipVisible]  = useState(false)
   const [tickerProgress, setTickerProgress] = useState(null)
 
   // State & Ref für das User Profile Dropdown Menu
@@ -473,7 +475,7 @@ export default function App() {
 
       <div style={{ flex: 1 }}>
         {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
-        {page === 'drip'       && <DripSimulator      portfolioData={portfolioData} />}
+        {page === 'drip'       && <DripSimulator     portfolioData={portfolioData} />}
         {page === 'roadmap'    && <RoadmapPage />}
         {page === 'profile'    && <ProfilePage appUser={appUser} onParqetUpdated={loadData} />}
 
@@ -501,9 +503,53 @@ export default function App() {
 
             {!showSkeleton && !showEmpty && (
               <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
-                <div style={{ marginBottom: 16 }}>
-                  <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
-                  <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Portfolio-Übersicht · Nettowerte</p>
+                
+                {/* HEADER & UMSCHALT-BUTTONS */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>
+                      {dashboardView === 'dividends' ? '📈 Dividenden Dashboard' : '💼 Portfolio Dashboard'}
+                    </h1>
+                    <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4, margin: 0 }}>
+                      {dashboardView === 'dividends' ? 'Portfolio-Übersicht · Nettowerte' : 'Bestand, Marktwert & Asset-Übersicht'}
+                    </p>
+                  </div>
+
+                  {/* Toggle Button Group */}
+                  <div style={{ display: 'flex', background: '#161b27', padding: 4, borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                    <button
+                      onClick={() => setDashboardView('dividends')}
+                      style={{
+                        background: dashboardView === 'dividends' ? '#009991' : 'transparent',
+                        color: dashboardView === 'dividends' ? '#ffffff' : '#7a8ba0',
+                        border: 'none',
+                        borderRadius: 8,
+                        padding: '6px 14px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      💰 Dividenden
+                    </button>
+                    <button
+                      onClick={() => setDashboardView('portfolio')}
+                      style={{
+                        background: dashboardView === 'portfolio' ? '#009991' : 'transparent',
+                        color: dashboardView === 'portfolio' ? '#ffffff' : '#7a8ba0',
+                        border: 'none',
+                        borderRadius: 8,
+                        padding: '6px 14px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      💼 Portfolio Tracker
+                    </button>
+                  </div>
                 </div>
 
                 {error && (
@@ -512,105 +558,122 @@ export default function App() {
                   </div>
                 )}
 
-                <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
-                  {KPI_RANGES.map(({ key, label }) => (
-                    <button key={key} onClick={() => setKpiRange(key)} style={{
-                      padding:'5px 16px', borderRadius:20, fontSize:12, cursor:'pointer',
-                      border:'1px solid #2a3a50',
-                      background: kpiRange === key ? '#1e3a5f' : 'transparent',
-                      color: kpiRange === key ? '#93c5fd' : '#7a8ba0',
-                    }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                {/* VIEW 1: DIVIDENDEN DASHBOARD */}
+                {dashboardView === 'dividends' && (
+                  <>
+                    <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+                      {KPI_RANGES.map(({ key, label }) => (
+                        <button key={key} onClick={() => setKpiRange(key)} style={{
+                          padding:'5px 16px', borderRadius:20, fontSize:12, cursor:'pointer',
+                          border:'1px solid #2a3a50',
+                          background: kpiRange === key ? '#1e3a5f' : 'transparent',
+                          color: kpiRange === key ? '#93c5fd' : '#7a8ba0',
+                        }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
 
-                <div className="kpi-grid">
-                  <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
-                           detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
-                  <KpiCard label="Brutto" value={k.gross} color="#60a5fa"
-                           detail={{ label:'davon Steuern', value:k.tax, color:'#fb923c' }} />
-                  <KpiCard
-                    label="Dividendenrendite"
-                    value={fmtPct((dividendYield[kpiRange] ?? 0) + 0.01)}
-                    color="#34d399"
-                    sub="auf den Einstandskurs"
-                  />
-                </div>
+                    <div className="kpi-grid">
+                      <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
+                               detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
+                      <KpiCard label="Brutto" value={k.gross} color="#60a5fa"
+                               detail={{ label:'davon Steuern', value:k.tax, color:'#fb923c' }} />
+                      <KpiCard
+                        label="Dividendenrendite"
+                        value={fmtPct((dividendYield[kpiRange] ?? 0) + 0.01)}
+                        color="#34d399"
+                        sub="auf den Einstandskurs"
+                      />
+                    </div>
 
-                <div className="kpi-grid">
-                  {trueCagr !== null && (
-                    <KpiCard
-                      label={`CAGR (${trueCagr.years}J)`}
-                      value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
-                      color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
-                      sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
+                    <div className="kpi-grid">
+                      {trueCagr !== null && (
+                        <KpiCard
+                          label={`CAGR (${trueCagr.years}J)`}
+                          value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
+                          color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
+                          sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
+                        />
+                      )}
+                      <KpiCard
+                        label="YoY-Wachstum"
+                        value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'}
+                        color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
+                        sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
+                      />
+                      {hasRealData && (
+                        <KpiCard
+                          label="Real (inflationsber.)"
+                          value={fmt(realTotal)}
+                          color="#f59e0b"
+                          detail={{ label: 'Kaufkraftverlust', value: fmt(inflation), color: '#ef4444' }}
+                          sub={`Gesamt · Basis: ${Object.keys(monthly).map(Number).sort()[0]}`}
+                        />
+                      )}
+                    </div>
+
+                    <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
+                      Prognose · Nächste 12 Monate
+                    </p>
+                    <div className="kpi-grid">
+                      <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6"
+                               detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }}
+                               sub="Prognose basierend auf Vorjahren" />
+                      <KpiCard
+                        label={`Wachstum ${cy} vs. ${cy - 1}`}
+                        value={(() => {
+                          const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
+                          const actualLastYear = yearTotal(monthly, cy - 1)
+                          if (actualLastYear === 0) return '–'
+                          const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100
+                          return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %'
+                        })()}
+                        color={(() => {
+                          const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
+                          const actualLastYear = yearTotal(monthly, cy - 1)
+                          if (actualLastYear === 0) return '#7a8ba0'
+                          return ((forecastCurrentYear - actualLastYear) / actualLastYear) >= 0 ? '#22c55e' : '#ef4444'
+                        })()}
+                        sub="Prognose Gesamtjahr"
+                      />
+                      <KpiCard
+                        label="Progn. Dividendenrendite"
+                        value={(() => {
+                          const forecastNet = calcForecastNext12mNet()
+                          if (!currentValue || currentValue === 0) return '–'
+                          return fmtPct((forecastNet / currentValue) * 100)
+                        })()}
+                        color="#5bcec2"
+                        sub="Prognose nächste 12M / Marktwert"
+                      />
+                    </div>
+
+                    <DividendChart
+                      monthly={monthly} cum={cum}
+                      forecastCum={forecastCum} forecastMonthly={forecastMonthly}
+                      byHolding={byHolding} forecastByHolding={forecastByHolding}
                     />
-                  )}
-                  <KpiCard
-                    label="YoY-Wachstum"
-                    value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'}
-                    color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
-                    sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
-                  />
-                  {hasRealData && (
-                    <KpiCard
-                      label="Real (inflationsber.)"
-                      value={fmt(realTotal)}
-                      color="#f59e0b"
-                      detail={{ label: 'Kaufkraftverlust', value: fmt(inflation), color: '#ef4444' }}
-                      sub={`Gesamt · Basis: ${Object.keys(monthly).map(Number).sort()[0]}`}
-                    />
-                  )}
-                </div>
+                    <DividendHeatmap monthly={monthly} />
 
-                <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
-                  Prognose · Nächste 12 Monate
-                </p>
-                <div className="kpi-grid">
-                  <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6"
-                           detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }}
-                           sub="Prognose basierend auf Vorjahren" />
-                  <KpiCard
-                    label={`Wachstum ${cy} vs. ${cy - 1}`}
-                    value={(() => {
-                      const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
-                      const actualLastYear = yearTotal(monthly, cy - 1)
-                      if (actualLastYear === 0) return '–'
-                      const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100
-                      return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %'
-                    })()}
-                    color={(() => {
-                      const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
-                      const actualLastYear = yearTotal(monthly, cy - 1)
-                      if (actualLastYear === 0) return '#7a8ba0'
-                      return ((forecastCurrentYear - actualLastYear) / actualLastYear) >= 0 ? '#22c55e' : '#ef4444'
-                    })()}
-                    sub="Prognose Gesamtjahr"
-                  />
-                  <KpiCard
-                    label="Progn. Dividendenrendite"
-                    value={(() => {
-                      const forecastNet = calcForecastNext12mNet()
-                      if (!currentValue || currentValue === 0) return '–'
-                      return fmtPct((forecastNet / currentValue) * 100)
-                    })()}
-                    color="#5bcec2"
-                    sub="Prognose nächste 12M / Marktwert"
-                  />
-                </div>
+                    <div id="dividends-table">
+                      <DividendDonut byHolding={byHolding} kpiRange={kpiRange} />
+                      <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
+                    </div>
+                  </>
+                )}
 
-                <DividendChart
-                  monthly={monthly} cum={cum}
-                  forecastCum={forecastCum} forecastMonthly={forecastMonthly}
-                  byHolding={byHolding} forecastByHolding={forecastByHolding}
-                />
-                <DividendHeatmap monthly={monthly} />
+                {/* VIEW 2: PORTFOLIO DASHBOARD (EINGEBUNDENE KOMPONENTE) */}
+                {dashboardView === 'portfolio' && (
+                  <PortfolioDashboard
+                    currentValue={currentValue}
+                    forecast12m={forecast12m}
+                    calcForecastNext12mNet={calcForecastNext12mNet}
+                    byHolding={byHolding}
+                    kpiRange={kpiRange}
+                  />
+                )}
 
-                <div id="dividends-table">
-                  <DividendDonut byHolding={byHolding} kpiRange={kpiRange} />
-                  <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
-                </div>
               </div>
             )}
           </>
