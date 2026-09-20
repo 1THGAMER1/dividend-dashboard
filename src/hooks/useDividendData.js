@@ -65,31 +65,29 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         })
 
-        // Exakte Berechnung der verbleibenden Anteile und Einstandswerte aus Buy- und Sell-Aktivitäten
         const assetMap = {}
 
-        // 1. Alle Käufe aufaddieren
+        // 1. Alle Käufe aufaddieren (flexibel über ISIN, Ticker oder Holding-ID)
         buyActsData.forEach(act => {
-            const isin = act.asset?.isin
-            if (!isin) return
-            if (!assetMap[isin]) {
-                assetMap[isin] = { shares: 0, value: 0 }
+            const key = act.asset?.isin || act.asset?.ticker || act.holdingId || act.asset?.id
+            if (!key) return
+            if (!assetMap[key]) {
+                assetMap[key] = { shares: 0, value: 0 }
             }
-            assetMap[isin].shares += parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
-            assetMap[isin].value  += parseFloat(String(act.amount || act.total || '0').replace(',', '.')) || 0
+            assetMap[key].shares += parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
+            assetMap[key].value  += parseFloat(String(act.amount || act.total || '0').replace(',', '.')) || 0
         })
 
         // 2. Alle Verkäufe abziehen
         sellActsData.forEach(act => {
-            const isin = act.asset?.isin
-            if (!isin || !assetMap[isin]) return
+            const key = act.asset?.isin || act.asset?.ticker || act.holdingId || act.asset?.id
+            if (!key || !assetMap[key]) return
             const soldShares = parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
             
-            // Proportionalen Einstandswert berechnen und abziehen
-            if (assetMap[isin].shares > 0) {
-                const avgPrice = assetMap[isin].value / assetMap[isin].shares
-                assetMap[isin].shares = Math.max(0, assetMap[isin].shares - soldShares)
-                assetMap[isin].value  = Math.max(0, assetMap[isin].shares * avgPrice)
+            if (assetMap[key].shares > 0) {
+                const avgPrice = assetMap[key].value / assetMap[key].shares
+                assetMap[key].shares = Math.max(0, assetMap[key].shares - soldShares)
+                assetMap[key].value  = Math.max(0, assetMap[key].shares * avgPrice)
             }
         })
 
@@ -99,13 +97,36 @@ export default function useDividendData() {
             const isin = tickers[id] || id
             const type = types[id] || 'Wertpapier'
 
-            // Prüfen, ob Werte aus der Aktivrecherchen-Map vorliegen
-            const computed = assetMap[isin] || assetMap[id] || { shares: 0, value: 0 }
+            // Verschiedene Schlüssel prüfen (ISIN, ID oder Name)
+            let computed = assetMap[isin] || assetMap[id] || assetMap[name] || { shares: 0, value: 0 }
+            let shares = computed.shares
+            let value = computed.value
 
-            // Fallback auf byHolding, falls dort noch Infos stehen
-            const b = bh[id] || bh[name] || bh[isin] || {}
-            const shares = computed.shares > 0 ? computed.shares : (parseFloat(String(b.shares || '0').replace(',', '.')) || 0)
-            const value  = computed.value > 0 ? computed.value : (parseFloat(String(b.value || b.totalValue || '0').replace(',', '.')) || 0)
+            // Fallback: Direkter Abgleich über die ID in den Buy/Sell-Aktivitäten, falls Key nicht matchte
+            if (shares <= 0) {
+                let fallbackShares = 0
+                let fallbackVal = 0
+                buyActsData.forEach(act => {
+                    const actId = act.holdingId || act.asset?.id || act.asset_id
+                    if (actId === id || act.asset?.isin === isin || act.asset?.ticker === isin) {
+                        fallbackShares += parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
+                        fallbackVal += parseFloat(String(act.amount || act.total || '0').replace(',', '.')) || 0
+                    }
+                })
+                sellActsData.forEach(act => {
+                    const actId = act.holdingId || act.asset?.id || act.asset_id
+                    if (actId === id || act.asset?.isin === isin || act.asset?.ticker === isin) {
+                        fallbackShares -= parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
+                    }
+                })
+                shares = Math.max(0, fallbackShares)
+                value = Math.max(0, fallbackVal)
+            }
+
+            // Letzter Fallback auf byHolding, falls dort Shares vorhanden sind
+            if (shares <= 0 && bh[id]?.shares) {
+                shares = parseFloat(String(bh[id].shares).replace(',', '.')) || 0
+            }
 
             return {
                 id,
