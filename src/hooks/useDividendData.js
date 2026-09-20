@@ -126,6 +126,7 @@ export default function useDividendData() {
 
         // setHoldings(list.filter(item => item.shares > 0));
         setHoldings(list);
+    }, []);
 
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
