@@ -49,7 +49,7 @@ export default function useDividendData() {
     }, [])
 
     const applyData = useCallback((payload) => {
-        const { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData, names = {}, types = {}, tickers = {}, purchaseValuePerHolding = {} } = payload
+        const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData, names = {}, types = {}, tickers = {}, purchaseValuePerHolding = {} } = payload
         setMonthly(m)
         setCum(c)
         setCurrentValue(currentVal)
@@ -65,14 +65,45 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         })
 
-        // NEU: Kombiniert alle Assets (auch ohne Dividenden) zu einem Array
-        const allHoldings = Object.keys(names).map(id => ({
-            id,
-            name: names[id] || id,
-            type: types[id] || 'Wertpapier',
-            isin: tickers[id] || '',
-            value: purchaseValuePerHolding[id] || 0 // Dies ist aktuell der Einstandswert, da die API keine Marktwerte pro Position lädt
-        }))
+        // KUGELSICHERES MAPPING: Alle Assets (inkl. Krypto) mit echten Anteilen und Einstandswert
+        const allHoldings = Object.keys(names).map(id => {
+            const name = names[id] || id
+            const isin = tickers[id] || ''
+            const type = types[id] || 'Wertpapier'
+
+            // 1. Anteile (Shares) primär aus byHolding suchen
+            const b = bh[id] || bh[name] || bh[isin] || Object.values(bh).find(x => x?.name === name || x?.isin === isin) || {}
+            let shares = parseFloat(String(b.shares || '0').replace(',', '.')) || 0
+
+            // 2. Einstandswert primär aus purchaseValuePerHolding laden
+            let val = parseFloat(String(purchaseValuePerHolding[id] || '0').replace(',', '.')) || 0
+
+            // 3. Fallback: Falls Shares oder Wert = 0 sind, berechnen wir sie direkt aus den Kaufaktivitäten (buyActsData)
+            if (shares === 0 || val === 0) {
+                let fallbackShares = 0
+                let fallbackVal = 0
+                ;(buyActsData || []).forEach(act => {
+                    const actId = act.holdingId || act.asset?.id || act.asset_id || act.holding_id
+                    // Wenn die ID, ISIN oder der Name übereinstimmt, summieren wir die Käufe
+                    if (actId === id || act.asset?.isin === isin || act.asset?.name === name) {
+                        fallbackShares += parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
+                        fallbackVal += parseFloat(String(act.amount || act.total || '0').replace(',', '.')) || 0
+                    }
+                })
+                if (shares === 0) shares = fallbackShares
+                if (val === 0) val = fallbackVal
+            }
+
+            return {
+                id,
+                name,
+                isin,
+                type,
+                shares,
+                value: val // Dies ist dein Einstandswert
+            }
+        })
+
         setHoldings(allHoldings)
     }, [])
 
