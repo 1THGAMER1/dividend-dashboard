@@ -65,14 +65,24 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         })
 
-        // Holdings direkt aus bh (byHolding) und names zusammenbauen
+        // Wir erstellen ein schnelles Lookup-Dictionary aus bh über ISIN/Ticker/Name
+        const bhLookup = {}
+        Object.entries(bh).forEach(([key, data]) => {
+            if (!data) return
+            const isin = data.ticker || key
+            const name = data.name
+            if (isin) bhLookup[isin.toLowerCase()] = data
+            if (name) bhLookup[name.toLowerCase()] = data
+        })
+
+        // Holdings aus names & bhLookup sauber zusammenbauen
         const allHoldings = Object.keys(names).map(id => {
             const name = names[id] || id
             const isin = tickers[id] || id
             const type = types[id] || 'Wertpapier'
 
-            // Suche direkt in bh nach passenden Einträgen (über ID, ISIN oder Name)
-            const holdingInfo = bh[id] || bh[isin] || bh[name] || Object.values(bh).find(x => x?.name === name || x?.ticker === isin) || {}
+            // Versuche die Daten aus bh zu finden
+            const holdingInfo = bh[id] || bhLookup[isin.toLowerCase()] || bhLookup[name.toLowerCase()] || {}
 
             const shares = parseFloat(String(holdingInfo.shares || holdingInfo.amount || '0').replace(',', '.')) || 0
             const value  = parseFloat(String(holdingInfo.value || holdingInfo.totalValue || holdingInfo.purchaseValue || '0').replace(',', '.')) || 0
@@ -89,7 +99,6 @@ export default function useDividendData() {
 
         setHoldings(allHoldings)
     }, [])
-
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
             fetchDividendActivities(),
