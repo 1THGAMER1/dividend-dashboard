@@ -13,7 +13,7 @@ import DividendChart      from './components/DividendChart'
 import DividendHeatmap    from './components/DividendHeatmap'
 import PositionsTable     from './components/PositionsTable'
 import DividendDonut      from './components/DividendDonut'
-import PortfolioDashboard from './components/PortfolioDashboard' // 👈 NEUER IMPORT
+import PortfolioDashboard from './components/PortfolioDashboard'
 import DividendCalculator from './pages/DividendCalculator'
 import DripSimulator      from './pages/DripSimulator'
 import RoadmapPage        from './pages/RoadmapPage'
@@ -33,11 +33,18 @@ const KPI_RANGES = [
   { key: '12m', label: '12M'   },
 ]
 
-const NAV_TABS = [
+// 2-in-1 Dual Navigations-Tabs
+const DIVIDEND_TABS = [
   { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
   { id: 'calendar',   emoji: '🗓',  label: 'Kalender'   },
   { id: 'calculator', emoji: '🧭', label: 'Rechner'    },
   { id: 'drip',       emoji: '♻️', label: 'DRIP'       },
+]
+
+const PORTFOLIO_TABS = [
+  { id: 'portfolio-overview', emoji: '💼', label: 'Bestände'    },
+  { id: 'portfolio-assets',   emoji: '🍰', label: 'Allokation'  },
+  { id: 'calculator',         emoji: '🧭', label: 'Rechner'    },
 ]
 
 const STATUS_INFO = {
@@ -153,9 +160,9 @@ export default function App() {
     buyActs,
   } = useDividendData()
 
-  const [kpiRange,        setKpiRange]        = useState('all')
+  const [appMode,         setAppMode]         = useState('dividends') // 'dividends' | 'portfolio'
   const [page,            setPage]            = useState('dashboard')
-  const [dashboardView,   setDashboardView]   = useState('dividends') // 👈 State für View Switch ('dividends' | 'portfolio')
+  const [kpiRange,        setKpiRange]        = useState('all')
   const [appUser,         setAppUser]         = useState(undefined)
   const [clientIdReady,   setClientIdReady]   = useState(false)
   const [profileLoading,  setProfileLoading]  = useState(true)
@@ -165,6 +172,14 @@ export default function App() {
   // State & Ref für das User Profile Dropdown Menu
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const menuRef = useRef(null)
+
+  // Umschalten des Gesamtsystems (Dual Mode)
+  const handleModeSwitch = (newMode) => {
+    setAppMode(newMode)
+    setPage(newMode === 'dividends' ? 'dashboard' : 'portfolio-overview')
+  }
+
+  const currentTabs = appMode === 'dividends' ? DIVIDEND_TABS : PORTFOLIO_TABS
 
   // Schließt das Dropdown-Menü beim Klick außerhalb
   useEffect(() => {
@@ -229,7 +244,6 @@ export default function App() {
   if (authLoading)     return <LoadingScreen text="Authentifizierung läuft…" />
   if (!loggedIn)       return <LoginScreen onLogin={startOAuthFlow} loading={authLoading} error={error} />
 
-  // Ticker-Aufloesung laeuft: Fortschrittsanzeige als Overlay
   if (tickerProgress) {
     return <LoadingScreen
       text="Wertpapiere werden mit Yahoo Finance verknüpft…"
@@ -325,19 +339,46 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f1420', display: 'flex', flexDirection: 'column' }}>
+      
+      {/* TOOLBAR NAV BAR MIT SYSTEM-SWITCHER */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#161b27', borderBottom: '1px solid #1e2a3a',
-        padding: '0 12px', height: 52,
-        position: 'sticky', top: 0, zIndex: 100,
+        padding: '0 12px', height: 52, position: 'sticky', top: 0, zIndex: 100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           <DashLogo size={28} />
-          <span className="nav-brand-text">Dividend Dashboard</span>
+
+          {/* 2-in-1 Dual System Mode Switcher */}
+          <div style={{ display: 'flex', background: '#0f1420', padding: 3, borderRadius: 8, border: '1px solid #1e2a3a' }}>
+            <button
+              onClick={() => handleModeSwitch('dividends')}
+              style={{
+                background: appMode === 'dividends' ? '#009991' : 'transparent',
+                color: appMode === 'dividends' ? '#ffffff' : '#64748b',
+                border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12,
+                fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              💰 Dividenden
+            </button>
+            <button
+              onClick={() => handleModeSwitch('portfolio')}
+              style={{
+                background: appMode === 'portfolio' ? '#009991' : 'transparent',
+                color: appMode === 'portfolio' ? '#ffffff' : '#64748b',
+                border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12,
+                fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              💼 Portfolio
+            </button>
+          </div>
         </div>
 
+        {/* Dynamische Navigations-Tabs */}
         <div style={{ display: 'flex', gap: 4 }}>
-          {NAV_TABS.map(tab => (
+          {currentTabs.map(tab => (
             <button key={tab.id} onClick={() => setPage(tab.id)} style={{
               background: page === tab.id ? '#009991' : 'transparent',
               color: page === tab.id ? 'white' : '#556070',
@@ -395,25 +436,13 @@ export default function App() {
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
               style={{
-                background: '#1e2a3a',
-                border: '1px solid #2a3a50',
-                borderRadius: '50%',
-                width: 34,
-                height: 34,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: 0,
-                overflow: 'hidden',
+                background: '#1e2a3a', border: '1px solid #2a3a50', borderRadius: '50%',
+                width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', padding: 0, overflow: 'hidden',
               }}
             >
               {appUser?.user_metadata?.avatar_url ? (
-                <img
-                  src={appUser.user_metadata.avatar_url}
-                  alt="Profil"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+                <img src={appUser.user_metadata.avatar_url} alt="Profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <span style={{ color: '#93c5fd', fontSize: 13, fontWeight: 700 }}>
                   {appUser?.email?.[0]?.toUpperCase() ?? '👤'}
@@ -421,20 +450,12 @@ export default function App() {
               )}
             </button>
 
-            {/* Dropdown Menu */}
             {userMenuOpen && (
               <div
                 style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 8px)',
-                  right: 0,
-                  background: '#161b27',
-                  border: '1px solid #2a3a50',
-                  borderRadius: 12,
-                  padding: '8px 0',
-                  width: 200,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  zIndex: 200,
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                  background: '#161b27', border: '1px solid #2a3a50', borderRadius: 12,
+                  padding: '8px 0', width: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 200,
                 }}
               >
                 <div style={{ padding: '8px 16px', borderBottom: '1px solid #1e2a3a', marginBottom: 4 }}>
@@ -473,94 +494,51 @@ export default function App() {
         </div>
       </nav>
 
+      {/* HAUPTINHALTS-BEREICH */}
       <div style={{ flex: 1 }}>
         {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
-        {page === 'drip'       && <DripSimulator     portfolioData={portfolioData} />}
         {page === 'roadmap'    && <RoadmapPage />}
         {page === 'profile'    && <ProfilePage appUser={appUser} onParqetUpdated={loadData} />}
 
-        {page === 'calendar' && (
-          <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
-            <div style={{ marginBottom: 20 }}>
-              <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
-              <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
-            </div>
-            {showEmpty
-              ? <EmptyState onRefresh={loadData} loading={loading} error={error} />
-              : (
-                <>
-                  <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
-                  <DividendCalendar  forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
-                </>
-              )}
-          </div>
-        )}
-
-        {page === 'dashboard' && (
+        {/* DIVIDENDEN SYSTEM */}
+        {appMode === 'dividends' && (
           <>
-            {showSkeleton && <SkeletonDashboard />}
-            {showEmpty    && <EmptyState onRefresh={loadData} loading={loading} error={error} />}
-
-            {!showSkeleton && !showEmpty && (
+            {page === 'drip' && <DripSimulator portfolioData={portfolioData} />}
+            {page === 'calendar' && (
               <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
-                
-                {/* HEADER & UMSCHALT-BUTTONS */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-                  <div>
-                    <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>
-                      {dashboardView === 'dividends' ? '📈 Dividenden Dashboard' : '💼 Portfolio Dashboard'}
-                    </h1>
-                    <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4, margin: 0 }}>
-                      {dashboardView === 'dividends' ? 'Portfolio-Übersicht · Nettowerte' : 'Bestand, Marktwert & Asset-Übersicht'}
-                    </p>
-                  </div>
-
-                  {/* Toggle Button Group */}
-                  <div style={{ display: 'flex', background: '#161b27', padding: 4, borderRadius: 10, border: '1px solid #1e2a3a' }}>
-                    <button
-                      onClick={() => setDashboardView('dividends')}
-                      style={{
-                        background: dashboardView === 'dividends' ? '#009991' : 'transparent',
-                        color: dashboardView === 'dividends' ? '#ffffff' : '#7a8ba0',
-                        border: 'none',
-                        borderRadius: 8,
-                        padding: '6px 14px',
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      💰 Dividenden
-                    </button>
-                    <button
-                      onClick={() => setDashboardView('portfolio')}
-                      style={{
-                        background: dashboardView === 'portfolio' ? '#009991' : 'transparent',
-                        color: dashboardView === 'portfolio' ? '#ffffff' : '#7a8ba0',
-                        border: 'none',
-                        borderRadius: 8,
-                        padding: '6px 14px',
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      💼 Portfolio Tracker
-                    </button>
-                  </div>
+                <div style={{ marginBottom: 20 }}>
+                  <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
+                  <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
                 </div>
+                {showEmpty
+                  ? <EmptyState onRefresh={loadData} loading={loading} error={error} />
+                  : (
+                    <>
+                      <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
+                      <DividendCalendar  forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
+                    </>
+                  )}
+              </div>
+            )}
 
-                {error && (
-                  <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'12px 16px', borderRadius:10, marginBottom:16, fontSize:13 }}>
-                    ⚠ {error}
-                  </div>
-                )}
+            {page === 'dashboard' && (
+              <>
+                {showSkeleton && <SkeletonDashboard />}
+                {showEmpty    && <EmptyState onRefresh={loadData} loading={loading} error={error} />}
 
-                {/* VIEW 1: DIVIDENDEN DASHBOARD */}
-                {dashboardView === 'dividends' && (
-                  <>
+                {!showSkeleton && !showEmpty && (
+                  <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
+                    <div style={{ marginBottom: 16 }}>
+                      <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
+                      <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Portfolio-Übersicht · Nettowerte</p>
+                    </div>
+
+                    {error && (
+                      <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'12px 16px', borderRadius:10, marginBottom:16, fontSize:13 }}>
+                        ⚠ {error}
+                      </div>
+                    )}
+
                     <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
                       {KPI_RANGES.map(({ key, label }) => (
                         <button key={key} onClick={() => setKpiRange(key)} style={{
@@ -575,108 +553,65 @@ export default function App() {
                     </div>
 
                     <div className="kpi-grid">
-                      <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e"
-                               detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
-                      <KpiCard label="Brutto" value={k.gross} color="#60a5fa"
-                               detail={{ label:'davon Steuern', value:k.tax, color:'#fb923c' }} />
-                      <KpiCard
-                        label="Dividendenrendite"
-                        value={fmtPct((dividendYield[kpiRange] ?? 0) + 0.01)}
-                        color="#34d399"
-                        sub="auf den Einstandskurs"
-                      />
+                      <KpiCard label="Dividenden Netto" value={k.net} color="#22c55e" detail={{ label:'Ø Monatlich', value:k.avg, color:'#a78bfa' }} />
+                      <KpiCard label="Brutto" value={k.gross} color="#60a5fa" detail={{ label:'davon Steuern', value:k.tax, color:'#fb923c' }} />
+                      <KpiCard label="Dividendenrendite" value={fmtPct((dividendYield[kpiRange] ?? 0) + 0.01)} color="#34d399" sub="auf den Einstandskurs" />
                     </div>
 
                     <div className="kpi-grid">
                       {trueCagr !== null && (
-                        <KpiCard
-                          label={`CAGR (${trueCagr.years}J)`}
-                          value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'}
-                          color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'}
-                          sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`}
-                        />
+                        <KpiCard label={`CAGR (${trueCagr.years}J)`} value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'} color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'} sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`} />
                       )}
-                      <KpiCard
-                        label="YoY-Wachstum"
-                        value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'}
-                        color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'}
-                        sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'}
-                      />
+                      <KpiCard label="YoY-Wachstum" value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'} color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'} sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'} />
                       {hasRealData && (
-                        <KpiCard
-                          label="Real (inflationsber.)"
-                          value={fmt(realTotal)}
-                          color="#f59e0b"
-                          detail={{ label: 'Kaufkraftverlust', value: fmt(inflation), color: '#ef4444' }}
-                          sub={`Gesamt · Basis: ${Object.keys(monthly).map(Number).sort()[0]}`}
-                        />
+                        <KpiCard label="Real (inflationsber.)" value={fmt(realTotal)} color="#f59e0b" detail={{ label: 'Kaufkraftverlust', value: fmt(inflation), color: '#ef4444' }} sub={`Gesamt · Basis: ${Object.keys(monthly).map(Number).sort()[0]}`} />
                       )}
                     </div>
 
-                    <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
-                      Prognose · Nächste 12 Monate
-                    </p>
+                    <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Prognose · Nächste 12 Monate</p>
                     <div className="kpi-grid">
-                      <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6"
-                               detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }}
-                               sub="Prognose basierend auf Vorjahren" />
-                      <KpiCard
-                        label={`Wachstum ${cy} vs. ${cy - 1}`}
-                        value={(() => {
-                          const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
-                          const actualLastYear = yearTotal(monthly, cy - 1)
-                          if (actualLastYear === 0) return '–'
-                          const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100
-                          return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %'
-                        })()}
-                        color={(() => {
-                          const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0)
-                          const actualLastYear = yearTotal(monthly, cy - 1)
-                          if (actualLastYear === 0) return '#7a8ba0'
-                          return ((forecastCurrentYear - actualLastYear) / actualLastYear) >= 0 ? '#22c55e' : '#ef4444'
-                        })()}
-                        sub="Prognose Gesamtjahr"
-                      />
-                      <KpiCard
-                        label="Progn. Dividendenrendite"
-                        value={(() => {
-                          const forecastNet = calcForecastNext12mNet()
-                          if (!currentValue || currentValue === 0) return '–'
-                          return fmtPct((forecastNet / currentValue) * 100)
-                        })()}
-                        color="#5bcec2"
-                        sub="Prognose nächste 12M / Marktwert"
-                      />
+                      <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6" detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }} sub="Prognose basierend auf Vorjahren" />
+                      <KpiCard label={`Wachstum ${cy} vs. ${cy - 1}`} value={(() => { const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0); const actualLastYear = yearTotal(monthly, cy - 1); if (actualLastYear === 0) return '–'; const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100; return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %' })()} color={(() => { const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0); const actualLastYear = yearTotal(monthly, cy - 1); if (actualLastYear === 0) return '#7a8ba0'; return ((forecastCurrentYear - actualLastYear) / actualLastYear) >= 0 ? '#22c55e' : '#ef4444' })()} sub="Prognose Gesamtjahr" />
+                      <KpiCard label="Progn. Dividendenrendite" value={(() => { const forecastNet = calcForecastNext12mNet(); if (!currentValue || currentValue === 0) return '–'; return fmtPct((forecastNet / currentValue) * 100) })()} color="#5bcec2" sub="Prognose nächste 12M / Marktwert" />
                     </div>
 
-                    <DividendChart
-                      monthly={monthly} cum={cum}
-                      forecastCum={forecastCum} forecastMonthly={forecastMonthly}
-                      byHolding={byHolding} forecastByHolding={forecastByHolding}
-                    />
+                    <DividendChart monthly={monthly} cum={cum} forecastCum={forecastCum} forecastMonthly={forecastMonthly} byHolding={byHolding} forecastByHolding={forecastByHolding} />
                     <DividendHeatmap monthly={monthly} />
 
                     <div id="dividends-table">
                       <DividendDonut byHolding={byHolding} kpiRange={kpiRange} />
                       <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
                     </div>
-                  </>
+                  </div>
                 )}
-
-                {/* VIEW 2: PORTFOLIO DASHBOARD (EINGEBUNDENE KOMPONENTE) */}
-                {dashboardView === 'portfolio' && (
-                  <PortfolioDashboard
-                    currentValue={currentValue}
-                    forecast12m={forecast12m}
-                    calcForecastNext12mNet={calcForecastNext12mNet}
-                    byHolding={byHolding}
-                    kpiRange={kpiRange}
-                  />
-                )}
-
-              </div>
+              </>
             )}
           </>
+        )}
+
+        {/* PORTFOLIO SYSTEM */}
+        {appMode === 'portfolio' && (
+          <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
+            {page === 'portfolio-overview' && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>💼 Portfolio Bestände</h1>
+                  <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Echtzeit-Depotwerte & Positionen</p>
+                </div>
+                <PortfolioDashboard currentValue={currentValue} forecast12m={forecast12m} byHolding={byHolding} />
+              </>
+            )}
+
+            {page === 'portfolio-assets' && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🍰 Asset Allokation</h1>
+                  <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aufteilung der Positionen</p>
+                </div>
+                <DividendDonut byHolding={byHolding} kpiRange={kpiRange} />
+              </>
+            )}
+          </div>
         )}
       </div>
 
