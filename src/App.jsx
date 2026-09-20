@@ -152,6 +152,7 @@ export default function App() {
     loggedIn,
     monthly, cum, forecastCum, forecastMonthly,
     byHolding, forecastByHolding,
+    holdings, // 👈 Jetzt aus useDividendData ausgelesen
     kpi, dividendYield,
     loading, authLoading,
     lastUpdated, dataSource, error,
@@ -169,11 +170,9 @@ export default function App() {
   const [tooltipVisible,  setTooltipVisible]  = useState(false)
   const [tickerProgress, setTickerProgress] = useState(null)
 
-  // State & Ref für das User Profile Dropdown Menu
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const menuRef = useRef(null)
 
-  // Umschalten des Gesamtsystems (Dual Mode)
   const handleModeSwitch = (newMode) => {
     setAppMode(newMode)
     setPage(newMode === 'dividends' ? 'dashboard' : 'portfolio-overview')
@@ -181,7 +180,6 @@ export default function App() {
 
   const currentTabs = appMode === 'dividends' ? DIVIDEND_TABS : PORTFOLIO_TABS
 
-  // Schließt das Dropdown-Menü beim Klick außerhalb
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -192,7 +190,6 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Ticker-Fortschritts-Callback registrieren
   useEffect(() => {
     setTickerProgressCallback((p) => {
       setTickerProgress(p.done >= p.total ? null : p)
@@ -340,7 +337,7 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: '#0f1420', display: 'flex', flexDirection: 'column' }}>
       
-      {/* TOOLBAR NAV BAR MIT SYSTEM-SWITCHER */}
+      {/* NAVBAR */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#161b27', borderBottom: '1px solid #1e2a3a',
@@ -349,7 +346,7 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           <DashLogo size={28} />
 
-          {/* 2-in-1 Dual System Mode Switcher */}
+          {/* 2-in-1 Dual System Switcher */}
           <div style={{ display: 'flex', background: '#0f1420', padding: 3, borderRadius: 8, border: '1px solid #1e2a3a' }}>
             <button
               onClick={() => handleModeSwitch('dividends')}
@@ -376,7 +373,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Dynamische Navigations-Tabs */}
         <div style={{ display: 'flex', gap: 4 }}>
           {currentTabs.map(tab => (
             <button key={tab.id} onClick={() => setPage(tab.id)} style={{
@@ -431,7 +427,6 @@ export default function App() {
             <span className="nav-full-label" style={{ marginLeft: 4 }}>{loading ? 'Lade…' : 'Aktualisieren'}</span>
           </button>
 
-          {/* Profil Avatar & Dropdown */}
           <div style={{ position: 'relative' }} ref={menuRef}>
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -494,13 +489,13 @@ export default function App() {
         </div>
       </nav>
 
-      {/* HAUPTINHALTS-BEREICH */}
+      {/* HAUPTINHALT */}
       <div style={{ flex: 1 }}>
         {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
         {page === 'roadmap'    && <RoadmapPage />}
         {page === 'profile'    && <ProfilePage appUser={appUser} onParqetUpdated={loadData} />}
 
-        {/* DIVIDENDEN SYSTEM */}
+        {/* DIVIDENDEN MODUS */}
         {appMode === 'dividends' && (
           <>
             {page === 'drip' && <DripSimulator portfolioData={portfolioData} />}
@@ -589,7 +584,7 @@ export default function App() {
           </>
         )}
 
-        {/* PORTFOLIO SYSTEM */}
+        {/* PORTFOLIO MODUS */}
         {appMode === 'portfolio' && (
           <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
             {page === 'portfolio-overview' && (
@@ -598,7 +593,12 @@ export default function App() {
                   <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>💼 Portfolio Bestände</h1>
                   <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Echtzeit-Depotwerte & Positionen</p>
                 </div>
-                <PortfolioDashboard currentValue={currentValue} forecast12m={forecast12m} byHolding={byHolding} />
+                <PortfolioDashboard 
+                  currentValue={currentValue} 
+                  forecast12m={forecast12m} 
+                  holdings={holdings} 
+                  byHolding={byHolding} 
+                />
               </>
             )}
 
