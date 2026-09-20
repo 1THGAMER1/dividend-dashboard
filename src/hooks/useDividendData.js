@@ -65,68 +65,17 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         })
 
-        const assetMap = {}
-
-        // 1. Alle Käufe aufaddieren (flexibel über ISIN, Ticker oder Holding-ID)
-        buyActsData.forEach(act => {
-            const key = act.asset?.isin || act.asset?.ticker || act.holdingId || act.asset?.id
-            if (!key) return
-            if (!assetMap[key]) {
-                assetMap[key] = { shares: 0, value: 0 }
-            }
-            assetMap[key].shares += parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
-            assetMap[key].value  += parseFloat(String(act.amount || act.total || '0').replace(',', '.')) || 0
-        })
-
-        // 2. Alle Verkäufe abziehen
-        sellActsData.forEach(act => {
-            const key = act.asset?.isin || act.asset?.ticker || act.holdingId || act.asset?.id
-            if (!key || !assetMap[key]) return
-            const soldShares = parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
-            
-            if (assetMap[key].shares > 0) {
-                const avgPrice = assetMap[key].value / assetMap[key].shares
-                assetMap[key].shares = Math.max(0, assetMap[key].shares - soldShares)
-                assetMap[key].value  = Math.max(0, assetMap[key].shares * avgPrice)
-            }
-        })
-
-        // 3. Holdings-Array für das Dashboard generieren
+        // Holdings direkt aus bh (byHolding) und names zusammenbauen
         const allHoldings = Object.keys(names).map(id => {
             const name = names[id] || id
             const isin = tickers[id] || id
             const type = types[id] || 'Wertpapier'
 
-            // Verschiedene Schlüssel prüfen (ISIN, ID oder Name)
-            let computed = assetMap[isin] || assetMap[id] || assetMap[name] || { shares: 0, value: 0 }
-            let shares = computed.shares
-            let value = computed.value
+            // Suche direkt in bh nach passenden Einträgen (über ID, ISIN oder Name)
+            const holdingInfo = bh[id] || bh[isin] || bh[name] || Object.values(bh).find(x => x?.name === name || x?.ticker === isin) || {}
 
-            // Fallback: Direkter Abgleich über die ID in den Buy/Sell-Aktivitäten, falls Key nicht matchte
-            if (shares <= 0) {
-                let fallbackShares = 0
-                let fallbackVal = 0
-                buyActsData.forEach(act => {
-                    const actId = act.holdingId || act.asset?.id || act.asset_id
-                    if (actId === id || act.asset?.isin === isin || act.asset?.ticker === isin) {
-                        fallbackShares += parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
-                        fallbackVal += parseFloat(String(act.amount || act.total || '0').replace(',', '.')) || 0
-                    }
-                })
-                sellActsData.forEach(act => {
-                    const actId = act.holdingId || act.asset?.id || act.asset_id
-                    if (actId === id || act.asset?.isin === isin || act.asset?.ticker === isin) {
-                        fallbackShares -= parseFloat(String(act.shares || act.quantity || '0').replace(',', '.')) || 0
-                    }
-                })
-                shares = Math.max(0, fallbackShares)
-                value = Math.max(0, fallbackVal)
-            }
-
-            // Letzter Fallback auf byHolding, falls dort Shares vorhanden sind
-            if (shares <= 0 && bh[id]?.shares) {
-                shares = parseFloat(String(bh[id].shares).replace(',', '.')) || 0
-            }
+            const shares = parseFloat(String(holdingInfo.shares || holdingInfo.amount || '0').replace(',', '.')) || 0
+            const value  = parseFloat(String(holdingInfo.value || holdingInfo.totalValue || holdingInfo.purchaseValue || '0').replace(',', '.')) || 0
 
             return {
                 id,
@@ -137,7 +86,7 @@ export default function useDividendData() {
                 value
             }
         })
-        console.log("🔍 ERMITTELTE HOLDINGS:", allHoldings);
+
         setHoldings(allHoldings)
     }, [])
 
