@@ -5,17 +5,26 @@ const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 export default function PortfolioDashboard({ 
   currentValue, 
   forecast12m, 
-  calcForecastNext12mNet, 
   byHolding 
 }) {
-  // Holdings als Array aufbereiten & nach Marktwert / Wert sortieren
-  const holdingsList = Object.entries(byHolding || {}).map(([name, data]) => ({
-    name,
-    type: data.type || 'Asset',
-    shares: data.shares || 0,
-    value: data.value || data.totalValue || 0,
-    netDiv: data.net || 0,
-  })).sort((a, b) => b.value - a.value)
+  // Holdings korrekt aus byHolding extrahieren
+  const holdingsList = Object.entries(byHolding || {}).map(([key, data]) => {
+    // Parst String-Zahlen wie '0.83' zu echten Floats
+    const sharesNum = parseFloat(String(data.shares || '0').replace(',', '.')) || 0
+    
+    // Ermittelt den Marktwert (Fallback auf verschiedene mögliche Parqet-Properties)
+    const rawValue = data.value ?? data.totalValue ?? data.marketValue ?? 0
+    const valueNum = parseFloat(String(rawValue).replace(',', '.')) || 0
+
+    return {
+      isin: data.isin || key,
+      // Verwende bevorzugt den Klarnamen, sonst die ISIN / den Key
+      name: data.name || data.asset?.name || data.holdingName || key,
+      type: data.type || data.assetType || 'Wertpapier',
+      shares: sharesNum,
+      value: valueNum,
+    }
+  }).sort((a, b) => b.value - a.value)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -35,7 +44,7 @@ export default function PortfolioDashboard({
         />
         <KpiCard
           label="Progn. Jahresausschüttung"
-          value={fmt(forecast12m.total)}
+          value={fmt(forecast12m?.total ?? 0)}
           color="#22c55e"
           sub="Nächste 12 Monate Netto"
         />
@@ -59,7 +68,7 @@ export default function PortfolioDashboard({
           <thead>
             <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
               <th style={{ paddingBottom: 10 }}>Holding</th>
-              <th style={{ paddingBottom: 10 }}>Typ</th>
+              <th style={{ paddingBottom: 10 }}>Anteile</th>
               <th style={{ paddingBottom: 10, textAlign: 'right' }}>Anteil am Depot</th>
               <th style={{ paddingBottom: 10, textAlign: 'right' }}>Marktwert</th>
             </tr>
@@ -73,26 +82,20 @@ export default function PortfolioDashboard({
               </tr>
             ) : (
               holdingsList.map((item, idx) => {
-                const sharePct = currentValue > 0 ? ((item.value / currentValue) * 100).toFixed(1) : 0
+                const sharePct = currentValue > 0 && item.value > 0 
+                  ? ((item.value / currentValue) * 100).toFixed(1) 
+                  : '0,0'
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid #0f1420' }}>
                     <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
-                      {item.name}
+                      <div>{item.name}</div>
+                      {item.isin && item.isin !== item.name && (
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>
+                      )}
                     </td>
-                    <td style={{ padding: '12px 0' }}>
-                      <span
-                        style={{
-                          background: '#0f172a',
-                          border: '1px solid #1e293b',
-                          color: '#38bdf8',
-                          fontSize: 11,
-                          padding: '2px 8px',
-                          borderRadius: 10,
-                        }}
-                      >
-                        {item.type}
-                      </span>
+                    <td style={{ padding: '12px 0', color: '#94a3b8' }}>
+                      {item.shares > 0 ? item.shares.toLocaleString('de-DE') : '—'}
                     </td>
                     <td style={{ padding: '12px 0', textAlign: 'right', color: '#94a3b8' }}>
                       {sharePct} %
