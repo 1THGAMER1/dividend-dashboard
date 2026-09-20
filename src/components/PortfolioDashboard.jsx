@@ -7,15 +7,15 @@ export default function PortfolioDashboard({
   forecast12m, 
   holdings = [] 
 }) {
-  // 1. Array aufteilen: Aktive Assets (Wert > 0) vs. Verkaufte Assets (Wert <= 0)
-  // Wir nutzen 0.01 als Puffer für Rundungsfehler
+  // Aktive Bestände: Mindestens ein Anteil im Depot (shares > 0.001 wegen möglicher Rundungsfehler)
   const activeHoldings = holdings
-    .filter(item => (item.value || 0) > 0.01)
+    .filter(item => item.shares > 0.001)
     .sort((a, b) => b.value - a.value)
 
+  // Verkaufte Bestände: Anteile liegen bei 0
   const soldHoldings = holdings
-    .filter(item => (item.value || 0) <= 0.01)
-    .sort((a, b) => a.name.localeCompare(b.name)) // Verkaufte alphabetisch sortieren
+    .filter(item => item.shares <= 0.001)
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -32,7 +32,7 @@ export default function PortfolioDashboard({
           label="Aktive Positionen"
           value={activeHoldings.length.toString()}
           color="#a78bfa"
-          sub="Aktuelle Assets im Depot"
+          sub="Alle Assets im Depot (inkl. Krypto)"
         />
         <KpiCard
           label="Progn. Jahresausschüttung"
@@ -42,7 +42,7 @@ export default function PortfolioDashboard({
         />
       </div>
 
-      {/* 1. TABELLE: AKTIVE POSITIONEN */}
+      {/* 1. TABELLE: AKTIVE BESTÄNDE */}
       <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto' }}>
         <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#f1f5f9' }}>
           💼 Aktive Bestände
@@ -53,13 +53,14 @@ export default function PortfolioDashboard({
             <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
               <th style={{ paddingBottom: 10 }}>Asset</th>
               <th style={{ paddingBottom: 10 }}>Typ</th>
+              <th style={{ paddingBottom: 10 }}>Anteile</th>
               <th style={{ paddingBottom: 10, textAlign: 'right' }}>Einstandswert</th>
             </tr>
           </thead>
           <tbody>
             {activeHoldings.length === 0 ? (
               <tr>
-                <td colSpan={3} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan={4} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
                   Keine aktiven Bestände gefunden.
                 </td>
               </tr>
@@ -75,8 +76,11 @@ export default function PortfolioDashboard({
                       {item.type}
                     </span>
                   </td>
+                  <td style={{ padding: '12px 0', color: '#94a3b8' }}>
+                    {item.shares > 0 ? item.shares.toLocaleString('de-DE') : '—'}
+                  </td>
                   <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
-                    {fmt(item.value)}
+                    {item.value > 0 ? fmt(item.value) : '---'}
                   </td>
                 </tr>
               ))
@@ -85,7 +89,7 @@ export default function PortfolioDashboard({
         </table>
       </div>
 
-      {/* 2. TABELLE: VERKAUFTE POSITIONEN (nur anzeigen, wenn es welche gibt) */}
+      {/* 2. TABELLE: VERKAUFTE POSITIONEN */}
       {soldHoldings.length > 0 && (
         <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto', opacity: 0.8 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#94a3b8' }}>
@@ -113,7 +117,7 @@ export default function PortfolioDashboard({
                     </span>
                   </td>
                   <td style={{ padding: '10px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
-                    Verkauft
+                    Verkauft (0 Anteile)
                   </td>
                 </tr>
               ))}
