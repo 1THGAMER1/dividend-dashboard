@@ -10,46 +10,46 @@ export default function PortfolioDashboard({
 }) {
   let list = []
 
-  // 1. Echte Holdings (falls Parqet-Array vorhanden)
+  // 1. Echte Holdings aus Parqet verarbeiten (inkl. Growth, ETFs & Crypto)
   if (Array.isArray(holdings) && holdings.length > 0) {
     list = holdings
       .filter(Boolean)
       .map(h => {
-        const shares = parseFloat(String(h?.shares || h?.amount || 0).replace(',', '.')) || 0
-        const price = parseFloat(String(h?.price || h?.currentPrice || 0).replace(',', '.')) || 0
-        const val = parseFloat(String(h?.value || h?.marketValue || (shares * price)).replace(',', '.')) || 0
+        // Name auflösen (asset.name > name > isin)
+        const name = h?.asset?.name || h?.name || h?.holdingName || h?.isin || 'Unbekannt'
+        const isin = h?.asset?.isin || h?.isin || ''
+        const type = h?.asset?.type || h?.type || 'Wertpapier'
 
-        return {
-          name: h?.asset?.name || h?.name || h?.isin || 'Unbekannt',
-          isin: h?.asset?.isin || h?.isin || '',
-          type: h?.asset?.type || h?.type || 'Wertpapier',
-          shares,
-          value: val,
-        }
+        // Zahlen-Parser (unterstützt '0.83' als String und Floats)
+        const shares = parseFloat(String(h?.shares ?? h?.amount ?? 0).replace(',', '.')) || 0
+        const price = parseFloat(String(h?.price ?? h?.currentPrice ?? 0).replace(',', '.')) || 0
+        
+        // Marktwert auflösen
+        const rawVal = h?.value ?? h?.marketValue ?? h?.totalValue ?? (shares * price)
+        const value = parseFloat(String(rawVal).replace(',', '.')) || 0
+
+        return { name, isin, type, shares, value }
       })
   } else if (byHolding && typeof byHolding === 'object') {
     // 2. Fallback über byHolding
     list = Object.entries(byHolding)
       .filter(([_, data]) => Boolean(data))
       .map(([key, data]) => {
+        const name = data?.name || data?.asset?.name || key
+        const isin = data?.isin || key
+        const type = data?.type || 'Wertpapier'
         const shares = parseFloat(String(data?.shares || '0').replace(',', '.')) || 0
-        const val = parseFloat(String(data?.value || data?.totalValue || 0).replace(',', '.')) || 0
+        const value = parseFloat(String(data?.value || data?.totalValue || 0).replace(',', '.')) || 0
 
-        return {
-          name: data?.name || data?.asset?.name || key,
-          isin: data?.isin || key,
-          type: data?.type || 'Wertpapier',
-          shares,
-          value: val,
-        }
+        return { name, isin, type, shares, value }
       })
   }
 
-  // Sortierung absteigend nach Wert
-  list.sort((a, b) => (b?.value || 0) - (a?.value || 0))
+  // Absteigend nach Marktwert sortieren
+  list.sort((a, b) => b.value - a.value)
 
-  const calculatedTotal = list.reduce((sum, item) => sum + (item?.value || 0), 0)
-  const finalTotalValue = currentValue > 0 ? currentValue : calculatedTotal
+  const computedTotal = list.reduce((sum, item) => sum + item.value, 0)
+  const finalTotalValue = currentValue > 0 ? currentValue : computedTotal
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -129,6 +129,7 @@ export default function PortfolioDashboard({
                           fontSize: 11,
                           padding: '2px 8px',
                           borderRadius: 10,
+                          textTransform: 'uppercase',
                         }}
                       >
                         {item.type}
