@@ -26,18 +26,19 @@ export default function useDividendData() {
     const [forecastByHolding, setForecastByHolding] = useState({})
     const [dividendYield,     setDividendYield]     = useState({ all: 0, ytd: 0, '12m': 0 })
     const [buyActs,           setBuyActs]           = useState([])
+    const [holdings,          setHoldings]          = useState([]) // NEU: Speichert alle Assets
     const [kpi,               setKpi]               = useState({
         all:   { net:0, gross:0, tax:0, avgMonthly:0 },
         ytd:   { net:0, gross:0, tax:0, avgMonthly:0 },
         '12m': { net:0, gross:0, tax:0, avgMonthly:0 },
     })
-    const [loading,      setLoading]      = useState(false)
-    const [authLoading,  setAuthLoading]  = useState(false)
-    const [lastUpdated,  setLastUpdated]  = useState(null)
-    const [dataSource,   setDataSource]   = useState(null)
-    const [error,        setError]        = useState(null)
-    const [currentValue, setCurrentValue] = useState(0)
-    const [cacheInfo,    setCacheInfo]    = useState(null)
+    const [loading,       setLoading]       = useState(false)
+    const [authLoading,   setAuthLoading]   = useState(false)
+    const [lastUpdated,   setLastUpdated]   = useState(null)
+    const [dataSource,    setDataSource]    = useState(null)
+    const [error,         setError]         = useState(null)
+    const [currentValue,  setCurrentValue]  = useState(0)
+    const [cacheInfo,     setCacheInfo]     = useState(null)
 
     useEffect(() => {
         if (window.location.pathname !== '/callback') return
@@ -48,7 +49,7 @@ export default function useDividendData() {
     }, [])
 
     const applyData = useCallback((payload) => {
-        const { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData } = payload
+        const { m, c, fc, bh, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData, names = {}, types = {}, tickers = {}, purchaseValuePerHolding = {} } = payload
         setMonthly(m)
         setCum(c)
         setCurrentValue(currentVal)
@@ -63,6 +64,16 @@ export default function useDividendData() {
             ytd:   purchaseValue > 0 ? +((kpiYtd.net / purchaseValue) * 100).toFixed(2) : 0,
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         })
+
+        // NEU: Kombiniert alle Assets (auch ohne Dividenden) zu einem Array
+        const allHoldings = Object.keys(names).map(id => ({
+            id,
+            name: names[id] || id,
+            type: types[id] || 'Wertpapier',
+            isin: tickers[id] || '',
+            value: purchaseValuePerHolding[id] || 0 // Dies ist aktuell der Einstandswert, da die API keine Marktwerte pro Position lädt
+        }))
+        setHoldings(allHoldings)
     }, [])
 
     const fetchFromParqet = useCallback(async () => {
@@ -99,15 +110,13 @@ export default function useDividendData() {
             names,
             types,
             tickers,
+            purchaseValuePerHolding, // Wichtig für applyData
             yahooByIsin,
         }
         writeCache(dataset).catch(err => console.warn('Cache-Schreiben fehlgeschlagen:', err))
         return dataset
     }, [])
 
-    /**
-     * Rebuild forecast mit frischen Yahoo-Daten, ohne Parqet neu abzufragen.
-     */
     const refreshYahooForCached = useCallback(async (cached) => {
         const payload      = cached.payload
         const tickers      = payload.tickers      || {}
@@ -128,8 +137,6 @@ export default function useDividendData() {
             setForecastMonthly(fc.monthly)
             setForecastByHolding(fc.forecastByHolding)
 
-            // Immer cachen, auch wenn yahooByIsin leer ist — verhindert
-            // wiederholte Anfragen wenn Yahoo keine Daten liefert
             const updated = { ...payload, fc, yahooByIsin }
             writeCache(updated).catch(err => console.warn('Yahoo-Cache-Update fehlgeschlagen:', err))
         } catch (e) {
@@ -152,7 +159,6 @@ export default function useDividendData() {
 
                     const hasRawActs = (cached.payload.rawActs?.length ?? 0) > 0
 
-                    // Zaehle wie viele nicht-Krypto Holdings gecacht sind
                     const cachedTypes   = cached.payload.types   || {}
                     const cachedTickers = cached.payload.tickers  || {}
                     const nonCryptoIsins = Object.keys(cachedTickers).filter(isin => {
@@ -162,8 +168,6 @@ export default function useDividendData() {
                     const yahooCount    = Object.keys(cached.payload.yahooByIsin || {}).length
                     const expectedCount = nonCryptoIsins.length
 
-                    // Refresh wenn: kein rawActs, kein yahooByIsin,
-                    // oder Abdeckung unter 50% der erwarteten Holdings
                     const coverageOk = expectedCount === 0 || (yahooCount / expectedCount) >= 0.5
                     const needsYahooRefresh = !hasRawActs || !coverageOk
 
@@ -222,6 +226,7 @@ export default function useDividendData() {
         kpi, dividendYield,
         currentValue,
         buyActs,
+        holdings, // NEU: Exportiert das vollständige Array an App.jsx
         loading, authLoading,
         lastUpdated, dataSource, error,
         cacheInfo,
