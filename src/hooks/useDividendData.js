@@ -65,30 +65,17 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         })
 
-        // Wir erstellen ein schnelles Lookup-Dictionary aus bh über ISIN/Ticker/Name
-        const bhLookup = {}
-        Object.entries(bh).forEach(([key, data]) => {
-            if (!data) return
-            const isin = data.ticker || key
-            const name = data.name
-            if (isin) bhLookup[isin.toLowerCase()] = data
-            if (name) bhLookup[name.toLowerCase()] = data
-        })
+        // Direkter Aufbau der Holdings aus bh (da bh exakt alle Bestände mit shares liefert)
+        const allHoldings = Object.entries(bh).map(([key, data]) => {
+            const name = data.name || names[key] || key
+            const isin = data.ticker || tickers[key] || key
+            const type = data.type || types[key] || 'security'
 
-        // Holdings aus names & bhLookup sauber zusammenbauen
-        const allHoldings = Object.keys(names).map(id => {
-            const name = names[id] || id
-            const isin = tickers[id] || id
-            const type = types[id] || 'Wertpapier'
-
-            // Versuche die Daten aus bh zu finden
-            const holdingInfo = bh[id] || bhLookup[isin.toLowerCase()] || bhLookup[name.toLowerCase()] || {}
-
-            const shares = parseFloat(String(holdingInfo.shares || holdingInfo.amount || '0').replace(',', '.')) || 0
-            const value  = parseFloat(String(holdingInfo.value || holdingInfo.totalValue || holdingInfo.purchaseValue || '0').replace(',', '.')) || 0
+            const shares = parseFloat(String(data.shares || data.amount || '0').replace(',', '.')) || 0
+            const value  = parseFloat(String(data.value || data.totalValue || data.purchaseValue || '0').replace(',', '.')) || 0
 
             return {
-                id,
+                id: key,
                 name,
                 isin,
                 type,
@@ -99,6 +86,7 @@ export default function useDividendData() {
 
         setHoldings(allHoldings)
     }, [])
+    
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
             fetchDividendActivities(),
