@@ -1,6 +1,5 @@
 import KpiCard from './KpiCard'
 
-// 1. FIX: Robuste Formatierung mit Tausendertrennzeichen über Intl.NumberFormat
 const fmt = n => 
   new Intl.NumberFormat('de-DE', { 
     style: 'currency', 
@@ -9,22 +8,31 @@ const fmt = n =>
 
 export default function PortfolioDashboard({ 
   currentValue,
-  currentVal, // 2. FIX: Fallback hinzugefügt, da die API "currentVal" liefert
+  currentVal, 
   forecast12m, 
   holdings = [] 
 }) {
-  // Nimmt currentValue, fällt aber sicher auf currentVal der API zurück
   const displayValue = currentValue ?? currentVal ?? 0;
 
-  // 3. FIX: Sichere Fallbacks (?? 0) für "shares", falls das Feld im Objekt fehlt
+  // 1. FIX: Toleranzgrenze für Anteile (shares) auf 6 Nachkommastellen (1e-6) gesenkt
+  // Damit werden auch kleine Krypto-Bruchstücke (z.B. 0.0005 BTC) als aktiv erkannt!
   const activeHoldings = holdings
-    .filter(item => (item.shares ?? 0) > 0.001)
+    .filter(item => (item.shares ?? 0) > 0.000001)
     .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 
   const soldHoldings = holdings
-    .filter(item => (item.shares ?? 0) <= 0.001)
-    // 4. FIX: Absturzschutz bei fehlendem Namen im String-Vergleich
+    .filter(item => (item.shares ?? 0) <= 0.000001)
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+
+  // 2. FIX: Hilfsfunktion, um interne hld_-IDs durch lesbare Namen (oder den Ticker) zu ersetzen
+  const getDisplayName = (item) => {
+    const rawName = item.name || '';
+    if (rawName.startsWith('hld_')) {
+      // Wenn der Name nur die ID ist, versuche den Ticker (z.B. BTC) anzuzeigen
+      return item.ticker ? item.ticker : 'Krypto-Asset (Details fehlen)';
+    }
+    return rawName || item.ticker || 'Unbekanntes Asset';
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -45,7 +53,6 @@ export default function PortfolioDashboard({
         />
         <KpiCard
           label="Progn. Jahresausschüttung"
-          // 5. FIX: "net" statt "total" verwendet, passend zur Datenstruktur kpi12m
           value={fmt(forecast12m?.net ?? 0)}
           color="#22c55e"
           sub="Nächste 12 Monate Netto"
@@ -76,10 +83,12 @@ export default function PortfolioDashboard({
               </tr>
             ) : (
               activeHoldings.map((item, idx) => (
-                // 6. FIX: Stabile React-Keys (ISIN oder Ticker) statt reinem Array-Index
                 <tr key={item.isin || item.ticker || idx} style={{ borderBottom: '1px solid #0f1420' }}>
                   <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
-                    <div>{item.name || 'Unbekanntes Asset'}</div>
+                    
+                    {/* HIER greift die neue Hilfsfunktion für den Namen */}
+                    <div>{getDisplayName(item)}</div>
+                    
                     {item.isin && <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>}
                   </td>
                   <td style={{ padding: '12px 0' }}>
@@ -88,7 +97,10 @@ export default function PortfolioDashboard({
                     </span>
                   </td>
                   <td style={{ padding: '12px 0', color: '#94a3b8' }}>
-                    {item.shares > 0 ? item.shares.toLocaleString('de-DE') : '—'}
+                    {/* Krypto-Werte behalten ihre Nachkommastellen (bis zu 8) */}
+                    {item.shares > 0 
+                      ? item.shares.toLocaleString('de-DE', { maximumFractionDigits: 8 }) 
+                      : '—'}
                   </td>
                   <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
                     {(item.value ?? 0) > 0 ? fmt(item.value) : '---'}
@@ -119,7 +131,10 @@ export default function PortfolioDashboard({
               {soldHoldings.map((item, idx) => (
                 <tr key={item.isin || item.ticker || idx} style={{ borderBottom: '1px solid #161b27' }}>
                   <td style={{ padding: '10px 0', fontWeight: 500, color: '#94a3b8' }}>
-                    <div>{item.name || 'Unbekanntes Asset'}</div>
+                    
+                    {/* Auch hier nutzen wir die Namens-Hilfsfunktion */}
+                    <div>{getDisplayName(item)}</div>
+                    
                     {item.isin && <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>}
                   </td>
                   <td style={{ padding: '10px 0' }}>
