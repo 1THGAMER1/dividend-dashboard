@@ -1,25 +1,22 @@
 import React from 'react'
 import { PieChart, Pie, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { getAssetAllocation } from '/src/dataUtils.js'
+import { getAssetAllocation } from '../utils/dataUtils'
 
 const COLORS = ['#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#fb923c', '#facc15']
-
 const fmtVal = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
-export default function AssetAllocationDonut({ holdings }) {
-    const data = getAssetAllocation(holdings)
+export default function AssetAllocationDonut({ holdings = [], currentValue = 0 }) {
+    const data = getAssetAllocation(holdings, currentValue)
 
     if (!data || data.length === 0) {
         return (
-            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }}>
-                Keine Allokations-Daten verfügbar
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 40, textAlign: 'center', color: '#64748b' }}>
+                Lade Allokations-Daten…
             </div>
         )
     }
 
     const totalValue = data.reduce((sum, item) => sum + item.value, 0)
-
-    // Wir weisen den Datenpunkten direkt ihre Farbe zu, um Cell komplett zu umgehen
     const coloredData = data.map((item, index) => ({
         ...item,
         fill: COLORS[index % COLORS.length]
@@ -31,8 +28,8 @@ export default function AssetAllocationDonut({ holdings }) {
                 🍰 Vermögensaufteilung nach Asset-Klassen
             </h3>
 
-            <div style={{ width: '100%', height: 280 }}>
-                <ResponsiveContainer>
+            <div style={{ width: '100%', height: 280, minHeight: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
                             data={coloredData}

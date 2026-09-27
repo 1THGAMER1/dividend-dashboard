@@ -1,34 +1,31 @@
-// Eine schöne Farbpalette für die einzelnen Werte
-import {Legend, ResponsiveContainer, Tooltip} from "recharts";
+import React from 'react'
+import { PieChart, Pie, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 const COLORS = [
     '#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#fb923c',
     '#facc15', '#38bdf8', '#f87171', '#4ade80', '#c084fc',
     '#2dd4bf', '#fbbf24', '#818cf8', '#fb7185', '#38a169'
 ]
-
 const fmtVal = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
-export default function AssetHoldingDonut({ holdings }) {
-    // Filtere nur aktive Positionen mit Wert größer 0 heraus
+export default function AssetHoldingDonut({ holdings = [] }) {
     const activeHoldings = holdings
         .filter(item => (item.shares > 0 || item.shares === 0) && (item.value || 0) > 0)
         .map(item => ({
             name: item.name || item.isin,
             value: item.value || 0
         }))
-        .sort((a, b) => b.value - a.value) // Größte Positionen zuerst
+        .sort((a, b) => b.value - a.value)
 
     if (!activeHoldings || activeHoldings.length === 0) {
         return (
-            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }}>
-                Keine Positions-Daten verfügbar
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 40, textAlign: 'center', color: '#64748b' }}>
+                Lade Positions-Daten…
             </div>
         )
     }
 
     const totalValue = activeHoldings.reduce((sum, item) => sum + item.value, 0)
-
     const coloredData = activeHoldings.map((item, index) => ({
         ...item,
         fill: COLORS[index % COLORS.length]
@@ -40,8 +37,8 @@ export default function AssetHoldingDonut({ holdings }) {
                 📊 Verteilung nach einzelnen Werten
             </h3>
 
-            <div style={{ width: '100%', height: 320 }}>
-                <ResponsiveContainer>
+            <div style={{ width: '100%', height: 280, minHeight: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
                             data={coloredData}
