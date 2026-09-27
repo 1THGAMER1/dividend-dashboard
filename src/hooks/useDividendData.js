@@ -177,7 +177,7 @@ export default function useDividendData() {
 
         const m  = groupByYearMonth(acts)
         const c  = toCumulative(m)
-        const fc = buildForecast(c, acts, buyActsData, names, yahooByIsin, sellActsData)
+        const fc = buildForecast(c, acts, buyActsData, names, yahooByIsin, sellActsData, types)
         const bh = groupByHolding(acts, names, types, purchaseValuePerHolding, tickers)
 
         const kpiAll = calcKpiFromActivities(acts, 'all')
@@ -215,7 +215,7 @@ export default function useDividendData() {
 
         try {
             const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
-            const fc = buildForecast(payload.c, rawActs, buyActs, names, yahooByIsin, sellActs)
+            const fc = buildForecast(payload.c, rawActs, buyActs, names, yahooByIsin, sellActs, types)
 
             setForecastCum(fc.cum)
             setForecastMonthly(fc.monthly)

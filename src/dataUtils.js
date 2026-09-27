@@ -29,7 +29,7 @@ export function toCumulative(monthly) {
   return result
 }
 
-export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = []) {
+export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = [], types={}) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
   const ny = cy + 1
@@ -187,12 +187,16 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     const name   = names[isin] || isin
     const shares = currentShares(isin)
 
+    const rawType = types?.[isin] || 'security'
+    const cleanType = formatAssetType(rawType, name)
+
     // möglicher FIX
     const row    = {
       name: name,
       isin: isin,
       shares: shares,
-      value: valueMap[isin] || 0
+      value: valueMap[isin] || 0,
+      type : cleanType
     }
 
     for (let m = 0; m < 12; m++) {
@@ -391,4 +395,26 @@ export function sumCalendarEventsByMonth(events) {
     sums[ev.month] += ev.amount
   }
   return sums.map(v => +v.toFixed(2))
+}
+
+export function formatAssetType(rawType) {
+  if (!rawType) return 'Aktie';
+
+  const t = rawType.toLowerCase();
+
+  if (t.includes('crypto') || t.includes('coin') || t.includes('token')) {
+    return 'Krypto';
+  }
+  if (t.includes('etf') || t.includes('fund') || t.includes('fonds') || t.includes('mutualfund')) {
+    return 'ETF';
+  }
+  if (t.includes('stock') || t.includes('equity') || t.includes('aktie')) {
+    return 'Aktie';
+  }
+  if (t.includes('commodity') || t.includes('precious') || t.includes('gold')) {
+    return 'Rohstoff';
+  }
+
+  // Wenn Parqet keinen spezifischen Typ liefert, standardmäßig Aktie (oder was am häufigsten vorkommt)
+  return 'Wertpapier';
 }
