@@ -35,9 +35,9 @@ const ROADMAP = [
     title: 'Sicherheit & Zuverlässigkeit',
     period: 'Q2 2026',
     items: [
-      { text: 'AES-256-GCM Verschlüsselung der Client ID',  done: true },
+      { text: 'AES-256-GCM Verschlüsselung der Client ID',   done: true },
       { text: 'JWK Key Caching (kein Re-Login nach Reload)', done: true },
-      { text: 'CORS-Einschränkung & Bearer-Auth am Proxy',  done: true },
+      { text: 'CORS-Einschränkung & Bearer-Auth am Proxy',   done: true },
       { text: 'Access Token in sessionStorage (XSS-Schutz)', done: true },
       { text: 'Weitere kleine QoL Verbesserungen',           done: true },
     ],
@@ -45,8 +45,21 @@ const ROADMAP = [
   {
     phase: '03',
     status: 'active',
+    title: 'Sicherheit & Zuverlässigkeit',
+    period: 'Q3 2026',
+    items: [
+      { text: 'Erste Übersicht für die Porfolio-Übersicht',                             done: true },
+      { text: 'Stabile Erkennung von vorher unbekannten Assets und richtige Zuordnung', done: true },
+      { text: 'Portfolio-Pie',                                                          done: true },
+      { text: 'Portfolio-Pie inkl. X-Ray Funktion',                                     done: true },
+      { text: 'QoL Verbesserungen',                                                     done: true },
+    ],
+  },
+  {
+    phase: '04',
+    status: 'planned',
     title: 'Portfolio Intelligence',
-    period: 'Q2–Q3 2026',
+    period: 'Q3-Q4 2026',
     items: [
       { text: 'Steuer-Export (CSV / PDF)',                                          done: false },
       { text: 'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)', done: true  },
@@ -54,22 +67,22 @@ const ROADMAP = [
     ],
   },
   {
-    phase: '04',
+    phase: '05',
     status: 'planned',
     title: 'Benachrichtigungen & Automatisierung',
-    period: 'Q3 2026',
+    period: 'Q4 2026',
     items: [
       { text: 'E-Mail-Benachrichtigung bei Dividendenzahlungen', done: false },
-      { text: 'Monatlicher Portfolio-Report per Mail',         done: false },
-      { text: 'Browser Push-Benachrichtigungen',                      done: false },
+      { text: 'Monatlicher Portfolio-Report per Mail',           done: false },
+      { text: 'Browser Push-Benachrichtigungen',                 done: false },
       { text: 'Automatischer Daten-Refresh (Cron)',              done: false },
     ],
   },
   {
-    phase: '05',
+    phase: '06',
     status: 'planned',
     title: 'Social & Sharing',
-    period: 'Q3-Q4',
+    period: 'Q1 2027',
     items: [
       { text: 'Portfolio-Snapshot teilen (anonymisiert)',          done: false },
       { text: 'Community-Vergleich (anonymisiertes Ranking)',      done: false },

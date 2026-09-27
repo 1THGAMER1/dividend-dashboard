@@ -23,6 +23,7 @@ import DividendCalendar  from './components/DividendCalendar.jsx'
 import SkeletonDashboard from './components/SkeletonDashboard'
 import EmptyState        from './components/EmptyState'
 import Footer            from './components/Footer'
+import AssetAllocationDonut from './components/AssetAllocationDonut'
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -632,9 +633,9 @@ export default function App() {
                     <>
                       <div style={{ marginBottom: 16 }}>
                         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🍰 Asset Allokation</h1>
-                        <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aufteilung der Positionen</p>
+                        <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aufteilung deiner echten Depotwerte nach Klassen</p>
                       </div>
-                      <DividendDonut byHolding={byHolding} kpiRange={kpiRange} />
+                      <AssetAllocationDonut holdings={enrichedHoldings || holdings} />
                     </>
                 )}
               </div>
