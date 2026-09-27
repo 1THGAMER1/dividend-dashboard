@@ -430,3 +430,15 @@ export function formatAssetType(rawType) {
   // Wenn Parqet keinen spezifischen Typ liefert, standardmäßig Aktie (oder was am häufigsten vorkommt)
   return 'Wertpapier';
 }
+
+export function getAssetAllocation(enrichedHoldings) {
+  const allocation = {}
+
+  for (const item of enrichedHoldings) {
+    if (item.shares <= 0) continue // Nur aktive Bestände berücksichtigen
+    const type = item.type || 'Aktie'
+    allocation[type] = (allocation[type] || 0) + (item.value || 0)
+  }
+
+  return Object.entries(allocation).map(([name, value]) => ({ name, value }))
+}

@@ -6,26 +6,41 @@ import { calcRealTotal } from './inflation'
 import { setTickerProgressCallback } from './api'
 
 import KpiCard           from './components/KpiCard'
-import LoginScreen       from './components/LoginScreen'
-import AppLogin          from './components/AppLogin'
+import LoginScreen       from './pages/LoginScreen.jsx'
+import AppLogin          from './pages/AppLogin.jsx'
 import ParqetSetup       from './components/ParqetSetup'
 import DividendChart     from './components/DividendChart'
 import DividendHeatmap   from './components/DividendHeatmap'
 import PositionsTable    from './components/PositionsTable'
 import DividendDonut     from './components/DividendDonut'
-import PortfolioDashboard from './components/PortfolioDashboard'
+import PortfolioDashboard from './pages/PortfolioDashboard.jsx'
 import DividendCalculator from './pages/DividendCalculator'
 import DripSimulator     from './pages/DripSimulator'
 import RoadmapPage       from './pages/RoadmapPage'
 import ProfilePage       from './pages/ProfilePage'
 import UpcomingDividends from './components/UpcomingDividends'
-import DividendCalendar  from './components/DividendCalendar'
+import DividendCalendar  from './pages/DividendCalendar.jsx'
 import SkeletonDashboard from './components/SkeletonDashboard'
 import EmptyState        from './components/EmptyState'
 import Footer            from './components/Footer'
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
+const [currentView, setCurrentView] = useState(window.location.hash.replace('#', '') || 'dashboard')
+useEffect(() => {
+  const handleHashChange = () => {
+    const view = window.location.hash.replace('#', '') || 'dashboard'
+    setCurrentView(view)
+  }
+  window.addEventListener('hashchange', handleHashChange)
+  return () => window.removeEventListener('hashchange', handleHashChange)
+}, [])
+
+// Wenn der User den Tab/die Ansicht wechselt, aktualisierst du die URL so:
+const changeView = (viewName) => {
+  window.location.hash = viewName
+  setCurrentView(viewName)
+}
 
 const KPI_RANGES = [
   { key: 'all', label: 'Gesamt' },
@@ -44,7 +59,7 @@ const DIVIDEND_TABS = [
 const PORTFOLIO_TABS = [
   { id: 'portfolio-overview', emoji: '💼', label: 'Bestände'    },
   { id: 'portfolio-assets',   emoji: '🍰', label: 'Allokation'  },
-  { id: 'calculator',         emoji: '🧭', label: 'Rechner'    },
+  //{ id: 'calculator',         emoji: '🧭', label: 'Rechner'    },
 ]
 
 const STATUS_INFO = {

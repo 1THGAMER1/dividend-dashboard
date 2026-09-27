@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { supabase } from '../supabaseClient'
+import { supabase } from '../supabaseClient.js'
 
 const FEATURES = [
     { icon: '📊', title: 'Dividenden-Übersicht',   desc: 'Alle Ausschüttungen auf einen Blick – monatlich, YTD oder Seit Kauf' },

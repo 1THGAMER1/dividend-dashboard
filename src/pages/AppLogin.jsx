@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { supabase } from '../supabaseClient'
-import { storePassword } from '../passwordStore'
+import { supabase } from '../supabaseClient.js'
+import { storePassword } from '../passwordStore.js'
 
 export default function AppLogin() {
   const [email,    setEmail]    = useState('')
