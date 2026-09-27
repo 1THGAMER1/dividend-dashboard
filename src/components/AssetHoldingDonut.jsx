@@ -1,5 +1,5 @@
 import React from 'react'
-import { PieChart, Pie, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 
 const COLORS = [
     '#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#fb923c',
@@ -9,8 +9,9 @@ const COLORS = [
 const fmtVal = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
 export default function AssetHoldingDonut({ holdings = [] }) {
+    // NUR aktive Positionen (shares > 0) und mit echtem Wert
     const activeHoldings = holdings
-        .filter(item => (item.shares > 0 || item.shares === 0) && (item.value || 0) > 0)
+        .filter(item => (item.shares || 0) > 0.000001 && (item.value || 0) > 0)
         .map(item => ({
             name: item.name || item.isin,
             value: item.value || 0
@@ -20,7 +21,7 @@ export default function AssetHoldingDonut({ holdings = [] }) {
     if (!activeHoldings || activeHoldings.length === 0) {
         return (
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 40, textAlign: 'center', color: '#64748b' }}>
-                Lade Positions-Daten…
+                Keine aktiven Positionen verfügbar
             </div>
         )
     }
@@ -33,11 +34,12 @@ export default function AssetHoldingDonut({ holdings = [] }) {
 
     return (
         <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24, marginBottom: 20 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: '#e0e6f0', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: '#e0e6f0', marginBottom: 4 }}>
                 📊 Verteilung nach einzelnen Werten
             </h3>
+            <p style={{ color: '#7a8ba0', fontSize: 12, marginBottom: 16 }}>Nur aktive Bestände</p>
 
-            <div style={{ width: '100%', height: 280, minHeight: 280 }}>
+            <div style={{ width: '100%', height: 240, minHeight: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
@@ -46,26 +48,38 @@ export default function AssetHoldingDonut({ holdings = [] }) {
                             nameKey="name"
                             cx="50%"
                             cy="50%"
-                            innerRadius={65}
-                            outerRadius={105}
-                            paddingAngle={3}
+                            innerRadius={60}
+                            outerRadius={95}
+                            paddingAngle={2}
                             stroke="#161b27"
                             strokeWidth={2}
                             isAnimationActive={false}
                         />
                         <Tooltip
                             contentStyle={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 8, color: '#e0e6f0', fontSize: 12 }}
-                            formatter={(value) => [fmtVal(value), 'Einstandswert']}
-                        />
-                        <Legend
-                            formatter={(value, entry) => {
-                                const { payload } = entry
-                                const percent = totalValue > 0 ? ((payload.value / totalValue) * 100).toFixed(1) : 0
-                                return <span style={{ color: '#c0ccd8', fontSize: 12, marginRight: 10 }}>{value} ({percent.replace('.', ',')} %)</span>
+                            formatter={(value, name) => {
+                                const percent = totalValue > 0 ? ((value / totalValue) * 100).toFixed(1) : 0
+                                return [`${fmtVal(value)} (${percent.replace('.', ',')} %)`, name]
                             }}
                         />
                     </PieChart>
                 </ResponsiveContainer>
+            </div>
+
+            {/* Kompakte, scrollbare Liste der Werte unter dem Chart statt der kaputten Legende */}
+            <div style={{ marginTop: 12, maxHeight: 120, overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {coloredData.map((item, idx) => {
+                    const percent = totalValue > 0 ? ((item.value / totalValue) * 100).toFixed(1) : 0
+                    return (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#c0ccd8' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 10 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.fill, flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+                            </div>
+                            <span style={{ fontWeight: 600, flexShrink: 0 }}>{fmtVal(item.value)} ({percent.replace('.', ',')} %)</span>
+                        </div>
+                    )
+                })}
             </div>
         </div>
     )

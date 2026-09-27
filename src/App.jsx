@@ -155,11 +155,23 @@ export default function App() {
     const hash = window.location.hash.replace('#', '')
     return hash || 'dashboard'
   })
+
+  const [appMode, setAppMode] = useState(() => {
+    const hash = window.location.hash.replace('#', '')
+    if (hash && hash.startsWith('portfolio')) return 'portfolio'
+    return 'dividends'
+  })
+
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '')
       if (hash && hash !== page) {
         setPage(hash)
+        if (hash.startsWith('portfolio')) {
+          setAppMode('portfolio')
+        } else {
+          setAppMode('dividends')
+        }
       }
     }
     window.addEventListener('hashchange', handleHashChange)
@@ -190,7 +202,6 @@ export default function App() {
     currentValue,
   } = useDividendData()
 
-  const [appMode,         setAppMode]         = useState('dividends') // 'dividends' | 'portfolio'
   const [kpiRange,        setKpiRange]        = useState('all')
   const [appUser,         setAppUser]         = useState(undefined)
   const [clientIdReady,   setClientIdReady]   = useState(false)
