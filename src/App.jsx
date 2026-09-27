@@ -647,7 +647,7 @@ export default function App() {
                         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🍰 Asset Allokation</h1>
                         <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aufteilung deiner echten Depotwerte nach Klassen</p>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', gap: '20' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20' }}>
                       <AssetHoldingDonut holdings={enrichedHoldings || holdings} />
                       <AssetAllocationDonut holdings={enrichedHoldings || holdings} />
                       </div>
