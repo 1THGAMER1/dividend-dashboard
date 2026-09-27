@@ -130,25 +130,26 @@ export default function PortfolioDashboard({
                         <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
                             <th style={{ paddingBottom: 10 }}>Asset</th>
                             <th style={{ paddingBottom: 10 }}>Typ</th>
-                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Status</th>
+                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Erlös / Status</th> {/* <--- NEUE SPALTE */}
                         </tr>
                         </thead>
                         <tbody>
                         {soldHoldings.map((item, idx) => (
                             <tr key={item.isin || idx} style={{ borderBottom: '1px solid #161b27' }}>
-                                <td style={{ padding: '10px 0', fontWeight: 500, color: '#94a3b8' }}>
+                                <td style={{ padding: '12px 0', fontWeight: 500, color: '#94a3b8' }}>
                                     <div>{getDisplayName(item)}</div>
-                                    {item.isin && !item.isin.startsWith('hld_') && (
+                                    {item.isin && !item.isin.startsWith('hld_') && item.isin !== item.name && (
                                         <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>
                                     )}
                                 </td>
-                                <td style={{ padding: '10px 0' }}>
+                                <td style={{ padding: '12px 0' }}>
                     <span style={{ background: '#161b27', border: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                      {item.type || 'N/A'}
+                      {item.type || 'Aktie'}
                     </span>
                                 </td>
-                                <td style={{ padding: '12px 0', textAlign: 'right', color: '#94a3b8' }}>
-                                    {item.soldValue > 0 ? `Erlös: ${fmt(item.soldValue)}` : 'Position geschlossen'}
+                                {/* HIER ZEIGEN WIR JETZT DEN BERECHNETEN WERT ODER DEN FALLBACK */}
+                                <td style={{ padding: '12px 0', textAlign: 'right', color: '#94a3b8', fontStyle: item.soldValue > 0 ? 'normal' : 'italic' }}>
+                                    {item.soldValue > 0 ? fmt(item.soldValue) : 'Position geschlossen'}
                                 </td>
                             </tr>
                         ))}
