@@ -210,12 +210,12 @@ export default function useDividendData() {
     }, [])
 
     const refreshYahooForCached = useCallback(async (cached) => {
-        const payload      = cached.payload
+        const payload      = cached.payload || {}
         const tickers      = payload.tickers      || {}
         const types        = payload.types        || {}
-        const rawActs      = payload.rawActs      || []
-        const buyActs      = payload.buyActsData  || []
-        const sellActs     = payload.sellActsData || []
+        const rawActs      = Array.isArray(payload.rawActs) ? payload.rawActs : []
+        const buyActs      = Array.isArray(payload.buyActsData) ? payload.buyActsData : []
+        const sellActs     = Array.isArray(payload.sellActsData) ? payload.sellActsData : []
         const names        = payload.names        || {}
 
         if (Object.keys(tickers).length === 0) return
@@ -223,12 +223,16 @@ export default function useDividendData() {
 
         try {
             const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
-            const fc = buildForecast(payload.c, rawActs, buyActs, names, yahooByIsin, sellActs, types)
+            const fc = buildForecast(payload.c || {}, rawActs, buyActs, names, yahooByIsin, sellActs, types)
 
-            setForecastCum(fc.cum)
-            setForecastMonthly(fc.monthly)
-            setForecastByHolding(fc.forecastByHolding)
-            if (fc.enrichedHoldings) setEnrichedHoldings(fc.enrichedHoldings)
+            if (fc) {
+                setForecastCum(fc.cum || {})
+                setForecastMonthly(fc.monthly || {})
+                setForecastByHolding(fc.forecastByHolding || {})
+                if (Array.isArray(fc.enrichedHoldings)) {
+                    setEnrichedHoldings(fc.enrichedHoldings)
+                }
+            }
 
             const updated = { ...payload, fc, yahooByIsin }
             writeCache(updated).catch(err => console.warn('Yahoo-Cache-Update fehlgeschlagen:', err))

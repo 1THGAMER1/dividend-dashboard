@@ -100,7 +100,11 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
   function estimateDpsWithSource(isin, month) {
     const yearData  = byIsin[isin] || {}
-    const yahooDivs = yahooByIsin[isin] || []
+
+    // Sicherstellen, dass yahooDivs immer ein Array ist (egal ob altes Cache-Format oder neues Objekt)
+    const rawYahoo  = yahooByIsin[isin] || []
+    const yahooDivs = Array.isArray(rawYahoo) ? rawYahoo : (rawYahoo.dividends || [])
+
     const refYears  = [cy - 1, cy - 2]
     const weights   = [0.7, 0.3]
 
@@ -175,7 +179,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
-  // Korrektes Einlesen der Einstandswerte über die Schleifenvariable 'buy'
   const valueMap = {}
   for (const buy of buyActivities) {
     const isin = resolve(buy.asset?.isin || buy.asset?.symbol || 'unknown')
@@ -183,7 +186,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     valueMap[isin] = (valueMap[isin] || 0) + amount
   }
 
-  // Korrektes Einlesen der Verkaufserlöse über die Schleifenvariable 'sell'
   const soldValueMap = {}
   for (const sell of sellActivities) {
     const isin = resolve(sell.asset?.isin || sell.asset?.symbol || 'unknown')
@@ -443,7 +445,7 @@ export function getAssetAllocation(enrichedHoldings, totalPortfolioValue = 0) {
     holdingsSum += val
   }
   const result = Object.entries(allocation).map(([name, value]) => ({ name, value }))
-  // Wenn ein Gesamtwert vorliegt und es eine Differenz gibt (z.B. Cash), fangen wir das auf
+
   if (totalPortfolioValue > holdingsSum) {
     const diff = totalPortfolioValue - holdingsSum
     result.push({ name: 'Cash / Sonstiges', value: diff })
