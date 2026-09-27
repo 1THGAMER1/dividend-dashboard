@@ -27,6 +27,7 @@ export default function useDividendData() {
     const [dividendYield,     setDividendYield]     = useState({ all: 0, ytd: 0, '12m': 0 })
     const [buyActs,           setBuyActs]           = useState([])
     const [holdings,          setHoldings]          = useState([])
+    const [enrichedHoldings,  setEnrichedHoldings]  = useState([])
     const [kpi,               setKpi]               = useState({
         all:   { net:0, gross:0, tax:0, avgMonthly:0 },
         ytd:   { net:0, gross:0, tax:0, avgMonthly:0 },
@@ -48,9 +49,9 @@ export default function useDividendData() {
             .catch(e  => { setError(e.message); setAuthLoading(false) })
     }, [])
 
-   const applyData = useCallback((payload) => {
+    const applyData = useCallback((payload) => {
         const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData = [], sellActsData = [], names = {}, types = {}, tickers = {}, purchaseValuePerHolding = [] } = payload;
-        
+
         setMonthly(m);
         setCum(c);
         setCurrentValue(currentVal);
@@ -59,6 +60,12 @@ export default function useDividendData() {
         setByHolding(bh);
         setForecastByHolding(fc.forecastByHolding);
         setBuyActs(buyActsData ?? []);
+
+        // Übernimmt die saubere Tabelle direkt aus den Forecast-Daten (fc)
+        if (fc.enrichedHoldings) {
+            setEnrichedHoldings(fc.enrichedHoldings);
+        }
+
         setKpi({ all: kpiAll, ytd: kpiYtd, '12m': kpi12m });
         setDividendYield({
             all:   purchaseValue > 0 ? +((kpiAll.net / purchaseValue) * 100).toFixed(2) : 0,
@@ -66,10 +73,7 @@ export default function useDividendData() {
             '12m': purchaseValue > 0 ? +((kpi12m.net / purchaseValue) * 100).toFixed(2) : 0,
         });
 
-        // 1. DYNAMISCHES LEXIKON AUFBAUEN (Verknüpft hld_ IDs automatisch mit Tickersymbolen & Namen)
         const idMap = {};
-
-        // A) Aus purchaseValuePerHolding Daten extrahieren
         const phArray = Array.isArray(purchaseValuePerHolding) ? purchaseValuePerHolding : Object.values(purchaseValuePerHolding || {});
         phArray.forEach(item => {
             const hId = item.holdingId || item.id;
@@ -81,7 +85,6 @@ export default function useDividendData() {
             }
         });
 
-        // B) Aus allen Kauf- und Verkaufsaktivitäten ergänzen
         [...(buyActsData || []), ...(sellActsData || [])].forEach(act => {
             const hId = act.holdingId;
             const symbol = act.asset?.ticker || act.asset?.isin;
@@ -90,7 +93,6 @@ export default function useDividendData() {
             }
         });
 
-        // Hilfsfunktion zum Auflösen der korrekten ID/ISIN für den Tracker
         const resolveId = (act) => {
             const rawId = act.asset?.ticker || act.asset?.isin || act.holdingId;
             if (idMap[rawId]) return idMap[rawId].isin;
@@ -100,22 +102,20 @@ export default function useDividendData() {
 
         const tracker = {};
 
-        // 2. KÄUFE VERARBEITEN
         (buyActsData || []).forEach(act => {
             const isin = resolveId(act);
             if (!isin) return;
             if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0, soldValue: 0, realizedGains: 0 };
-            
+
             tracker[isin].shares += parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
             tracker[isin].val += parseFloat(String(act.amount || act.total || 0).replace(',', '.')) || 0;
         });
 
-        // 3. VERKÄUFE VERARBEITEN & GEWINNE BERECHNEN
         (sellActsData || []).forEach(act => {
             const isin = resolveId(act);
             if (!isin) return;
             if (!tracker[isin]) tracker[isin] = { shares: 0, val: 0, soldValue: 0, realizedGains: 0 };
-            
+
             const soldShares = parseFloat(String(act.shares || act.quantity || 0).replace(',', '.')) || 0;
             if (tracker[isin].shares > 0) {
                 const avgPrice = tracker[isin].val / tracker[isin].shares;
@@ -127,7 +127,6 @@ export default function useDividendData() {
             tracker[isin].realizedGains += parseFloat(String(act.realizedGainsNet || act.realizedGains || 0).replace(',', '.')) || 0;
         });
 
-        // 4. DASHBOARD LISTE ZUSAMMENBAUEN
         const allKeys = Array.from(new Set([
             ...Object.keys(names),
             ...Object.keys(tracker),
@@ -136,7 +135,7 @@ export default function useDividendData() {
 
         const list = allKeys.map(key => {
             const mapped = idMap[key] || Object.values(idMap).find(x => x.isin === key);
-            
+
             const isin = tickers[key] || mapped?.isin || key;
             const name = names[key] || mapped?.name || key;
             const type = types[key] || mapped?.type || 'Wertpapier';
@@ -158,12 +157,10 @@ export default function useDividendData() {
             };
         });
 
-        // Doppelte Einträge bereinigen
         const uniqueList = Array.from(new Map(list.map(item => [item.isin, item])).values());
-
         setHoldings(uniqueList);
     }, []);
-    
+
     const fetchFromParqet = useCallback(async () => {
         const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
             fetchDividendActivities(),
@@ -176,7 +173,6 @@ export default function useDividendData() {
         ])
 
         const { names, types, tickers } = holdingData
-
         const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
 
         const m  = groupByYearMonth(acts)
@@ -219,11 +215,12 @@ export default function useDividendData() {
 
         try {
             const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
-
             const fc = buildForecast(payload.c, rawActs, buyActs, names, yahooByIsin, sellActs)
+
             setForecastCum(fc.cum)
             setForecastMonthly(fc.monthly)
             setForecastByHolding(fc.forecastByHolding)
+            if (fc.enrichedHoldings) setEnrichedHoldings(fc.enrichedHoldings)
 
             const updated = { ...payload, fc, yahooByIsin }
             writeCache(updated).catch(err => console.warn('Yahoo-Cache-Update fehlgeschlagen:', err))
@@ -246,7 +243,6 @@ export default function useDividendData() {
                     setLoading(false)
 
                     const hasRawActs = (cached.payload.rawActs?.length ?? 0) > 0
-
                     const cachedTypes   = cached.payload.types   || {}
                     const cachedTickers = cached.payload.tickers  || {}
                     const nonCryptoIsins = Object.keys(cachedTickers).filter(isin => {
@@ -309,7 +305,8 @@ export default function useDividendData() {
         kpi, dividendYield,
         currentValue,
         buyActs,
-        holdings, // <--- Exportiert das korrekte Holdings-Array
+        holdings,
+        enrichedHoldings,
         loading, authLoading,
         lastUpdated, dataSource, error,
         cacheInfo,
