@@ -155,6 +155,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
   const isinsFromDivs = Object.keys(byIsin)
   const isinsFromBuys = Object.keys(sharesFromBuys).filter(isin => (netSharesMap[isin] ?? 0) > 0)
+  const isinsFromNames = Object.keys(names)
   const isinsAll      = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
   const isins = isinsAll.filter(isin => {
     if (!(isin in netSharesMap)) return true
@@ -171,12 +172,19 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
       curYearActuals[d.getMonth()] += a.amountNet ?? a.amount ?? 0
     }
   }
+  const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
 
+  // Einstandswertberechnung aus den Buy-Aktivitäten
   const valueMap = {}
   for (const a of buyActivities) {
-    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
     const amount = parseFloat(String(a.amount || a.total || 0).replace(',', '.')) || 0
     valueMap[isin] = (valueMap[isin] || 0) + amount
+  }
+  // Erlös und Verkaufswert aus den Sell-Aktivitäten
+  const soldValueMap = {}
+  for (const a of sellActivities) {
+    const amount = parseFloat(String(a.amountNet || a.amount || a.total || 0).replace(',', '.')) || 0
+    soldValueMap[isin] = (soldValueMap[isin] || 0) + amount
   }
 
   const forecastByHolding = {}
@@ -196,6 +204,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
       isin: isin,
       shares: shares,
       value: valueMap[isin] || 0,
+      soldValue : soldValueMap[isin] || 0,
       type : cleanType
     }
 
