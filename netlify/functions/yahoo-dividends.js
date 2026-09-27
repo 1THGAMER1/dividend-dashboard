@@ -11,7 +11,7 @@ export const handler = async function(event, context) {
     }
 
     try {
-        const symbol = event.queryStringParameters?.symbol;
+        const symbol = event.queryStringParameters?.symbol || event.queryStringParameters?.ticker;
         const range = event.queryStringParameters?.range || '5y';
         const interval = event.queryStringParameters?.interval || '1mo';
 
