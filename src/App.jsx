@@ -26,21 +26,6 @@ import Footer            from './components/Footer'
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
-const [currentView, setCurrentView] = useState(window.location.hash.replace('#', '') || 'dashboard')
-useEffect(() => {
-  const handleHashChange = () => {
-    const view = window.location.hash.replace('#', '') || 'dashboard'
-    setCurrentView(view)
-  }
-  window.addEventListener('hashchange', handleHashChange)
-  return () => window.removeEventListener('hashchange', handleHashChange)
-}, [])
-
-// Wenn der User den Tab/die Ansicht wechselt, aktualisierst du die URL so:
-const changeView = (viewName) => {
-  window.location.hash = viewName
-  setCurrentView(viewName)
-}
 
 const KPI_RANGES = [
   { key: 'all', label: 'Gesamt' },
@@ -163,6 +148,21 @@ function LoadingScreen({ text, progress }) {
 }
 
 export default function App() {
+  const [currentView, setCurrentView] = useState(window.location.hash.replace('#', '') || 'dashboard')
+  useEffect(() => {
+    const handleHashChange = () => {
+      const view = window.location.hash.replace('#', '') || 'dashboard'
+      setCurrentView(view)
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
+
+// Wenn der User den Tab/die Ansicht wechselt, aktualisierst du die URL so:
+  const changeView = (viewName) => {
+    window.location.hash = viewName
+    setCurrentView(viewName)
+  }
   const {
     loggedIn,
     monthly, cum, forecastCum, forecastMonthly,
