@@ -172,6 +172,13 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
+  const valueMap = {}
+  for (const a of buyActivities) {
+    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
+    const amount = parseFloat(String(a.amount || a.total || 0).replace(',', '.')) || 0
+    valueMap[isin] = (valueMap[isin] || 0) + amount
+  }
+
   const forecastByHolding = {}
   const enrichedHoldings = []
 
@@ -179,15 +186,14 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     forecastByHolding[isin] = {}
     const name   = names[isin] || isin
     const shares = currentShares(isin)
-    const holdingInfo = currentShares(isin)
-    const totalValue = holdingInfo.purchaseValue || (shares * 100)
 
     // möglicher FIX
     const row    = {
       name: name,
       isin: isin,
       shares: shares,
-      value: holdingInfo.value || 0}
+      value: valueMap[isin] || 0
+    }
 
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
