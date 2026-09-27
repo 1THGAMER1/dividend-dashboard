@@ -173,15 +173,21 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   }
 
   const forecastByHolding = {}
-  const enrichedHoldings = [] // FIX: Umbenannt und bereit für den Export
+  const enrichedHoldings = []
 
-  for (const isin of isins) {
+  for (const isin of isinsAll) {
     forecastByHolding[isin] = {}
     const name   = names[isin] || isin
     const shares = currentShares(isin)
+    const holdingInfo = currentShares(isin)
+    const totalValue = holdingInfo.purchaseValue || (shares * 100)
 
-    // FIX: Keine Rundung mehr bei shares, es bleibt eine Zahl
-    const row    = { name: name.slice(0, 20), isin, shares: shares }
+    // möglicher FIX
+    const row    = {
+      name: name,
+      isin: isin,
+      shares: shares,
+      value: holdingInfo.value || 0}
 
     for (let m = 0; m < 12; m++) {
       const actual = byIsin[isin][cy]?.[m]
