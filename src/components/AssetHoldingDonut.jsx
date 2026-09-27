@@ -39,8 +39,8 @@ export default function AssetHoldingDonut({ holdings = [] }) {
             </h3>
             <p style={{ color: '#7a8ba0', fontSize: 12, marginBottom: 16 }}>Nur aktive Bestände</p>
 
-            <div style={{ width: '100%', height: 240, minHeight: 240 }}>
-                <ResponsiveContainer width="100%" height="100%">
+            <div style={{ width: '100%', height: 280, minWidth: 250 }}>
+                <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
                         <Pie
                             data={coloredData}

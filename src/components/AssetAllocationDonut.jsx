@@ -28,8 +28,8 @@ export default function AssetAllocationDonut({ holdings = [], currentValue = 0 }
                 🍰 Vermögensaufteilung nach Asset-Klassen
             </h3>
 
-            <div style={{ width: '100%', height: 280, minHeight: 280 }}>
-                <ResponsiveContainer width="100%" height="100%">
+            <div style={{ width: '100%', height: 280, minWidth: 250 }}>
+                <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
                         <Pie
                             data={coloredData}

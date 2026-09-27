@@ -50,7 +50,13 @@ export default function useDividendData() {
     }, [])
 
     const applyData = useCallback((payload) => {
-        const { m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m, purchaseValue, currentVal, buyActsData = [], sellActsData = [], names = {}, types = {}, tickers = {}, purchaseValuePerHolding = [] } = payload;
+        const {
+            m, c, fc, bh = {}, kpiAll, kpiYtd, kpi12m,
+            purchaseValue, currentVal, buyActsData = [],
+            sellActsData = [], names = {}, types = {},
+            tickers = {}, purchaseValuePerHolding = [],
+            yahooByIsin = {}
+        } = payload;
 
         setMonthly(m);
         setCum(c);
@@ -61,7 +67,6 @@ export default function useDividendData() {
         setForecastByHolding(fc.forecastByHolding);
         setBuyActs(buyActsData ?? []);
 
-        // Übernimmt die saubere Tabelle direkt aus den Forecast-Daten (fc)
         if (fc.enrichedHoldings) {
             setEnrichedHoldings(fc.enrichedHoldings);
         }
@@ -142,8 +147,11 @@ export default function useDividendData() {
 
             let shares = tracker[key]?.shares || tracker[isin]?.shares || 0;
             let val = tracker[key]?.val || tracker[isin]?.val || 0;
-            let soldValue = tracker[key]?.soldValue || tracker[isin]?.soldValue || 0;
-            let realizedGains = tracker[key]?.realizedGains || tracker[isin]?.realizedGains || 0;
+
+            // --- LIVE-MARKTWERT ERMITTELN ---
+            const currentPrice = yahooByIsin[isin]?.price || null;
+            let marketValue = (currentPrice !== null && currentPrice !== undefined) ? shares * currentPrice : val;
+            // --------------------------------
 
             return {
                 id: key,
@@ -151,9 +159,9 @@ export default function useDividendData() {
                 isin,
                 type,
                 shares: shares > 0.0001 ? shares : 0,
-                value: shares > 0.0001 ? val : 0,
-                soldValue,
-                realizedGains
+                value: shares > 0.0001 ? marketValue : 0,
+                costValue: val,
+                soldValue: tracker[key]?.soldValue || 0,
             };
         });
 

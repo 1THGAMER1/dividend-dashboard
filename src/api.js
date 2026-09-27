@@ -278,18 +278,19 @@ async function resolveIsinsToTickers(isins) {
 // --- Yahoo Dividenden ---
 
 export async function fetchYahooDividends(ticker) {
-  if (!ticker) return { dividends: [], currency: 'EUR', _resolvedTicker: null }
+  if (!ticker) return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
   try {
     const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(ticker)}`)
-    if (!res.ok) return { dividends: [], currency: 'EUR', _resolvedTicker: null }
+    if (!res.ok) return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
     const data = await res.json()
     return {
       dividends:       data.dividends      || [],
       currency:        data.currency       || 'EUR',
+      price:           data.price          || data.regularMarketPrice || null, // <--- Aktuellen Kurs erfassen
       _resolvedTicker: data.resolvedTicker || null,
     }
   } catch {
-    return { dividends: [], currency: 'EUR', _resolvedTicker: null }
+    return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
   }
 }
 
@@ -326,17 +327,20 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   console.log(`[Yahoo] ${withTicker.length}/${relevant.length} mit EUR-Ticker`)
 
   const results = await Promise.allSettled(
-    withTicker.map(async isin => {
-      const symbol = resolvedTickers[isin]
-      const { dividends } = await fetchYahooDividends(symbol)
-      return { isin, dividends }
-    })
+      withTicker.map(async isin => {
+        const symbol = resolvedTickers[isin]
+        const { dividends, price } = await fetchYahooDividends(symbol)
+        return { isin, dividends, price }
+      })
   )
 
   const map = {}
   for (const r of results) {
-    if (r.status === 'fulfilled' && r.value.dividends.length > 0) {
-      map[r.value.isin] = r.value.dividends
+    if (r.status === 'fulfilled') {
+      map[r.value.isin] = {
+        dividends: r.value.dividends,
+        price: r.value.price
+      }
     }
   }
   return map
@@ -396,5 +400,18 @@ export async function fetchCurrentValue() {
   } catch (e) {
     console.error('fetchCurrentValue Fehler:', e.message)
     return 0
+  }
+}
+// Holt den aktuellen Live-Kurs für ein Asset via Yahoo Finance
+export async function fetchCurrentPrice(tickerOrIsin) {
+  try {
+    // Falls du bereits einen Yahoo-Endpoint nutzt, hier einbinden
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${tickerOrIsin}?range=1d&interval=1d`)
+    const data = await res.json()
+    const price = data.chart?.result?.[0]?.meta?.regularMarketPrice
+    return price || null
+  } catch (e) {
+    console.warn(`Konnte Kurs für ${tickerOrIsin} nicht laden:`, e.message)
+    return null
   }
 }
