@@ -180,10 +180,13 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     const amount = parseFloat(String(a.amount || a.total || 0).replace(',', '.')) || 0
     valueMap[isin] = (valueMap[isin] || 0) + amount
   }
-  // Erlös und Verkaufswert aus den Sell-Aktivitäten
+  // Erlös / Verkaufswert aus den Sell-Aktivitäten summieren
   const soldValueMap = {}
   for (const a of sellActivities) {
-    const amount = parseFloat(String(a.amountNet || a.amount || a.total || 0).replace(',', '.')) || 0
+    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
+    // Wir fangen hier alle denkbaren Feldnamen ab, die Parqet für den Verkaufserlös nutzen könnte:
+    const rawAmount = a.amountNet ?? a.amount ?? a.total ?? a.value ?? 0
+    const amount = parseFloat(String(rawAmount).replace(',', '.')) || 0
     soldValueMap[isin] = (soldValueMap[isin] || 0) + amount
   }
 
