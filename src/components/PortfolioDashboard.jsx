@@ -29,10 +29,12 @@ export default function PortfolioDashboard({
     const rawName = item.name || '';
     if (rawName.startsWith('hld_')) {
       // Wenn der Name nur die ID ist, versuche den Ticker (z.B. BTC) anzuzeigen
+      
       return item.ticker ? item.ticker : 'Krypto-Asset (Details fehlen)';
     }
     return rawName || item.ticker || 'Unbekanntes Asset';
   }
+  console.log("Eingehende Holdings:", holdings.filter(h => h.name?.includes('hld_') || h.ticker === 'BTC'));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
