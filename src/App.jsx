@@ -148,27 +148,39 @@ function LoadingScreen({ text, progress }) {
 }
 
 export default function App() {
-  const [currentView, setCurrentView] = useState(window.location.hash.replace('#', '') || 'dashboard')
+  // 1. Hash-Routing State direkt in der App-Komponente
+  const [page, setPage] = useState(() => {
+    const hash = window.location.hash.replace('#', '')
+    return hash || 'dashboard'
+  })
   useEffect(() => {
     const handleHashChange = () => {
-      const view = window.location.hash.replace('#', '') || 'dashboard'
-      setCurrentView(view)
+      const hash = window.location.hash.replace('#', '')
+      if (hash && hash !== page) {
+        setPage(hash)
+      }
     }
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [])
+  }, [page])
 
-// Wenn der User den Tab/die Ansicht wechselt, aktualisierst du die URL so:
-  const changeView = (viewName) => {
-    window.location.hash = viewName
-    setCurrentView(viewName)
+  const handlePageChange = (newPage) => {
+    setPage(newPage)
+    window.location.hash = newPage
   }
+
+  const handleModeSwitch = (newMode) => {
+    setAppMode(newMode)
+    const defaultPage = newMode === 'dividends' ? 'dashboard' : 'portfolio-overview'
+    handlePageChange(defaultPage)
+  }
+
   const {
     loggedIn,
     monthly, cum, forecastCum, forecastMonthly,
     byHolding, forecastByHolding,
     holdings,
-    enrichedHoldings, // 1. FIX: Hier holen wir das perfekte Array aus dem Hook
+    enrichedHoldings,
     kpi, dividendYield,
     loading, authLoading,
     lastUpdated, dataSource, error,
@@ -177,7 +189,6 @@ export default function App() {
   } = useDividendData()
 
   const [appMode,         setAppMode]         = useState('dividends') // 'dividends' | 'portfolio'
-  const [page,            setPage]            = useState('dashboard')
   const [kpiRange,        setKpiRange]        = useState('all')
   const [appUser,         setAppUser]         = useState(undefined)
   const [clientIdReady,   setClientIdReady]   = useState(false)
@@ -187,12 +198,6 @@ export default function App() {
 
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const menuRef = useRef(null)
-
-  const handleModeSwitch = (newMode) => {
-    setAppMode(newMode)
-    setPage(newMode === 'dividends' ? 'dashboard' : 'portfolio-overview')
-  }
-
   const currentTabs = appMode === 'dividends' ? DIVIDEND_TABS : PORTFOLIO_TABS
 
   useEffect(() => {
@@ -394,7 +399,7 @@ export default function App() {
 
           <div style={{ display: 'flex', gap: 4 }}>
             {currentTabs.map(tab => (
-                <button key={tab.id} onClick={() => setPage(tab.id)} style={{
+                <button key={tab.id} onClick={() => handlePageChange(tab.id)} style={{
                   background: page === tab.id ? '#009991' : 'transparent',
                   color: page === tab.id ? 'white' : '#556070',
                   border: 'none', borderRadius: 8,

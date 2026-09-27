@@ -29,7 +29,7 @@ export function toCumulative(monthly) {
   return result
 }
 
-export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = [], types={}) {
+export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = [], types = {}) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
   const ny = cy + 1
@@ -53,13 +53,13 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   const sharesFromBuys  = {}
   const sharesFromSells = {}
 
-  for (const a of buyActivities) {
-    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
-    sharesFromBuys[isin] = (sharesFromBuys[isin] || 0) + (a.shares ?? 0)
+  for (const buy of buyActivities) {
+    const isin = resolve(buy.asset?.isin || buy.asset?.symbol || 'unknown')
+    sharesFromBuys[isin] = (sharesFromBuys[isin] || 0) + (buy.shares ?? 0)
   }
-  for (const a of sellActivities) {
-    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
-    sharesFromSells[isin] = (sharesFromSells[isin] || 0) + (a.shares ?? 0)
+  for (const sell of sellActivities) {
+    const isin = resolve(sell.asset?.isin || sell.asset?.symbol || 'unknown')
+    sharesFromSells[isin] = (sharesFromSells[isin] || 0) + (sell.shares ?? 0)
   }
 
   const netSharesMap = {}
@@ -153,14 +153,16 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     return { dps: avg, source: 'yahoo-avg', detail: `avg(${monthMatches.length}): ${avg.toFixed(6)}` }
   }
 
-  const isinsFromDivs = Object.keys(byIsin)
-  const isinsFromBuys = Object.keys(sharesFromBuys).filter(isin => (netSharesMap[isin] ?? 0) > 0)
+  const isinsFromDivs  = Object.keys(byIsin)
+  const isinsFromBuys  = Object.keys(sharesFromBuys).filter(isin => (netSharesMap[isin] ?? 0) > 0)
   const isinsFromNames = Object.keys(names)
-  const isinsAll      = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
+  const isinsAll       = [...new Set([...isinsFromDivs, ...isinsFromBuys, ...isinsFromNames])]
+
   const isins = isinsAll.filter(isin => {
     if (!(isin in netSharesMap)) return true
     return netSharesMap[isin] > 0
   })
+
   for (const isin of isinsFromBuys) {
     if (!byIsin[isin]) byIsin[isin] = {}
   }
@@ -172,20 +174,20 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
       curYearActuals[d.getMonth()] += a.amountNet ?? a.amount ?? 0
     }
   }
-  const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
 
-  // Einstandswertberechnung aus den Buy-Aktivitäten
+  // Korrektes Einlesen der Einstandswerte über die Schleifenvariable 'buy'
   const valueMap = {}
-  for (const a of buyActivities) {
-    const amount = parseFloat(String(a.amount || a.total || 0).replace(',', '.')) || 0
+  for (const buy of buyActivities) {
+    const isin = resolve(buy.asset?.isin || buy.asset?.symbol || 'unknown')
+    const amount = parseFloat(String(buy.amount || buy.total || 0).replace(',', '.')) || 0
     valueMap[isin] = (valueMap[isin] || 0) + amount
   }
-  // Erlös / Verkaufswert aus den Sell-Aktivitäten summieren
+
+  // Korrektes Einlesen der Verkaufserlöse über die Schleifenvariable 'sell'
   const soldValueMap = {}
-  for (const a of sellActivities) {
-    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
-    // Wir fangen hier alle denkbaren Feldnamen ab, die Parqet für den Verkaufserlös nutzen könnte:
-    const rawAmount = a.amountNet ?? a.amount ?? a.total ?? a.value ?? 0
+  for (const sell of sellActivities) {
+    const isin = resolve(sell.asset?.isin || sell.asset?.symbol || 'unknown')
+    const rawAmount = sell.amountNet ?? sell.amount ?? sell.total ?? sell.value ?? 0
     const amount = parseFloat(String(rawAmount).replace(',', '.')) || 0
     soldValueMap[isin] = (soldValueMap[isin] || 0) + amount
   }
@@ -198,26 +200,25 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     const name   = names[isin] || isin
     const shares = currentShares(isin)
 
-    const rawType = types?.[isin] || 'security'
+    const rawType   = types?.[isin] || 'security'
     const cleanType = formatAssetType(rawType, name)
 
-    // möglicher FIX
-    const row    = {
+    const row = {
       name: name,
       isin: isin,
       shares: shares,
       value: valueMap[isin] || 0,
-      soldValue : soldValueMap[isin] || 0,
-      type : cleanType
+      soldValue: soldValueMap[isin] || 0,
+      type: cleanType
     }
 
     for (let m = 0; m < 12; m++) {
-      const actual = byIsin[isin][cy]?.[m]
+      const actual = byIsin[isin]?.[cy]?.[m]
       if (actual && actual.amount > 0) {
         forecastByHolding[isin][m] = +actual.amount.toFixed(4)
         row[MONTHS[m]] = `✓${actual.amount.toFixed(2)}`
       } else {
-        const { dps, source, detail } = estimateDpsWithSource(isin, m)
+        const { dps, source } = estimateDpsWithSource(isin, m)
         const total = +(dps * shares).toFixed(4)
         forecastByHolding[isin][m] = total
         if (m >= cm && total > 0) {
@@ -238,7 +239,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     } else if (m === cm) {
       const alreadyReceived = curYearActuals[cm]
       const stillExpected   = isins.reduce((s, isin) => {
-        const actual = byIsin[isin][cy]?.[cm]
+        const actual = byIsin[isin]?.[cy]?.[cm]
         if (actual && actual.amount > 0) return s
         return s + (forecastByHolding[isin][cm] || 0)
       }, 0)
@@ -269,7 +270,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     cum:              { [cy]: cumCy,     [ny]: cumNy     },
     monthly:          { [cy]: monthlyCy, [ny]: monthlyNy },
     forecastByHolding,
-    enrichedHoldings, // FIX: Die Liste wird hier exportiert
+    enrichedHoldings,
   }
 }
 
