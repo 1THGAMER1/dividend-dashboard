@@ -29,13 +29,10 @@ export default function PortfolioDashboard({
         .filter(item => getShares(item) <= 0.000001)
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
-    // Fallback-Logik für Namen, falls rohe Datenbank-IDs (hld_...) durchrutschen
+    // Fallback-Logik für Namen
     const getDisplayName = (item) => {
-        const rawName = item.name || '';
-        if (rawName.startsWith('hld_')) {
-            return item.isin && !item.isin.startsWith('hld_') ? item.isin : 'Unbekanntes Asset';
-        }
-        return rawName || item.isin || 'Unbekanntes Asset';
+        // Da wir die neue Tabelle nutzen, ist item.name bereits "Bitcoin", "Solana" etc.
+        return item.name || item.isin || 'Unbekanntes Asset';
     }
 
     return (
@@ -94,8 +91,8 @@ export default function PortfolioDashboard({
                                 <tr key={item.isin || idx} style={{ borderBottom: '1px solid #0f1420' }}>
                                     <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
                                         <div>{getDisplayName(item)}</div>
-                                        {/* Zeigt die ISIN/Ticker in kleiner Schrift, wenn es keine hld_ ID ist */}
-                                        {item.isin && !item.isin.startsWith('hld_') && (
+                                        {/* Zeigt die ISIN/den Ticker (z.B. "BTC") darunter an, solange er nicht leer ist */}
+                                        {item.isin && item.isin !== item.name && (
                                             <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>
                                         )}
                                     </td>
