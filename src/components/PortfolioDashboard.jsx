@@ -1,21 +1,30 @@
 import KpiCard from './KpiCard'
 
-const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
+// 1. FIX: Robuste Formatierung mit Tausendertrennzeichen über Intl.NumberFormat
+const fmt = n => 
+  new Intl.NumberFormat('de-DE', { 
+    style: 'currency', 
+    currency: 'EUR' 
+  }).format(n || 0)
 
 export default function PortfolioDashboard({ 
-  currentValue, 
+  currentValue,
+  currentVal, // 2. FIX: Fallback hinzugefügt, da die API "currentVal" liefert
   forecast12m, 
   holdings = [] 
 }) {
-  // Aktive Bestände: Mindestens ein Anteil im Depot (shares > 0.001 wegen möglicher Rundungsfehler)
-  const activeHoldings = holdings
-    .filter(item => item.shares > 0.001)
-    .sort((a, b) => b.value - a.value)
+  // Nimmt currentValue, fällt aber sicher auf currentVal der API zurück
+  const displayValue = currentValue ?? currentVal ?? 0;
 
-  // Verkaufte Bestände: Anteile liegen bei 0
+  // 3. FIX: Sichere Fallbacks (?? 0) für "shares", falls das Feld im Objekt fehlt
+  const activeHoldings = holdings
+    .filter(item => (item.shares ?? 0) > 0.001)
+    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+
   const soldHoldings = holdings
-    .filter(item => item.shares <= 0.001)
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .filter(item => (item.shares ?? 0) <= 0.001)
+    // 4. FIX: Absturzschutz bei fehlendem Namen im String-Vergleich
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -24,7 +33,7 @@ export default function PortfolioDashboard({
       <div className="kpi-grid">
         <KpiCard
           label="Portfolio Marktwert"
-          value={currentValue > 0 ? fmt(currentValue) : '--- €'}
+          value={displayValue > 0 ? fmt(displayValue) : '--- €'}
           color="#60a5fa"
           sub="Aktueller Gesamtwert"
         />
@@ -36,7 +45,8 @@ export default function PortfolioDashboard({
         />
         <KpiCard
           label="Progn. Jahresausschüttung"
-          value={fmt(forecast12m?.total ?? 0)}
+          // 5. FIX: "net" statt "total" verwendet, passend zur Datenstruktur kpi12m
+          value={fmt(forecast12m?.net ?? 0)}
           color="#22c55e"
           sub="Nächste 12 Monate Netto"
         />
@@ -66,21 +76,22 @@ export default function PortfolioDashboard({
               </tr>
             ) : (
               activeHoldings.map((item, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid #0f1420' }}>
+                // 6. FIX: Stabile React-Keys (ISIN oder Ticker) statt reinem Array-Index
+                <tr key={item.isin || item.ticker || idx} style={{ borderBottom: '1px solid #0f1420' }}>
                   <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
-                    <div>{item.name}</div>
+                    <div>{item.name || 'Unbekanntes Asset'}</div>
                     {item.isin && <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>}
                   </td>
                   <td style={{ padding: '12px 0' }}>
                     <span style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#38bdf8', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                      {item.type}
+                      {item.type || 'N/A'}
                     </span>
                   </td>
                   <td style={{ padding: '12px 0', color: '#94a3b8' }}>
                     {item.shares > 0 ? item.shares.toLocaleString('de-DE') : '—'}
                   </td>
                   <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
-                    {item.value > 0 ? fmt(item.value) : '---'}
+                    {(item.value ?? 0) > 0 ? fmt(item.value) : '---'}
                   </td>
                 </tr>
               ))
@@ -106,14 +117,14 @@ export default function PortfolioDashboard({
             </thead>
             <tbody>
               {soldHoldings.map((item, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid #161b27' }}>
+                <tr key={item.isin || item.ticker || idx} style={{ borderBottom: '1px solid #161b27' }}>
                   <td style={{ padding: '10px 0', fontWeight: 500, color: '#94a3b8' }}>
-                    <div>{item.name}</div>
+                    <div>{item.name || 'Unbekanntes Asset'}</div>
                     {item.isin && <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>}
                   </td>
                   <td style={{ padding: '10px 0' }}>
                     <span style={{ background: '#161b27', border: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                      {item.type}
+                      {item.type || 'N/A'}
                     </span>
                   </td>
                   <td style={{ padding: '10px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
