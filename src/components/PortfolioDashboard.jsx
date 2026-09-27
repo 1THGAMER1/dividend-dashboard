@@ -1,159 +1,165 @@
+import React from 'react'
 import KpiCard from './KpiCard'
 
-const fmt = n => 
-  new Intl.NumberFormat('de-DE', { 
-    style: 'currency', 
-    currency: 'EUR' 
-  }).format(n || 0)
+const fmt = n =>
+    new Intl.NumberFormat('de-DE', {
+        style: 'currency',
+        currency: 'EUR'
+    }).format(n || 0)
 
-export default function PortfolioDashboard({ 
-  currentValue,
-  currentVal, 
-  forecast12m, 
-  holdings = [] 
-}) {
-  const displayValue = currentValue ?? currentVal ?? 0;
+export default function PortfolioDashboard({
+                                               currentValue,
+                                               currentVal,
+                                               forecast12m,
+                                               holdings = []
+                                           }) {
+    // Fallback für den Marktwert, falls die API "currentVal" statt "currentValue" nutzt
+    const displayValue = currentValue ?? currentVal ?? 0;
 
-  // 1. FIX: Toleranzgrenze für Anteile (shares) auf 6 Nachkommastellen (1e-6) gesenkt
-  // Damit werden auch kleine Krypto-Bruchstücke (z.B. 0.0005 BTC) als aktiv erkannt!
-  const activeHoldings = holdings
-    .filter(item => (item.shares ?? 0) > 0.000001)
-    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+    // Macht sicherheitshalber aus jedem Input (String oder Number) eine echte Zahl
+    const getShares = (item) => parseFloat(item.shares) || 0;
 
-  const soldHoldings = holdings
-    .filter(item => (item.shares ?? 0) <= 0.000001)
-    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    // Filtert mit einer sehr niedrigen Grenze (1e-6), um auch kleinste Krypto-Bruchteile als "Aktiv" zu erkennen
+    const activeHoldings = holdings
+        .filter(item => getShares(item) > 0.000001)
+        .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 
-  // 2. FIX: Hilfsfunktion, um interne hld_-IDs durch lesbare Namen (oder den Ticker) zu ersetzen
-  const getDisplayName = (item) => {
-    const rawName = item.name || '';
-    if (rawName.startsWith('hld_')) {
-      // Wenn der Name nur die ID ist, versuche den Ticker (z.B. BTC) anzuzeigen
-      
-      return item.ticker ? item.ticker : 'Krypto-Asset (Details fehlen)';
+    // Alles was exakt 0 ist (oder darunter liegt), wandert in die Verkauft-Tabelle
+    const soldHoldings = holdings
+        .filter(item => getShares(item) <= 0.000001)
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+
+    // Fallback-Logik für Namen, falls rohe Datenbank-IDs (hld_...) durchrutschen
+    const getDisplayName = (item) => {
+        const rawName = item.name || '';
+        if (rawName.startsWith('hld_')) {
+            return item.isin && !item.isin.startsWith('hld_') ? item.isin : 'Unbekanntes Asset';
+        }
+        return rawName || item.isin || 'Unbekanntes Asset';
     }
-    return rawName || item.ticker || 'Unbekanntes Asset';
-  }
-  console.log("Eingehende Holdings:", holdings.filter(h => h.name?.includes('hld_') || h.ticker === 'BTC'));
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      
-      {/* KPI KARTEN */}
-      <div className="kpi-grid">
-        <KpiCard
-          label="Portfolio Marktwert"
-          value={displayValue > 0 ? fmt(displayValue) : '--- €'}
-          color="#60a5fa"
-          sub="Aktueller Gesamtwert"
-        />
-        <KpiCard
-          label="Aktive Positionen"
-          value={activeHoldings.length.toString()}
-          color="#a78bfa"
-          sub="Alle Assets im Depot (inkl. Krypto)"
-        />
-        <KpiCard
-          label="Progn. Jahresausschüttung"
-          value={fmt(forecast12m?.net ?? 0)}
-          color="#22c55e"
-          sub="Nächste 12 Monate Netto"
-        />
-      </div>
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-      {/* 1. TABELLE: AKTIVE BESTÄNDE */}
-      <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto' }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#f1f5f9' }}>
-          💼 Aktive Bestände
-        </h3>
+            {/* KPI KARTEN */}
+            <div className="kpi-grid">
+                <KpiCard
+                    label="Portfolio Marktwert"
+                    value={displayValue > 0 ? fmt(displayValue) : '--- €'}
+                    color="#60a5fa"
+                    sub="Aktueller Gesamtwert"
+                />
+                <KpiCard
+                    label="Aktive Positionen"
+                    value={activeHoldings.length.toString()}
+                    color="#a78bfa"
+                    sub="Alle Assets im Depot (inkl. Krypto)"
+                />
+                <KpiCard
+                    label="Progn. Jahresausschüttung"
+                    value={fmt(forecast12m?.net ?? 0)}
+                    color="#22c55e"
+                    sub="Nächste 12 Monate Netto"
+                />
+            </div>
 
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 14 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
-              <th style={{ paddingBottom: 10 }}>Asset</th>
-              <th style={{ paddingBottom: 10 }}>Typ</th>
-              <th style={{ paddingBottom: 10 }}>Anteile</th>
-              <th style={{ paddingBottom: 10, textAlign: 'right' }}>Einstandswert</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activeHoldings.length === 0 ? (
-              <tr>
-                <td colSpan={4} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
-                  Keine aktiven Bestände gefunden.
-                </td>
-              </tr>
-            ) : (
-              activeHoldings.map((item, idx) => (
-                <tr key={item.isin || item.ticker || idx} style={{ borderBottom: '1px solid #0f1420' }}>
-                  <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
-                    
-                    {/* HIER greift die neue Hilfsfunktion für den Namen */}
-                    <div>{getDisplayName(item)}</div>
-                    
-                    {item.isin && <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>}
-                  </td>
-                  <td style={{ padding: '12px 0' }}>
-                    <span style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#38bdf8', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                      {item.type || 'N/A'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 0', color: '#94a3b8' }}>
-                    {/* Krypto-Werte behalten ihre Nachkommastellen (bis zu 8) */}
-                    {item.shares > 0 
-                      ? item.shares.toLocaleString('de-DE', { maximumFractionDigits: 8 }) 
-                      : '—'}
-                  </td>
-                  <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
-                    {(item.value ?? 0) > 0 ? fmt(item.value) : '---'}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            {/* 1. TABELLE: AKTIVE BESTÄNDE */}
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto' }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#f1f5f9' }}>
+                    💼 Aktive Bestände
+                </h3>
 
-      {/* 2. TABELLE: VERKAUFTE POSITIONEN */}
-      {soldHoldings.length > 0 && (
-        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto', opacity: 0.8 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#94a3b8' }}>
-            📦 Verkaufte & Historische Positionen
-          </h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 14 }}>
+                    <thead>
+                    <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
+                        <th style={{ paddingBottom: 10 }}>Asset</th>
+                        <th style={{ paddingBottom: 10 }}>Typ</th>
+                        <th style={{ paddingBottom: 10 }}>Anteile</th>
+                        <th style={{ paddingBottom: 10, textAlign: 'right' }}>Einstandswert</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {activeHoldings.length === 0 ? (
+                        <tr>
+                            <td colSpan={4} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
+                                Keine aktiven Bestände gefunden.
+                            </td>
+                        </tr>
+                    ) : (
+                        activeHoldings.map((item, idx) => {
+                            const sharesNum = getShares(item);
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
-                <th style={{ paddingBottom: 10 }}>Asset</th>
-                <th style={{ paddingBottom: 10 }}>Typ</th>
-                <th style={{ paddingBottom: 10, textAlign: 'right' }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {soldHoldings.map((item, idx) => (
-                <tr key={item.isin || item.ticker || idx} style={{ borderBottom: '1px solid #161b27' }}>
-                  <td style={{ padding: '10px 0', fontWeight: 500, color: '#94a3b8' }}>
-                    
-                    {/* Auch hier nutzen wir die Namens-Hilfsfunktion */}
-                    <div>{getDisplayName(item)}</div>
-                    
-                    {item.isin && <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>}
-                  </td>
-                  <td style={{ padding: '10px 0' }}>
+                            return (
+                                // Stabiler Key durch ISIN oder Index
+                                <tr key={item.isin || idx} style={{ borderBottom: '1px solid #0f1420' }}>
+                                    <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
+                                        <div>{getDisplayName(item)}</div>
+                                        {/* Zeigt die ISIN/Ticker in kleiner Schrift, wenn es keine hld_ ID ist */}
+                                        {item.isin && !item.isin.startsWith('hld_') && (
+                                            <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: '12px 0' }}>
+                      <span style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#38bdf8', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
+                        {item.type || 'N/A'}
+                      </span>
+                                    </td>
+                                    <td style={{ padding: '12px 0', color: '#94a3b8' }}>
+                                        {/* Erlaubt bis zu 8 Nachkommastellen für Kryptowährungen */}
+                                        {sharesNum > 0
+                                            ? sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 8 })
+                                            : '—'}
+                                    </td>
+                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
+                                        {(item.value ?? 0) > 0 ? fmt(item.value) : '---'}
+                                    </td>
+                                </tr>
+                            )
+                        })
+                    )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* 2. TABELLE: VERKAUFTE POSITIONEN */}
+            {soldHoldings.length > 0 && (
+                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto', opacity: 0.8 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#94a3b8' }}>
+                        📦 Verkaufte & Historische Positionen
+                    </h3>
+
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                        <thead>
+                        <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
+                            <th style={{ paddingBottom: 10 }}>Asset</th>
+                            <th style={{ paddingBottom: 10 }}>Typ</th>
+                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Status</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {soldHoldings.map((item, idx) => (
+                            <tr key={item.isin || idx} style={{ borderBottom: '1px solid #161b27' }}>
+                                <td style={{ padding: '10px 0', fontWeight: 500, color: '#94a3b8' }}>
+                                    <div>{getDisplayName(item)}</div>
+                                    {item.isin && !item.isin.startsWith('hld_') && (
+                                        <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>
+                                    )}
+                                </td>
+                                <td style={{ padding: '10px 0' }}>
                     <span style={{ background: '#161b27', border: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
                       {item.type || 'N/A'}
                     </span>
-                  </td>
-                  <td style={{ padding: '10px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
-                    Verkauft (0 Anteile)
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                                </td>
+                                <td style={{ padding: '10px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
+                                    Verkauft (0 Anteile)
+                                </td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
 
-    </div>
-  )
+        </div>
+    )
 }
