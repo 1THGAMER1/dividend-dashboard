@@ -11,9 +11,7 @@ export const handler = async function(event, context) {
     }
 
     try {
-        const symbol = event.queryStringParameters?.symbol || event.queryStringParameters?.ticker;
-        const range = event.queryStringParameters?.range || '5y';
-        const interval = event.queryStringParameters?.interval || '1mo';
+        let symbol = event.queryStringParameters?.symbol || event.queryStringParameters?.ticker;
 
         if (!symbol) {
             return {
@@ -23,6 +21,25 @@ export const handler = async function(event, context) {
             };
         }
 
+        // --- AUTOMATISCHER ISIN-ZU-TICKER-FALLBACK ---
+        const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/;
+        if (ISIN_REGEX.test(symbol)) {
+            try {
+                const searchRes = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}`, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                });
+                const searchData = await searchRes.json();
+                if (searchData.quotes && searchData.quotes.length > 0) {
+                    symbol = searchData.quotes[0].symbol; // Wandelt z.B. ISIN in "NVDA" um
+                }
+            } catch (e) {
+                console.warn('ISIN-Suche in Netlify-Function fehlgeschlagen:', e.message);
+            }
+        }
+        // ---------------------------------------------
+
         if (!/^[A-Za-z0-9.-]+$/.test(symbol)) {
             return {
                 statusCode: 400,
@@ -31,9 +48,10 @@ export const handler = async function(event, context) {
             };
         }
 
+        const range = event.queryStringParameters?.range || '5y';
+        const interval = event.queryStringParameters?.interval || '1mo';
         const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&events=div`;
 
-        // Nutzt das native Node.js fetch (kein require('node-fetch') nötig)
         const response = await fetch(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -75,6 +93,7 @@ export const handler = async function(event, context) {
 
         const responseData = {
             symbol: meta.symbol,
+            resolvedTicker: symbol, // Gibt den aufgelösten Ticker an den Client zurück
             currency: meta.currency,
             instrumentType: meta.instrumentType,
             regularMarketPrice: meta.regularMarketPrice,

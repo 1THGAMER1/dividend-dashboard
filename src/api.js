@@ -146,17 +146,14 @@ export async function fetchHoldingNames() {
 }
 
 // --- Supabase Ticker Cache ---
-// Speichert sowohl gefundene EUR-Ticker als auch NOT_FOUND-Eintraege.
-// NOT_FOUND-Eintraege verfallen nach NOT_FOUND_TTL_DAYS (7 Tage).
 
 async function invalidateNonEurTickerCache(isins) {
   if (isins.length === 0) return
   const { data } = await supabase
-    .from('isin_ticker_cache')
-    .select('isin, ticker')
-    .in('isin', isins)
+      .from('isin_ticker_cache')
+      .select('isin, ticker')
+      .in('isin', isins)
   if (!data) return
-  // Nur echte EUR-Ticker die falsch gecacht wurden loeschen (nicht NOT_FOUND)
   const badIsins = data.filter(r => r.ticker !== NOT_FOUND_SENTINEL && !isEurTicker(r.ticker)).map(r => r.isin)
   if (badIsins.length === 0) return
   console.log(`[Cache] Invalidiere ${badIsins.length} non-EUR Eintraege`)
@@ -166,9 +163,9 @@ async function invalidateNonEurTickerCache(isins) {
 async function loadTickerCache(isins) {
   if (isins.length === 0) return {}
   const { data } = await supabase
-    .from('isin_ticker_cache')
-    .select('isin, ticker, updated_at')
-    .in('isin', isins)
+      .from('isin_ticker_cache')
+      .select('isin, ticker, updated_at')
+      .in('isin', isins)
   if (!data) return {}
   const eurCutoff      = Date.now() - CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
   const notFoundCutoff = Date.now() - NOT_FOUND_TTL_DAYS * 24 * 60 * 60 * 1000
@@ -177,12 +174,10 @@ async function loadTickerCache(isins) {
     if (!row.ticker) continue
     const ts = new Date(row.updated_at).getTime()
     if (row.ticker === NOT_FOUND_SENTINEL) {
-      // Negativ-Cache: nur verwenden wenn juenger als 7 Tage
       if (ts > notFoundCutoff) {
-        map[row.isin] = null  // gecacht als nicht gefunden
+        map[row.isin] = null
       }
     } else {
-      // Positiv-Cache: nur EUR-Ticker, juenger als 30 Tage
       if (isEurTicker(row.ticker) && ts > eurCutoff) {
         map[row.isin] = row.ticker
       }
@@ -193,15 +188,14 @@ async function loadTickerCache(isins) {
 
 async function saveTickerCache(entries) {
   if (entries.length === 0) return
-  // Sowohl EUR-Ticker als auch NOT_FOUND speichern
   const rows = entries.map(e => ({
     isin:       e.isin,
     ticker:     e.ticker ?? NOT_FOUND_SENTINEL,
     updated_at: new Date().toISOString(),
   }))
   await supabase
-    .from('isin_ticker_cache')
-    .upsert(rows, { onConflict: 'isin' })
+      .from('isin_ticker_cache')
+      .upsert(rows, { onConflict: 'isin' })
 }
 
 async function resolveOneIsin(isin) {
@@ -215,7 +209,7 @@ async function resolveOneIsin(isin) {
       }
       if (!res.ok) return null
       const data = await res.json()
-      return data.resolvedTicker || null
+      return data.resolvedTicker || data.symbol || null
     } catch {
       if (attempt < RETRY_DELAYS.length) {
         await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]))
@@ -226,11 +220,9 @@ async function resolveOneIsin(isin) {
 }
 
 async function resolveIsinsToTickers(isins) {
-  // Nicht-EUR Eintraege aus Cache loeschen (aber NOT_FOUND behalten)
   await invalidateNonEurTickerCache(isins)
 
   const cached  = await loadTickerCache(isins)
-  // "missing" = noch gar nicht im Cache (weder positiv noch negativ)
   const missing = isins.filter(i => !(i in cached))
 
   const cachedFound    = Object.values(cached).filter(v => v !== null).length
@@ -250,14 +242,13 @@ async function resolveIsinsToTickers(isins) {
     const batch = missing.slice(i, i + BATCH_SIZE)
 
     const batchResults = await Promise.allSettled(
-      batch.map(isin => resolveOneIsin(isin))
+        batch.map(isin => resolveOneIsin(isin))
     )
 
     for (let j = 0; j < batch.length; j++) {
       const isin   = batch[j]
       const ticker = batchResults[j].status === 'fulfilled' ? batchResults[j].value : null
       result[isin] = ticker
-      // Immer cachen: gefundene Ticker UND nicht gefundene (als NOT_FOUND)
       newEntries.push({ isin, ticker })
       done++
       console.log(`[Resolve] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
@@ -275,7 +266,7 @@ async function resolveIsinsToTickers(isins) {
   return result
 }
 
-// --- Yahoo Dividenden ---
+// --- Yahoo Dividenden & Live Kurse ---
 
 export async function fetchYahooDividends(ticker) {
   if (!ticker) return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
@@ -284,10 +275,10 @@ export async function fetchYahooDividends(ticker) {
     if (!res.ok) return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
     const data = await res.json()
     return {
-      dividends:       data.dividends      || [],
-      currency:        data.currency       || 'EUR',
-      price:           data.price          || data.regularMarketPrice || null, // <--- Aktuellen Kurs erfassen
-      _resolvedTicker: data.resolvedTicker || null,
+      dividends:       data.dividends          || [],
+      currency:        data.currency           || 'EUR',
+      price:           data.regularMarketPrice || data.price || null,
+      _resolvedTicker: data.resolvedTicker     || null,
     }
   } catch {
     return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
@@ -305,9 +296,8 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
     return !NO_DIVIDEND_TYPES.has(t)
   })
 
-  // Alle Holdings durch Resolver schicken die keinen EUR-Ticker haben
   const toResolve = relevant.filter(isin => needsResolution(tickers[isin]))
-  console.log(`[Yahoo] ${toResolve.length}/${relevant.length} benoetigen Resolver (non-EUR/ISIN/.L)`)
+  console.log(`[Yahoo] ${toResolve.length}/${relevant.length} benoetigen Resolver`)
 
   const tickerMap = await resolveIsinsToTickers(toResolve)
 
@@ -315,16 +305,14 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   for (const isin of relevant) {
     const raw = tickers[isin]
     if (isEurTicker(raw)) {
-      // Parqet hat bereits einen EUR-Ticker geliefert -> direkt verwenden
       resolvedTickers[isin] = raw
     } else {
-      // Resolver-Ergebnis verwenden (kann null sein wenn nicht gefunden)
-      resolvedTickers[isin] = tickerMap[isin] || null
+      resolvedTickers[isin] = tickerMap[isin] || raw || null
     }
   }
 
   const withTicker = relevant.filter(isin => resolvedTickers[isin])
-  console.log(`[Yahoo] ${withTicker.length}/${relevant.length} mit EUR-Ticker`)
+  console.log(`[Yahoo] ${withTicker.length}/${relevant.length} bereit für Yahoo-Abfrage`)
 
   const results = await Promise.allSettled(
       withTicker.map(async isin => {
@@ -402,14 +390,12 @@ export async function fetchCurrentValue() {
     return 0
   }
 }
-// Holt den aktuellen Live-Kurs für ein Asset via Yahoo Finance
+
 export async function fetchCurrentPrice(tickerOrIsin) {
   try {
-    // Falls du bereits einen Yahoo-Endpoint nutzt, hier einbinden
-    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${tickerOrIsin}?range=1d&interval=1d`)
+    const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(tickerOrIsin)}`)
     const data = await res.json()
-    const price = data.chart?.result?.[0]?.meta?.regularMarketPrice
-    return price || null
+    return data.regularMarketPrice || data.price || null
   } catch (e) {
     console.warn(`Konnte Kurs für ${tickerOrIsin} nicht laden:`, e.message)
     return null
