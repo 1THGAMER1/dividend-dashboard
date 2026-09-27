@@ -1,34 +1,3 @@
-import { buildIsinMergeMap, makeResolver } from './isinMerge'
-
-export const MONTHS = ['Jan','Feb','Mrz','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
-
-export const YEAR_COLORS = {
-  2024: '#60a5fa',
-  2025: '#a78bfa',
-  2026: '#c0397a',
-}
-
-export function groupByYearMonth(activities) {
-  const result = {}
-  for (const a of activities) {
-    const d = new Date(a.datetime)
-    const y = d.getFullYear()
-    const m = d.getMonth()
-    if (!result[y]) result[y] = Array(12).fill(0)
-    result[y][m] += a.amountNet ?? a.amount ?? 0
-  }
-  return result
-}
-
-export function toCumulative(monthly) {
-  const result = {}
-  for (const [y, vals] of Object.entries(monthly)) {
-    let sum = 0
-    result[y] = vals.map(v => +(sum += v).toFixed(4))
-  }
-  return result
-}
-
 export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = [], types = {}) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
@@ -101,7 +70,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   function estimateDpsWithSource(isin, month) {
     const yearData  = byIsin[isin] || {}
 
-    // Sicherstellen, dass yahooDivs immer ein Array ist (egal ob altes Cache-Format oder neues Objekt)
     const rawYahoo  = yahooByIsin[isin] || []
     const yahooDivs = Array.isArray(rawYahoo) ? rawYahoo : (rawYahoo.dividends || [])
 
@@ -204,12 +172,20 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
     const rawType   = types?.[isin] || 'security'
     const cleanType = formatAssetType(rawType, name)
+    const costVal = valueMap[isin] || 0
+
+    // --- LIVE-KURS DIREKT AUS YAHOO-BY-ISIN AUSLESEN ---
+    const yahooEntry = yahooByIsin[isin]
+    const livePrice = (yahooEntry && typeof yahooEntry === 'object') ? yahooEntry.price : null
+    const marketValue = (livePrice != null && !isNaN(livePrice)) ? shares * livePrice : costVal
+    // ----------------------------------------------------
 
     const row = {
       name: name,
       isin: isin,
       shares: shares,
-      value: valueMap[isin] || 0,
+      value: marketValue,
+      costValue: costVal,
       soldValue: soldValueMap[isin] || 0,
       type: cleanType
     }
@@ -274,182 +250,4 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     forecastByHolding,
     enrichedHoldings,
   }
-}
-
-export function heatColor(value, max) {
-  if (!value || value === 0) return '#1a2233'
-  const intensity = Math.min(value / max, 1)
-  const from = [20, 83, 45]
-  const to   = [21, 180, 90]
-  const rgb  = from.map((f, i) => Math.round(f + (to[i] - f) * Math.pow(intensity, 0.45)))
-  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
-}
-
-export function groupByHolding(activities, names = {}, types = {}, purchaseValues = {}, tickers = {}) {
-  const mergeMap = buildIsinMergeMap(activities, names)
-  const resolve  = makeResolver(mergeMap)
-
-  const palette = [
-    '#60a5fa','#a78bfa','#f472b6','#34d399','#fb923c',
-    '#facc15','#38bdf8','#f87171','#4ade80','#c084fc',
-    '#e879f9','#2dd4bf','#fbbf24','#818cf8','#fb7185',
-  ]
-  const map = {}
-  for (const a of activities) {
-    const rawIsin = a.asset?.isin || a.asset?.symbol || 'unknown'
-    const isin    = resolve(rawIsin)
-    const name   = names[isin] || names[rawIsin] || a.asset?.name || a.asset?.symbol || isin
-    const type   = types[isin] || types[rawIsin] || a.holdingAssetType || 'security'
-    const ticker = tickers[isin] || tickers[rawIsin] || null
-    const d      = new Date(a.datetime)
-    const year   = d.getFullYear()
-    const month  = d.getMonth()
-
-    if (!map[isin]) map[isin] = { name, type, ticker, monthly: {}, gross: {}, tax: {} }
-
-    if (!map[isin].monthly[year]) map[isin].monthly[year] = Array(12).fill(0)
-    if (!map[isin].gross[year])   map[isin].gross[year]   = Array(12).fill(0)
-    if (!map[isin].tax[year])     map[isin].tax[year]     = Array(12).fill(0)
-
-    const net   = a.amountNet ?? a.amount ?? 0
-    const gross = a.amount    ?? net
-    map[isin].monthly[year][month] += net
-    map[isin].gross[year][month]   += gross
-    map[isin].tax[year][month]     += gross - net
-  }
-
-  const now = new Date()
-  Object.keys(map).forEach((isin, idx) => {
-    map[isin].color = palette[idx % palette.length]
-    const pv       = purchaseValues[isin] ?? 0
-    const totalNet = Object.values(map[isin].monthly).flatMap(m => m).reduce((s, v) => s + v, 0)
-    map[isin].yield = pv > 0 ? +((totalNet / pv) * 100).toFixed(2) : null
-    let last12m = 0
-    for (const [year, months] of Object.entries(map[isin].monthly)) {
-      for (let m = 0; m < 12; m++) {
-        const date = new Date(+year, m, 1)
-        if ((now - date) / 864e5 <= 365) last12m += months[m] || 0
-      }
-    }
-    map[isin].assetYield = pv > 0 ? +((last12m / pv) * 100).toFixed(2) : null
-  })
-
-  return map
-}
-
-export function buildCalendarEvents({ activities, forecast, names = {}, selectedYear }) {
-  const mergeMap = buildIsinMergeMap(activities, names)
-  const resolve  = makeResolver(mergeMap)
-
-  const actualMap = new Map()
-
-  for (const a of activities) {
-    const d = new Date(a.datetime)
-    if (d.getFullYear() !== selectedYear) continue
-
-    const isin  = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
-    const month = d.getMonth()
-    const key   = `${isin}-${month}`
-    const amount = a.amountNet ?? a.amount ?? 0
-
-    actualMap.set(key, (actualMap.get(key) || 0) + amount)
-  }
-
-  const events = []
-
-  for (const [key, amount] of actualMap.entries()) {
-    const [isin, monthStr] = key.split(/-(?=[0-9]+$)/)
-    const month = Number(monthStr)
-    if (amount === 0) continue
-
-    events.push({
-      year: selectedYear,
-      month,
-      isin,
-      name: names[isin] || isin,
-      amount: +amount.toFixed(4),
-      type: 'actual',
-    })
-  }
-
-  const forecastByHolding = forecast?.forecastByHolding || {}
-
-  for (const [isin, byMonth] of Object.entries(forecastByHolding)) {
-    for (let month = 0; month < 12; month++) {
-      const amount = byMonth[month] || 0
-      if (amount <= 0) continue
-
-      const key = `${isin}-${month}`
-      if (actualMap.has(key)) continue
-
-      events.push({
-        year: selectedYear,
-        month,
-        isin,
-        name: names[isin] || isin,
-        amount: +amount.toFixed(4),
-        type: 'forecast',
-      })
-    }
-  }
-
-  return events
-}
-
-export function groupCalendarEventsByMonth(events) {
-  const byMonth = Array.from({ length: 12 }, () => [])
-  for (const ev of events) {
-    byMonth[ev.month].push(ev)
-  }
-  return byMonth
-}
-
-export function sumCalendarEventsByMonth(events) {
-  const sums = Array(12).fill(0)
-  for (const ev of events) {
-    sums[ev.month] += ev.amount
-  }
-  return sums.map(v => +v.toFixed(2))
-}
-
-export function formatAssetType(rawType) {
-  if (!rawType) return 'Aktie';
-
-  const t = rawType.toLowerCase();
-
-  if (t.includes('crypto') || t.includes('coin') || t.includes('token')) {
-    return 'Krypto';
-  }
-  if (t.includes('etf') || t.includes('fund') || t.includes('fonds') || t.includes('mutualfund')) {
-    return 'ETF';
-  }
-  if (t.includes('stock') || t.includes('equity') || t.includes('aktie')) {
-    return 'Aktie';
-  }
-  if (t.includes('commodity') || t.includes('precious') || t.includes('gold')) {
-    return 'Rohstoff';
-  }
-
-  return 'Wertpapier';
-}
-
-export function getAssetAllocation(enrichedHoldings, totalPortfolioValue = 0) {
-  const allocation = {}
-  let holdingsSum = 0
-
-  for (const item of enrichedHoldings) {
-    if (item.shares <= 0) continue // Nur aktive Bestände
-    const type = item.type || 'Aktie oder ETF'
-    const val = item.value || 0
-    allocation[type] = (allocation[type] || 0) + val
-    holdingsSum += val
-  }
-  const result = Object.entries(allocation).map(([name, value]) => ({ name, value }))
-
-  if (totalPortfolioValue > holdingsSum) {
-    const diff = totalPortfolioValue - holdingsSum
-    result.push({ name: 'Cash / Sonstiges', value: diff })
-  }
-
-  return result
 }
