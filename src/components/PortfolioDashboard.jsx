@@ -147,8 +147,8 @@ export default function PortfolioDashboard({
                       {item.type || 'N/A'}
                     </span>
                                 </td>
-                                <td style={{ padding: '10px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
-                                    Verkauft (0 Anteile)
+                                <td style={{ padding: '12px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
+                                    {item.soldValue > 0 ? `Erlös: ${fmt(item.soldValue)}` : 'Verkauft (0 Anteile)'}
                                 </td>
                             </tr>
                         ))}

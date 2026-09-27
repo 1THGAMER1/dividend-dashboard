@@ -155,6 +155,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
   const isinsFromDivs = Object.keys(byIsin)
   const isinsFromBuys = Object.keys(sharesFromBuys).filter(isin => (netSharesMap[isin] ?? 0) > 0)
+  const isinsFromNames = Object.keys(names)
   const isinsAll      = [...new Set([...isinsFromDivs, ...isinsFromBuys])]
   const isins = isinsAll.filter(isin => {
     if (!(isin in netSharesMap)) return true
