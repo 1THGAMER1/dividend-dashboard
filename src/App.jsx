@@ -24,6 +24,7 @@ import SkeletonDashboard from './components/SkeletonDashboard'
 import EmptyState        from './components/EmptyState'
 import Footer            from './components/Footer'
 import AssetAllocationDonut from './components/AssetAllocationDonut'
+import AssetHoldingDonut from "./components/AssetHoldingDonut.jsx";
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -635,6 +636,7 @@ export default function App() {
                         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🍰 Asset Allokation</h1>
                         <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aufteilung deiner echten Depotwerte nach Klassen</p>
                       </div>
+                      <AssetHoldingDonut holdings={enrichedHoldings || holdings} />
                       <AssetAllocationDonut holdings={enrichedHoldings || holdings} />
                     </>
                 )}

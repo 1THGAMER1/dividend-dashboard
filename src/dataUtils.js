@@ -431,14 +431,23 @@ export function formatAssetType(rawType) {
   return 'Wertpapier';
 }
 
-export function getAssetAllocation(enrichedHoldings) {
+export function getAssetAllocation(enrichedHoldings, totalPortfolioValue = 0) {
   const allocation = {}
+  let holdingsSum = 0
 
   for (const item of enrichedHoldings) {
-    if (item.shares <= 0) continue // Nur aktive Bestände berücksichtigen
-    const type = item.type || 'Aktie'
-    allocation[type] = (allocation[type] || 0) + (item.value || 0)
+    if (item.shares <= 0) continue // Nur aktive Bestände
+    const type = item.type || 'Aktie oder ETF'
+    const val = item.value || 0
+    allocation[type] = (allocation[type] || 0) + val
+    holdingsSum += val
+  }
+  const result = Object.entries(allocation).map(([name, value]) => ({ name, value }))
+  // Wenn ein Gesamtwert vorliegt und es eine Differenz gibt (z.B. Cash), fangen wir das auf
+  if (totalPortfolioValue > holdingsSum) {
+    const diff = totalPortfolioValue - holdingsSum
+    result.push({ name: 'Cash / Sonstiges', value: diff })
   }
 
-  return Object.entries(allocation).map(([name, value]) => ({ name, value }))
+  return result
 }
