@@ -427,7 +427,6 @@ export function formatAssetType(rawType) {
     return 'Rohstoff';
   }
 
-  // Wenn Parqet keinen spezifischen Typ liefert, standardmäßig Aktie (oder was am häufigsten vorkommt)
   return 'Wertpapier';
 }
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import KpiCard from '../components/KpiCard.jsx'
+import KpiCard from './KpiCard.jsx'
 
 const fmt = n =>
     new Intl.NumberFormat('de-DE', {
@@ -130,7 +130,8 @@ export default function PortfolioDashboard({
                         <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
                             <th style={{ paddingBottom: 10 }}>Asset</th>
                             <th style={{ paddingBottom: 10 }}>Typ</th>
-                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Erlös / Status</th> {/* <--- NEUE SPALTE */}
+                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Erlös / Status</th>
+                            <span style={{ marginLeft: 8, fontSize: 12, background: '#1e2a3a', color: '#94a3b8', padding: '1px 6px', borderRadius: 4, fontStyle: 'normal' }}>Beta</span>
                         </tr>
                         </thead>
                         <tbody>
@@ -150,7 +151,6 @@ export default function PortfolioDashboard({
                                 {/* HIER ZEIGEN WIR JETZT DEN BERECHNETEN WERT ODER DEN FALLBACK */}
                                 <td style={{ padding: '12px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
                                     <span>Position geschlossen</span>
-                                    <span style={{ marginLeft: 8, fontSize: 10, background: '#1e2a3a', color: '#94a3b8', padding: '1px 6px', borderRadius: 4, fontStyle: 'normal' }}>Beta</span>
                                 </td>
                             </tr>
                         ))}
