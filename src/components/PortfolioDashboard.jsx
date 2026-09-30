@@ -34,7 +34,7 @@ export default function PortfolioDashboard({
         // Da wir die neue Tabelle nutzen, ist item.name bereits "Bitcoin", "Solana" etc.
         return item.name || item.isin || 'Unbekanntes Asset';
     }
-
+// Test
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
