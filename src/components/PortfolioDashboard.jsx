@@ -72,8 +72,8 @@ export default function PortfolioDashboard({
                         <th style={{ paddingBottom: 10 }}>Asset</th>
                         <th style={{ paddingBottom: 10 }}>Typ</th>
                         <th style={{ paddingBottom: 10 }}>Anteile</th>
-                        <th style={{ paddingBottom: 10 }}>Einstandswert</th>
-                        <th style={{ paddingBottom: 10 }}>Position</th>
+                        <th style={{ paddingBottom: 10, textAlign: 'right' }}>Einstandswert</th>
+                        <th style={{ paddingBottom: 10, textAlign: 'right' }}>Position</th>
                         <th style={{ paddingBottom: 10, textAlign: 'right' }}>Kursgewinn in %</th>
                     </tr>
                     </thead>
@@ -87,6 +87,8 @@ export default function PortfolioDashboard({
                     ) : (
                         activeHoldings.map((item, idx) => {
                             const sharesNum = getShares(item);
+                            const cost = item.costValue || 0;
+                            const val = item.value || 0;
                             const profitPercent = cost > 0 ? ((val - cost) / cost) * 100 : 0;
 
                             return (
@@ -98,22 +100,22 @@ export default function PortfolioDashboard({
                                         )}
                                     </td>
                                     <td style={{ padding: '12px 0' }}>
-                      <span style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#38bdf8', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                        {item.type || 'N/A'}
-                      </span>
+                                      <span style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#38bdf8', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
+                                        {item.type || 'N/A'}
+                                      </span>
                                     </td>
                                     <td style={{ padding: '12px 0', color: '#94a3b8' }}>
-                                        {/* Erlaubt bis zu 5 Nachkommastellen für Kryptowährungen */}
                                         {sharesNum > 0
                                             ? sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 5 })
                                             : '—'}
                                     </td>
                                     <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 500, color: '#94a3b8' }}>
-                                        {(item.value ?? 0) > 0 ? fmt(item.costValue) : '---'}
+                                        {cost > 0 ? fmt(cost) : '---'}
                                     </td>
                                     <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
-                                        {(item.value ?? 0) > 0 ? fmt(item.value) : '---'}
+                                        {val > 0 ? fmt(val) : '---'}
                                     </td>
+                                    {/* HIER WAR DIE 6. SPALTE, DIE GEFEHLT HAT */}
                                     <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: profitPercent >= 0 ? '#22c55e' : '#ef4444' }}>
                                         {cost > 0 ? `${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')} %` : '—'}
                                     </td>
@@ -155,7 +157,6 @@ export default function PortfolioDashboard({
                       {item.type || 'Aktie'}
                     </span>
                                 </td>
-                                {/* HIER ZEIGEN WIR JETZT DEN BERECHNETEN WERT ODER DEN FALLBACK */}
                                 <td style={{ padding: '12px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
                                     <span>Position geschlossen</span>
                                 </td>
