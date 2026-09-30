@@ -1,11 +1,21 @@
 import React from 'react'
 import KpiCard from './KpiCard.jsx'
 
-const fmt = n =>
-    new Intl.NumberFormat('de-DE', {
+const fmt = (n) => {
+    const val = Number(n || 0)
+    const options = {
         style: 'currency',
-        currency: 'EUR'
-    }).format(n || 0)
+        currency: 'EUR',
+    }
+
+    // Ab 10.000 € werden keine Cent-Beträge mehr angezeigt.
+    if (Math.abs(val) >= 10000) {
+        options.minimumFractionDigits = 0
+        options.maximumFractionDigits = 0
+    }
+
+    return new Intl.NumberFormat('de-DE', options).format(val)
+}
 
 export default function PortfolioDashboard({
                                                currentValue,
