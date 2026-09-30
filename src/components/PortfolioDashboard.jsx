@@ -31,10 +31,9 @@ export default function PortfolioDashboard({
 
     // Fallback-Logik für Namen
     const getDisplayName = (item) => {
-        // Da wir die neue Tabelle nutzen, ist item.name bereits "Bitcoin", "Solana" etc.
         return item.name || item.isin || 'Unbekanntes Asset';
     }
-// Test
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
@@ -61,117 +60,120 @@ export default function PortfolioDashboard({
             </div>
 
             {/* 1. TABELLE: AKTIVE BESTÄNDE */}
-            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto' }}>
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#f1f5f9' }}>
                     💼 Aktive Bestände
                 </h3>
 
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 14 }}>
-                    <thead>
-                    <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
-                        <th style={{ paddingBottom: 10 }}>Asset</th>
-                        <th style={{ paddingBottom: 10 }}>Typ</th>
-                        <th style={{ paddingBottom: 10 }}>Anteile</th>
-                        <th style={{ paddingBottom: 10, textAlign: 'right' }}>Einstandswert</th>
-                        <th style={{ paddingBottom: 10, textAlign: 'right' }}>Position</th>
-                        <th style={{ paddingBottom: 10, textAlign: 'right' }}>Kursgewinn in %</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {activeHoldings.length === 0 ? (
-                        <tr>
-                            <td colSpan={6} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
-                                Keine aktiven Bestände gefunden.
-                            </td>
+                <div style={{ minWidth: 650 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                        <thead>
+                        <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
+                            <th style={{ paddingBottom: 10 }}>Asset</th>
+                            <th style={{ paddingBottom: 10 }}>Typ</th>
+                            <th style={{ paddingBottom: 10 }}>Anteile</th>
+                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Einstandswert</th>
+                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Position</th>
+                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Kursgewinn</th>
                         </tr>
-                    ) : (
-                        activeHoldings.map((item, idx) => {
-                            const sharesNum = getShares(item);
-                            const cost = item.costValue || 0;
-                            const val = item.value || 0;
-                            const profitPercent = cost > 0 ? ((val - cost) / cost) * 100 : 0;
+                        </thead>
+                        <tbody>
+                        {activeHoldings.length === 0 ? (
+                            <tr>
+                                <td colSpan={6} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
+                                    Keine aktiven Bestände gefunden.
+                                </td>
+                            </tr>
+                        ) : (
+                            activeHoldings.map((item, idx) => {
+                                const sharesNum = getShares(item);
+                                const cost = item.costValue || 0;
+                                const val = item.value || 0;
+                                const profitPercent = cost > 0 ? ((val - cost) / cost) * 100 : 0;
 
-                            return (
-                                <tr key={item.isin || idx} style={{ borderBottom: '1px solid #0f1420' }}>
-                                    <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
-                                        <div>{getDisplayName(item)}</div>
-                                        {item.isin && item.isin !== item.name && (
-                                            <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>
-                                        )}
-                                    </td>
-                                    <td style={{ padding: '12px 0' }}>
-                                      <span style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#38bdf8', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                                        {item.type || 'N/A'}
-                                      </span>
-                                    </td>
-                                    <td style={{ padding: '12px 0', color: '#94a3b8' }}>
-                                        {sharesNum > 0
-                                            ? sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 5 })
-                                            : '—'}
-                                    </td>
-                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 500, color: '#94a3b8' }}>
-                                        {cost > 0 ? fmt(cost) : '---'}
-                                    </td>
-                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
-                                        {val > 0 ? fmt(val) : '---'}
-                                    </td>
-                                    {/* HIER WAR DIE 6. SPALTE, DIE GEFEHLT HAT */}
-                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: profitPercent >= 0 ? '#22c55e' : '#ef4444' }}>
-                                        {cost > 0 ? `${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')} %` : '—'}
-                                    </td>
-                                </tr>
-                            )
-                        })
-                    )}
-                    </tbody>
-                </table>
+                                return (
+                                    <tr key={item.isin || idx} style={{ borderBottom: '1px solid #0f1420' }}>
+                                        <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
+                                            <div>{getDisplayName(item)}</div>
+                                            {item.isin && item.isin !== item.name && (
+                                                <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>
+                                            )}
+                                        </td>
+                                        <td style={{ padding: '12px 0' }}>
+                                          <span style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#38bdf8', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
+                                            {item.type || 'N/A'}
+                                          </span>
+                                        </td>
+                                        <td style={{ padding: '12px 0', color: '#94a3b8' }}>
+                                            {sharesNum > 0
+                                                ? sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 5 })
+                                                : '—'}
+                                        </td>
+                                        <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 500, color: '#94a3b8' }}>
+                                            {cost > 0 ? fmt(cost) : '---'}
+                                        </td>
+                                        <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
+                                            {val > 0 ? fmt(val) : '---'}
+                                        </td>
+                                        <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: profitPercent >= 0 ? '#22c55e' : '#ef4444' }}>
+                                            {cost > 0 ? `${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')} %` : '—'}
+                                        </td>
+                                    </tr>
+                                )
+                            })
+                        )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {/* 2. TABELLE: VERKAUFTE POSITIONEN */}
             {soldHoldings.length > 0 && (
-                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto', opacity: 0.9 } }>
+                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 16, padding: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', opacity: 0.9 }}>
                     <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#94a3b8' }}>
                         📦 Verkaufte & Historische Positionen
                     </h3>
 
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                        <thead>
-                        <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
-                            <th style={{ paddingBottom: 10 }}>Asset</th>
-                            <th style={{ paddingBottom: 10 }}>Typ</th>
-                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Erlös</th>
-                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Realisierter Gewinn / Verlust</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {soldHoldings.map((item, idx) => {
-                            const gain = item.realizedGain || 0;
-                            const isPositive = gain >= 0;
+                    <div style={{ minWidth: 550 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                            <thead>
+                            <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
+                                <th style={{ paddingBottom: 10 }}>Asset</th>
+                                <th style={{ paddingBottom: 10 }}>Typ</th>
+                                <th style={{ paddingBottom: 10, textAlign: 'right' }}>Erlös</th>
+                                <th style={{ paddingBottom: 10, textAlign: 'right' }}>Realisierter Gewinn / Verlust</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {soldHoldings.map((item, idx) => {
+                                const gain = item.realizedGain || 0;
+                                const isPositive = gain >= 0;
 
-                            return (
-                                <tr key={item.isin || idx} style={{ borderBottom: '1px solid #161b27' }}>
-                                    <td style={{ padding: '12px 0', fontWeight: 500, color: '#94a3b8' }}>
-                                        <div>{getDisplayName(item)}</div>
-                                        {item.isin && !item.isin.startsWith('hld_') && item.isin !== item.name && (
-                                            <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>
-                                        )}
-                                    </td>
-                                    <td style={{ padding: '12px 0' }}>
-                                        <span style={{ background: '#161b27', border: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                                          {item.type || 'Aktie'}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '12px 0', textAlign: 'right', color: '#94a3b8' }}>
-                                        {item.soldValue > 0 ? fmt(item.soldValue) : 'Position geschlossen'}
-                                    </td>
-                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444' }}>
-                                        {gain !== 0 ? `${isPositive ? '+' : ''}${fmt(gain)}` : '—'}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        </tbody>
-                    </table>
+                                return (
+                                    <tr key={item.isin || idx} style={{ borderBottom: '1px solid #161b27' }}>
+                                        <td style={{ padding: '12px 0', fontWeight: 500, color: '#94a3b8' }}>
+                                            <div>{getDisplayName(item)}</div>
+                                            {item.isin && !item.isin.startsWith('hld_') && item.isin !== item.name && (
+                                                <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>
+                                            )}
+                                        </td>
+                                        <td style={{ padding: '12px 0' }}>
+                                            <span style={{ background: '#161b27', border: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
+                                              {item.type || 'Aktie'}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '12px 0', textAlign: 'right', color: '#94a3b8' }}>
+                                            {item.soldValue > 0 ? fmt(item.soldValue) : 'Position geschlossen'}
+                                        </td>
+                                        <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444' }}>
+                                            {gain !== 0 ? `${isPositive ? '+' : ''}${fmt(gain)}` : '—'}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 

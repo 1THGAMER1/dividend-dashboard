@@ -35,7 +35,6 @@ const KPI_RANGES = [
   { key: '12m', label: '12M'   },
 ]
 
-// 2-in-1 Navigations-Tabs je nach aktivem System
 const DIVIDEND_TABS = [
   { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
   { id: 'calendar',   emoji: '🗓',  label: 'Kalender'   },
@@ -46,7 +45,6 @@ const DIVIDEND_TABS = [
 const PORTFOLIO_TABS = [
   { id: 'portfolio-overview', emoji: '💼', label: 'Bestände'    },
   { id: 'portfolio-assets',   emoji: '🍰', label: 'Allokation'  },
-  //{ id: 'calculator',         emoji: '🧭', label: 'Rechner'    },
 ]
 
 const STATUS_INFO = {
@@ -98,7 +96,7 @@ function LoadingScreen({ text, progress }) {
       <div style={{
         minHeight: '100vh', background: '#0f1420',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'column', gap: 20,
+        flexDirection: 'column', gap: 20, padding: 16,
       }}>
         <div style={{ animation: 'logoPulse 1.6s ease-in-out infinite' }}>
           <DashLogo size={64} />
@@ -109,7 +107,7 @@ function LoadingScreen({ text, progress }) {
         </div>
 
         {hasProgress ? (
-            <div style={{ width: 220, textAlign: 'center' }}>
+            <div style={{ width: '100%', maxWidth: 220, textAlign: 'center' }}>
               <div style={{ width: '100%', height: 6, background: '#1e2a3a', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
                 <div style={{
                   height: '100%',
@@ -150,7 +148,6 @@ function LoadingScreen({ text, progress }) {
 }
 
 export default function App() {
-  // 1. Hash-Routing State direkt in der App-Komponente
   const [page, setPage] = useState(() => {
     const hash = window.location.hash.replace('#', '')
     return hash || 'dashboard'
@@ -207,7 +204,7 @@ export default function App() {
   const [clientIdReady,   setClientIdReady]   = useState(false)
   const [profileLoading,  setProfileLoading]  = useState(true)
   const [tooltipVisible,  setTooltipVisible]  = useState(false)
-  const [tickerProgress, setTickerProgress] = useState(null)
+  const [tickerProgress,  setTickerProgress]  = useState(null)
 
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -276,7 +273,7 @@ export default function App() {
 
   if (tickerProgress) {
     return <LoadingScreen
-        text="Wertpapiere werden mit Yahoo Finance verknüpft…"
+        text="Wertpapiere & Kurse werden geladen…"
         progress={tickerProgress}
     />
   }
@@ -304,7 +301,6 @@ export default function App() {
     return +total.toFixed(2)
   }
 
-  // 2. FIX: forecast12m enthält jetzt alle benötigten Werte, inklusive "net" für das Dashboard
   const forecast12m = {
     ...calcForecastNext12m(),
     net: calcForecastNext12mNet()
@@ -372,53 +368,55 @@ export default function App() {
   const showEmpty    = !loading && !hasData
 
   return (
-      <div style={{ minHeight: '100vh', background: '#0f1420', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ minHeight: '100vh', background: '#0f1420', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
 
-        {/* NAVBAR */}
+        {/* RESPONSIVE NAVBAR */}
         <nav style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: '#161b27', borderBottom: '1px solid #1e2a3a',
-          padding: '0 12px', height: 52, position: 'sticky', top: 0, zIndex: 100,
+          padding: '0 8px', height: 52, position: 'sticky', top: 0, zIndex: 100,
+          gap: 6
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-            <DashLogo size={28} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <DashLogo size={26} />
 
-            {/* 2-in-1 Dual System Switcher */}
-            <div style={{ display: 'flex', background: '#0f1420', padding: 3, borderRadius: 8, border: '1px solid #1e2a3a' }}>
+            {/* Kompakter System-Switcher für Mobile */}
+            <div style={{ display: 'flex', background: '#0f1420', padding: 2, borderRadius: 8, border: '1px solid #1e2a3a' }}>
               <button
                   onClick={() => handleModeSwitch('dividends')}
                   style={{
                     background: appMode === 'dividends' ? '#009991' : 'transparent',
                     color: appMode === 'dividends' ? '#ffffff' : '#64748b',
-                    border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12,
-                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                    border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11,
+                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
                   }}
               >
-                💰 Dividenden
+                💰 <span className="nav-full-label">Dividenden</span>
               </button>
               <button
                   onClick={() => handleModeSwitch('portfolio')}
                   style={{
                     background: appMode === 'portfolio' ? '#009991' : 'transparent',
                     color: appMode === 'portfolio' ? '#ffffff' : '#64748b',
-                    border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12,
-                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                    border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11,
+                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
                   }}
               >
-                💼 Portfolio
+                💼 <span className="nav-full-label">Portfolio</span>
               </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 2, overflowX: 'auto', paddingBottom: 2 }}>
             {currentTabs.map(tab => (
                 <button key={tab.id} onClick={() => handlePageChange(tab.id)} style={{
                   background: page === tab.id ? '#009991' : 'transparent',
                   color: page === tab.id ? 'white' : '#556070',
                   border: 'none', borderRadius: 8,
-                  padding: '6px 10px',
-                  cursor: 'pointer', fontWeight: 600, fontSize: 13,
-                  transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 8px',
+                  cursor: 'pointer', fontWeight: 600, fontSize: 12,
+                  transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 4,
+                  whiteSpace: 'nowrap'
                 }}>
                   <span>{tab.emoji}</span>
                   <span className="nav-full-label">{tab.label}</span>
@@ -426,42 +424,14 @@ export default function App() {
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            {lastUpdated && (
-                <div
-                    className="nav-status"
-                    style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
-                    onMouseEnter={() => setTooltipVisible(true)}
-                    onMouseLeave={() => setTooltipVisible(false)}
-                >
-              <span style={{ color: statusIndicator.color, fontSize: 12, cursor: 'default', userSelect: 'none', whiteSpace: 'nowrap' }}>
-                {statusIndicator.text} · {lastUpdated.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-                  {tooltipVisible && (
-                      <div style={{
-                        position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                        background: '#1e2a3a', border: '1px solid #2a3a50',
-                        borderRadius: 8, padding: '8px 12px',
-                        fontSize: 12, color: '#c0ccd8', whiteSpace: 'nowrap',
-                        boxShadow: '0 4px 16px rgba(0,0,0,0.4)', zIndex: 200,
-                        pointerEvents: 'none',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ color: statusIndicator.color, fontSize: 10 }}>●</span>
-                          {statusIndicator.tooltip}
-                        </div>
-                      </div>
-                  )}
-                </div>
-            )}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
             <button onClick={loadData} disabled={loading} style={{
               background: loading ? '#1a2233' : '#1e3a5f',
               border: '1px solid #3b82f6', color: '#93c5fd',
-              padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
+              padding: '5px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 11,
               whiteSpace: 'nowrap',
             }}>
               <span>{loading ? '⟳' : '↻'}</span>
-              <span className="nav-full-label" style={{ marginLeft: 4 }}>{loading ? 'Lade…' : 'Aktualisieren'}</span>
             </button>
 
             <div style={{ position: 'relative' }} ref={menuRef}>
@@ -469,14 +439,14 @@ export default function App() {
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   style={{
                     background: '#1e2a3a', border: '1px solid #2a3a50', borderRadius: '50%',
-                    width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', padding: 0, overflow: 'hidden',
+                    width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', padding: 0, overflow: 'hidden', flexShrink: 0
                   }}
               >
                 {appUser?.user_metadata?.avatar_url ? (
                     <img src={appUser.user_metadata.avatar_url} alt="Profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                    <span style={{ color: '#93c5fd', fontSize: 13, fontWeight: 700 }}>
+                    <span style={{ color: '#93c5fd', fontSize: 12, fontWeight: 700 }}>
                   {appUser?.email?.[0]?.toUpperCase() ?? '👤'}
                 </span>
                 )}
@@ -487,7 +457,7 @@ export default function App() {
                       style={{
                         position: 'absolute', top: 'calc(100% + 8px)', right: 0,
                         background: '#161b27', border: '1px solid #2a3a50', borderRadius: 12,
-                        padding: '8px 0', width: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 200,
+                        padding: '8px 0', width: 190, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 200,
                       }}
                   >
                     <div style={{ padding: '8px 16px', borderBottom: '1px solid #1e2a3a', marginBottom: 4 }}>
@@ -526,8 +496,8 @@ export default function App() {
           </div>
         </nav>
 
-        {/* HAUPTINHALT */}
-        <div style={{ flex: 1 }}>
+        {/* HAUPTINHALT MIT FLUIDEM PADDING FÜR MOBILE */}
+        <div style={{ flex: 1, padding: '16px 10px', maxWidth: 1200, width: '100%', margin: '0 auto' }}>
           {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
           {page === 'roadmap'    && <RoadmapPage />}
           {page === 'profile'    && <ProfilePage appUser={appUser} onParqetUpdated={loadData} />}
@@ -537,10 +507,10 @@ export default function App() {
               <>
                 {page === 'drip' && <DripSimulator portfolioData={portfolioData} />}
                 {page === 'calendar' && (
-                    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
-                      <div style={{ marginBottom: 20 }}>
-                        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
-                        <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
+                    <div>
+                      <div style={{ marginBottom: 16 }}>
+                        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
+                        <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
                       </div>
                       {showEmpty
                           ? <EmptyState onRefresh={loadData} loading={loading} error={error} />
@@ -559,22 +529,22 @@ export default function App() {
                       {showEmpty    && <EmptyState onRefresh={loadData} loading={loading} error={error} />}
 
                       {!showSkeleton && !showEmpty && (
-                          <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
-                            <div style={{ marginBottom: 16 }}>
-                              <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
-                              <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Portfolio-Übersicht · Nettowerte</p>
+                          <div>
+                            <div style={{ marginBottom: 14 }}>
+                              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
+                              <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Portfolio-Übersicht · Nettowerte</p>
                             </div>
 
                             {error && (
-                                <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'12px 16px', borderRadius:10, marginBottom:16, fontSize:13 }}>
+                                <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'10px 14px', borderRadius:8, marginBottom:14, fontSize:12 }}>
                                   ⚠ {error}
                                 </div>
                             )}
 
-                            <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+                            <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
                               {KPI_RANGES.map(({ key, label }) => (
                                   <button key={key} onClick={() => setKpiRange(key)} style={{
-                                    padding:'5px 16px', borderRadius:20, fontSize:12, cursor:'pointer',
+                                    padding:'4px 14px', borderRadius:20, fontSize:11, cursor:'pointer',
                                     border:'1px solid #2a3a50',
                                     background: kpiRange === key ? '#1e3a5f' : 'transparent',
                                     color: kpiRange === key ? '#93c5fd' : '#7a8ba0',
@@ -592,25 +562,29 @@ export default function App() {
 
                             <div className="kpi-grid">
                               {trueCagr !== null && (
-                                  <KpiCard label={`CAGR (${trueCagr.years}J)`} value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'} color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'} sub={`${trueCagr.from} – ${trueCagr.to} · jährlich kumuliert`} />
+                                  <KpiCard label={`CAGR (${trueCagr.years}J)`} value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'} color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'} sub={`${trueCagr.from} – ${trueCagr.to}`} />
                               )}
-                              <KpiCard label="YoY-Wachstum" value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'} color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'} sub={yoy === null ? 'Nicht genügend Verlaufsdaten' : 'Akt. 12M vs. Vorjahr 12M'} />
+                              <KpiCard label="YoY-Wachstum" value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'} color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'} sub={yoy === null ? 'Nicht genügend Daten' : '12M vs. Vorjahr'} />
                               {hasRealData && (
-                                  <KpiCard label="Real (inflationsber.)" value={fmt(realTotal)} color="#f59e0b" detail={{ label: 'Kaufkraftverlust', value: fmt(inflation), color: '#ef4444' }} sub={`Gesamt · Basis: ${Object.keys(monthly || {}).map(Number).sort()[0]}`} />
+                                  <KpiCard label="Real (inflationsber.)" value={fmt(realTotal)} color="#f59e0b" detail={{ label: 'Verlust', value: fmt(inflation), color: '#ef4444' }} sub={`Basis: ${Object.keys(monthly || {}).map(Number).sort()[0]}`} />
                               )}
                             </div>
 
-                            <p style={{ fontSize:11, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Prognose · Nächste 12 Monate</p>
+                            <p style={{ fontSize:10, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8, marginTop:6 }}>Prognose · Nächste 12 Monate</p>
                             <div className="kpi-grid">
-                              <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6" detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }} sub="Prognose basierend auf Vorjahren" />
+                              <KpiCard label="Voraussichtlich Netto" value={fmt(forecast12m.total)} color="#f472b6" detail={{ label:'Ø Monatlich', value:fmt(forecast12m.avg), color:'#f472b6' }} sub="Basierend auf Vorjahren" />
                               <KpiCard label={`Wachstum ${cy} vs. ${cy - 1}`} value={(() => { const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0); const actualLastYear = yearTotal(monthly, cy - 1); if (actualLastYear === 0) return '–'; const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100; return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %' })()} color={(() => { const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0); const actualLastYear = yearTotal(monthly, cy - 1); if (actualLastYear === 0) return '#7a8ba0'; return ((forecastCurrentYear - actualLastYear) / actualLastYear) >= 0 ? '#22c55e' : '#ef4444' })()} sub="Prognose Gesamtjahr" />
-                              <KpiCard label="Progn. Dividendenrendite" value={(() => { const forecastNet = calcForecastNext12mNet(); if (!currentValue || currentValue === 0) return '–'; return fmtPct((forecastNet / currentValue) * 100) })()} color="#5bcec2" sub="Prognose nächste 12M / Marktwert" />
+                              <KpiCard label="Progn. Dividendenrendite" value={(() => { const forecastNet = calcForecastNext12mNet(); if (!currentValue || currentValue === 0) return '–'; return fmtPct((forecastNet / currentValue) * 100) })()} color="#5bcec2" sub="Nächste 12M / Marktwert" />
                             </div>
 
-                            <DividendChart monthly={monthly} cum={cum} forecastCum={forecastCum} forecastMonthly={forecastMonthly} byHolding={byHolding} forecastByHolding={forecastByHolding} />
-                            <DividendHeatmap monthly={monthly} />
+                            <div style={{ marginTop: 16 }}>
+                              <DividendChart monthly={monthly} cum={cum} forecastCum={forecastCum} forecastMonthly={forecastMonthly} byHolding={byHolding} forecastByHolding={forecastByHolding} />
+                            </div>
+                            <div style={{ marginTop: 16 }}>
+                              <DividendHeatmap monthly={monthly} />
+                            </div>
 
-                            <div id="dividends-table">
+                            <div id="dividends-table" style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
                               <DividendDonut byHolding={byHolding} kpiRange={kpiRange} />
                               <PositionsTable byHolding={byHolding} kpiRange={kpiRange} />
                             </div>
@@ -623,15 +597,14 @@ export default function App() {
 
           {/* PORTFOLIO MODUS */}
           {appMode === 'portfolio' && (
-              <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>
+              <div>
                 {page === 'portfolio-overview' && (
                     <>
-                      <div style={{ marginBottom: 16 }}>
-                        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>💼 Portfolio Bestände</h1>
-                        <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Echtzeit-Depotwerte & Positionen</p>
+                      <div style={{ marginBottom: 14 }}>
+                        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>💼 Portfolio Bestände</h1>
+                        <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Echtzeit-Depotwerte & Positionen</p>
                       </div>
 
-                      {/* 3. FIX: Übergabe des angereicherten Arrays (falls nicht vorhanden, Rückfall auf holdings) */}
                       <PortfolioDashboard
                           currentValue={currentValue}
                           forecast12m={forecast12m}
@@ -643,13 +616,13 @@ export default function App() {
 
                 {page === 'portfolio-assets' && (
                     <>
-                      <div style={{ marginBottom: 16 }}>
-                        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e0e6f0' }}>🍰 Asset Allokation</h1>
-                        <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aufteilung deiner echten Depotwerte nach Klassen</p>
+                      <div style={{ marginBottom: 14 }}>
+                        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>🍰 Asset Allokation</h1>
+                        <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Aufteilung deiner echten Depotwerte nach Klassen</p>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20' }}>
-                      <AssetHoldingDonut holdings={enrichedHoldings || holdings} />
-                      <AssetAllocationDonut holdings={enrichedHoldings || holdings} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <AssetHoldingDonut holdings={enrichedHoldings || holdings} />
+                        <AssetAllocationDonut holdings={enrichedHoldings || holdings} />
                       </div>
                     </>
                 )}

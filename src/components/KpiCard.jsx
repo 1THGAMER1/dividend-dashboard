@@ -10,7 +10,7 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
             border:         '1px solid #1e2a3a',
             flex:           '1 1 160px',
             minWidth:       0,
-            display:        'flex',
+            display:        'grid',
             flexDirection:  'column',
             justifyContent: 'space-between',
             minHeight:      110,
@@ -44,10 +44,10 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
             {/* Detail + Sub */}
             <div
                 className="kpi-card-footer"
-                style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap: 6, flexWrap:'wrap' }}
+                style={{ display:'grid', alignItems:'center', justifyContent:'space-between', gap: 6, flexWrap:'wrap' }}
             >
                 {detail && (
-                    <div style={{ fontSize:13, color:'#6a7f94', display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                    <div style={{ fontSize:13, color:'#6a7f94', display:'grid', alignItems:'center', gap:6, flexShrink:0 }}>
                         <span style={{ whiteSpace:'nowrap' }}>{detail.label}</span>
                         <span style={{
                             color:        detail.color || '#7c9db5',
