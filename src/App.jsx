@@ -24,68 +24,10 @@ import SkeletonDashboard from './components/SkeletonDashboard'
 import EmptyState        from './components/EmptyState'
 import Footer            from './components/Footer'
 import AssetAllocationDonut from './components/AssetAllocationDonut'
-import AssetHoldingDonut from "./components/AssetHoldingDonut.jsx";
+import AssetHoldingDonut from "./components/AssetHoldingDonut.jsx"
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
-// Prüfen, ob ein Share-Token in der URL ist
-const [sharedToken, setSharedToken] = useState(() => {
-  const hash = window.location.hash
-  if (hash.startsWith('#share/')) {
-    return hash.replace('#share/', '')
-  }
-  return null
-})
-
-const [sharedData, setSharedData] = useState(null)
-const [sharedLoading, setSharedLoading] = useState(!!sharedToken)
-
-// Wenn ein Share-Token da ist, lade die Daten anonym aus Supabase
-useEffect(() => {
-  if (!sharedToken) return
-  async function loadShared() {
-    const { data, error } = await supabase
-        .from('shared_portfolios')
-        .select('portfolio_data')
-        .eq('share_token', sharedToken)
-        .single()
-
-    if (data) {
-      setSharedData(data.portfolio_data)
-    }
-    setSharedLoading(false)
-  }
-  loadShared()
-}, [sharedToken])
-
-// Wenn im Share-Modus, zeige eine abgespeckte, anonyme Ansicht
-if (sharedToken) {
-  if (sharedLoading) return <LoadingScreen text="Geteiltes Portfolio wird geladen…" />
-  if (!sharedData) return <div style={{ color: '#fff', textAlign: 'center', padding: 50 }}>Portfolio nicht gefunden oder Link abgelaufen.</div>
-
-  return (
-      <div style={{ minHeight: '100vh', background: '#0f1420', color: '#c8d4e0', padding: 20 }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, background: '#161b27', padding: '16px 20px', borderRadius: 16, border: '1px solid #1e2a3a' }}>
-            <div>
-              <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: 0 }}>📊 Anonymes Portfolio</h2>
-              <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>Read-Only Ansicht</p>
-            </div>
-            <a href="/" style={{ background: '#1e3a5f', color: '#93c5fd', padding: '8px 14px', borderRadius: 8, fontSize: 12, textDecoration: 'none', fontWeight: 600 }}>
-              Eigenes Dashboard erstellen
-            </a>
-          </div>
-
-          {/* Hier kannst du die Komponenten mit den sharedData befüllen */}
-          <PortfolioDashboard
-              currentValue={sharedData.currentValue}
-              forecast12m={{ net: sharedData.kpi?.['all']?.net || 0 }}
-              holdings={sharedData.holdings || []}
-          />
-        </div>
-      </div>
-  )
-}
 
 const KPI_RANGES = [
   { key: 'all', label: 'Gesamt' },
@@ -206,6 +148,35 @@ function LoadingScreen({ text, progress }) {
 }
 
 export default function App() {
+  // Share-Token Logik in der Komponente
+  const [sharedToken, setSharedToken] = useState(() => {
+    const hash = window.location.hash
+    if (hash.startsWith('#share/')) {
+      return hash.replace('#share/', '')
+    }
+    return null
+  })
+
+  const [sharedData, setSharedData] = useState(null)
+  const [sharedLoading, setSharedLoading] = useState(!!sharedToken)
+
+  useEffect(() => {
+    if (!sharedToken) return
+    async function loadShared() {
+      const { data } = await supabase
+          .from('shared_portfolios')
+          .select('portfolio_data')
+          .eq('share_token', sharedToken)
+          .single()
+
+      if (data) {
+        setSharedData(data.portfolio_data)
+      }
+      setSharedLoading(false)
+    }
+    loadShared()
+  }, [sharedToken])
+
   const [page, setPage] = useState(() => {
     const hash = window.location.hash.replace('#', '')
     return hash || 'dashboard'
@@ -323,6 +294,34 @@ export default function App() {
     return () => { active = false }
   }, [appUser])
 
+  // Wenn im Share-Modus, zeige die anonyme Ansicht
+  if (sharedToken) {
+    if (sharedLoading) return <LoadingScreen text="Geteiltes Portfolio wird geladen…" />
+    if (!sharedData) return <div style={{ color: '#fff', textAlign: 'center', padding: 50 }}>Portfolio nicht gefunden oder Link abgelaufen.</div>
+
+    return (
+        <div style={{ minHeight: '100vh', background: '#0f1420', color: '#c8d4e0', padding: 20 }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, background: '#161b27', padding: '16px 20px', borderRadius: 16, border: '1px solid #1e2a3a' }}>
+              <div>
+                <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: 0 }}>📊 Anonymes Portfolio</h2>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>Read-Only Ansicht</p>
+              </div>
+              <a href="/" style={{ background: '#1e3a5f', color: '#93c5fd', padding: '8px 14px', borderRadius: 8, fontSize: 12, textDecoration: 'none', fontWeight: 600 }}>
+                Eigenes Dashboard erstellen
+              </a>
+            </div>
+
+            <PortfolioDashboard
+                currentValue={sharedData.currentValue}
+                forecast12m={{ net: sharedData.kpi?.['all']?.net || 0 }}
+                holdings={sharedData.holdings || []}
+            />
+          </div>
+        </div>
+    )
+  }
+
   if (appUser === undefined || profileLoading) return <LoadingScreen text="App wird vorbereitet…" />
   if (!appUser)        return <AppLogin />
   if (!clientIdReady)  return <ParqetSetup onDone={() => setClientIdReady(true)} />
@@ -438,7 +437,6 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <DashLogo size={26} />
 
-            {/* Kompakter System-Switcher für Mobile */}
             <div style={{ display: 'flex', background: '#0f1420', padding: 2, borderRadius: 8, border: '1px solid #1e2a3a' }}>
               <button
                   onClick={() => handleModeSwitch('dividends')}
@@ -554,13 +552,12 @@ export default function App() {
           </div>
         </nav>
 
-        {/* HAUPTINHALT MIT FLUIDEM PADDING FÜR MOBILE */}
+        {/* HAUPTINHALT */}
         <div style={{ flex: 1, padding: '16px 10px', maxWidth: 1200, width: '100%', margin: '0 auto' }}>
           {page === 'calculator' && <DividendCalculator portfolioData={portfolioData} />}
           {page === 'roadmap'    && <RoadmapPage />}
           {page === 'profile'    && <ProfilePage appUser={appUser} onParqetUpdated={loadData} />}
 
-          {/* DIVIDENDEN MODUS */}
           {appMode === 'dividends' && (
               <>
                 {page === 'drip' && <DripSimulator portfolioData={portfolioData} />}
@@ -653,7 +650,6 @@ export default function App() {
               </>
           )}
 
-          {/* PORTFOLIO MODUS */}
           {appMode === 'portfolio' && (
               <div>
                 {page === 'portfolio-overview' && (
