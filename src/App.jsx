@@ -20,14 +20,14 @@ const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
 const DIVIDEND_TABS = [
   { id: 'dashboard',  emoji: '📊', label: 'Dashboard'  },
-  { id: 'kalender',   emoji: '🗓',  label: 'Kalender'   },
-  { id: 'rechner', emoji: '🧭', label: 'Rechner'    },
+  { id: 'calendar',   emoji: '🗓',  label: 'Kalender'   },
+  { id: 'calculator', emoji: '🧭', label: 'Rechner'    },
   { id: 'drip',       emoji: '♻️', label: 'DRIP'       },
 ]
 
 const PORTFOLIO_TABS = [
-  { id: 'portfolio-bestände', emoji: '💼', label: 'Bestände'    },
-  { id: 'portfolio-allokation',   emoji: '🍰', label: 'Allokation'  },
+  { id: 'portfolio-overview', emoji: '💼', label: 'Bestände'    },
+  { id: 'portfolio-assets',   emoji: '🍰', label: 'Allokation'  },
 ]
 
 function yearTotal(monthly, year) {
