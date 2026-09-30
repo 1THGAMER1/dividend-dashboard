@@ -7,51 +7,19 @@ export default function ProfilePage({ appUser }) {
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState(null)
     const [imgError, setImgError] = useState(false)
+    const [existingToken, setexistingToken] = useState(null)
 
-    const { currentValue, holdings, enrichedHoldings, monthly, kpi } = useDividendData()
+    // Holen uns die Portfolio-Daten inklusive enrichedHoldings direkt aus dem Hook
+    const { currentValue, holdings, enrichedHoldings, monthly, kpi, byHolding } = useDividendData()
 
-    const handleSharePortfolio = async () => {
-        try {
-            setLoading(true)
-            // Generiere einen sicheren Share-Token
-            const token = Math.random().toString(36).substring(2) + Date.now().toString(36)
-
-            // Nutze angereicherte Holdings, falls vorhanden, sonst Fallback auf Standard-Holdings
-            const dataToShare = enrichedHoldings && enrichedHoldings.length > 0 ? enrichedHoldings : holdings
-
-            // Speichere die aktuellen Portfolio-Daten anonym in Supabase
-            const { error } = await supabase.from('shared_portfolios').insert([
-                {
-                    share_token: token,
-                    portfolio_data: {
-                        currentValue,
-                        holdings: dataToShare,
-                        monthly,
-                        kpi
-                    }
-                }
-            ])
-
-            if (error) throw error
-
-            const shareUrl = `${window.location.origin}/#share/${token}`
-            await navigator.clipboard.writeText(shareUrl)
-            setMessage({ type: 'success', text: 'Anonymer Share-Link in die Zwischenablage kopiert!' })
-        } catch (err) {
-            setMessage({ type: 'error', text: 'Fehler beim Erstellen des Links: ' + err.message })
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    // Lade die bestehende Parqet Client ID beim Laden der Seite
+    // Lade bestehende Parqet ID und prüfen, ob bereits ein Share-Token existiert
     useEffect(() => {
         async function loadProfile() {
             if (!appUser) return
             try {
                 const { data, error } = await supabase
                     .from('profiles')
-                    .select('parqet_client_id')
+                    .select('parqet_client_id, share_token')
                     .eq('id', appUser.id)
                     .maybeSingle()
 
@@ -59,12 +27,62 @@ export default function ProfilePage({ appUser }) {
                 if (data?.parqet_client_id) {
                     setParqetId(data.parqet_client_id)
                 }
+                if (data?.share_token) {
+                    setexistingToken(data.share_token)
+                }
             } catch (err) {
                 console.error('Fehler beim Laden des Profils:', err.message)
             }
         }
         loadProfile()
     }, [appUser])
+
+    // Stabiler Share-Link (wird aktualisiert, aber der Link-Token bleibt immer derselbe!)
+    const handleSharePortfolio = async () => {
+        try {
+            setLoading(tab => true)
+
+            // Entweder den vorhandenen Token nutzen oder einmalig einen neuen generieren
+            let token = existingToken
+            if (!token) {
+                token = Math.random().toString(36).substring(2) + Date.now().toString(36)
+                setexistingToken(token)
+            }
+
+            const dataToShare = enrichedHoldings && enrichedHoldings.length > 0 ? enrichedHoldings : holdings
+            const portfolioPayload = { currentValue, holdings: dataToShare, monthly, kpi, byHolding }
+
+            // 1. In der shared_portfolios Tabelle speichern/aktualisieren (Upsert über share_token)
+            const { error: shareError } = await supabase.from('shared_portfolios').upsert([
+                {
+                    share_token: token,
+                    portfolio_data: portfolioPayload,
+                    updated_at: new Date().toISOString()
+                }
+            ], { onConflict: 'share_token' })
+
+            if (shareError) throw shareError
+
+            // 2. Den Token direkt im Profil des Users hinterlegen, damit er dauerhaft erhalten bleibt
+            const { error: profileError } = await supabase.from('profiles').upsert([
+                {
+                    id: appUser.id,
+                    share_token: token,
+                    parqet_client_id: parqetId.trim()
+                }
+            ])
+
+            if (profileError) throw profileError
+
+            const shareUrl = `${window.location.origin}/#share/${token}`
+            await navigator.clipboard.writeText(shareUrl)
+            setMessage({ type: 'success', text: 'Dein fester Share-Link wurde in die Zwischenablage kopiert!' })
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Fehler beim Erstellen des Links: ' + err.message })
+        } finally {
+            setLoading(false)
+        }
+    }
 
     // Parqet Client ID speichern/aktualisieren
     const handleSaveParqetId = async (e) => {
@@ -90,7 +108,6 @@ export default function ProfilePage({ appUser }) {
         }
     }
 
-    // Liest alle aktiven Login-Anbieter aus dem Supabase User-Objekt aus
     const getProviders = (user) => {
         if (!user) return []
         const providers =
@@ -158,39 +175,6 @@ export default function ProfilePage({ appUser }) {
                     <p style={{ margin: '4px 0 8px 0', fontSize: 14, color: '#94a3b8' }}>
                         {appUser?.email}
                     </p>
-
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        {activeProviders.includes('email') && (
-                            <span
-                                style={{
-                                    background: '#0f172a',
-                                    border: '1px solid #1e293b',
-                                    color: '#94a3b8',
-                                    fontSize: 12,
-                                    padding: '3px 10px',
-                                    borderRadius: 12,
-                                    fontWeight: 500,
-                                }}
-                            >
-                Anmeldung via E-Mail & Passwort
-              </span>
-                        )}
-                        {activeProviders.includes('google') && (
-                            <span
-                                style={{
-                                    background: '#0f172a',
-                                    border: '1px solid #1e293b',
-                                    color: '#38bdf8',
-                                    fontSize: 12,
-                                    padding: '3px 10px',
-                                    borderRadius: 12,
-                                    fontWeight: 500,
-                                }}
-                            >
-                🌐 Google
-              </span>
-                        )}
-                    </div>
                 </div>
             </div>
 
@@ -208,7 +192,7 @@ export default function ProfilePage({ appUser }) {
                     🔗 Anonymes Portfolio teilen
                 </h3>
                 <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#94a3b8' }}>
-                    Generiere einen sicheren Nur-Lese-Link, um dein Portfolio inklusive aller Asset-Namen anonym mit anderen zu teilen.
+                    Dein fester Nur-Lese-Link. Wenn du ihn kopierst, werden deine aktuellen Portfoliodaten für diesen Link aktualisiert.
                 </p>
 
                 {message && (
@@ -242,7 +226,7 @@ export default function ProfilePage({ appUser }) {
                         cursor: 'pointer',
                     }}
                 >
-                    {loading ? 'Generiere Link…' : 'Share-Link kopieren'}
+                    {loading ? 'Aktualisiere Link…' : 'Share-Link kopieren'}
                 </button>
             </div>
 
