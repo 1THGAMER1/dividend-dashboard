@@ -607,7 +607,6 @@ export default function App() {
 
                       <PortfolioDashboard
                           currentValue={currentValue}
-                          forecast12m={forecast12m}
                           holdings={enrichedHoldings || holdings}
                           byHolding={byHolding}
                       />

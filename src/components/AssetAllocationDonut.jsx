@@ -1,5 +1,5 @@
 import React from 'react'
-import { PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, ResponsiveContainer } from 'recharts'
 import { getAssetAllocation } from '/src/dataUtils.js'
 
 const COLORS = ['#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#fb923c', '#facc15']
@@ -33,7 +33,6 @@ export default function AssetAllocationDonut({ holdings = [], currentValue = 0 }
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center' }}>
 
-                {/* Donut Chart Container mit zentralem Gesamtwert */}
                 <div style={{ width: '100%', height: 320, position: 'relative' }}>
                     <ResponsiveContainer width="100%" height={320}>
                         <PieChart>
@@ -49,13 +48,7 @@ export default function AssetAllocationDonut({ holdings = [], currentValue = 0 }
                                 stroke="#161b27"
                                 strokeWidth={3}
                                 isAnimationActive={false}
-                            />
-                            <Tooltip
-                                contentStyle={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, color: '#e0e6f0', fontSize: 13, padding: '10px 14px' }}
-                                formatter={(value, name) => {
-                                    const percent = totalValue > 0 ? ((value / totalValue) * 100).toFixed(1) : 0
-                                    return [`${fmtVal(value)} (${percent.replace('.', ',')} %)`, name]
-                                }}
+                                activeIndex={-1}
                             />
                         </PieChart>
                     </ResponsiveContainer>
@@ -73,7 +66,6 @@ export default function AssetAllocationDonut({ holdings = [], currentValue = 0 }
                     </div>
                 </div>
 
-                {/* Saubere Legende im Parqet-Stil */}
                 <div style={{ width: '100%', maxHeight: 220, overflowY: 'auto', paddingRight: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {coloredData.map((item, idx) => {
                         const percent = totalValue > 0 ? ((item.value / totalValue) * 100).toFixed(1) : 0
