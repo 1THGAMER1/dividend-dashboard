@@ -214,6 +214,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     return { dps: avg, source: 'yahoo-avg', detail: `avg(${monthMatches.length}): ${avg.toFixed(6)}` }
   }
 
+  const isinsFromBuys = Object.keys(sharesFromBuys)
   const isinsAll = [...allKnownIsins]
 
   const isins = isinsAll.filter(isin => {
