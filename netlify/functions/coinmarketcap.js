@@ -11,9 +11,9 @@ export const handler = async function(event, context) {
     }
 
     try {
-        const symbol = (event.queryStringParameters?.symbol || '').toUpperCase();
+        const symbols = (event.queryStringParameters?.symbol || event.queryStringParameters?.symbols || '').toUpperCase();
 
-        if (!symbol) {
+        if (!symbols) {
             return {
                 statusCode: 400,
                 headers,
@@ -21,19 +21,17 @@ export const handler = async function(event, context) {
             };
         }
 
-        // CoinMarketCap Pro API (oder über einen Public Price Endpunkt / CoinGecko Fallback)
-        // Hier nutzen wir die offizielle CoinMarketCap API (erfordert einen kostenlosen API-Key in deinen Netlify Environment Variables: CMC_API_KEY)
         const apiKey = process.env.CMC_API_KEY;
-
         if (!apiKey) {
             return {
                 statusCode: 500,
                 headers,
-                body: JSON.stringify({ error: 'CMC_API_KEY is not configured in environment variables' })
+                body: JSON.stringify({ error: 'CMC_API_KEY is not configured' })
             };
         }
 
-        const url = `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${encodeURIComponent(symbol)}&convert=EUR`;
+        // CoinMarketCap erlaubt mehrere Symbole, getrennt durch Komma
+        const url = `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${encodeURIComponent(symbols)}&convert=EUR`;
 
         const response = await fetch(url, {
             headers: {
@@ -47,31 +45,26 @@ export const handler = async function(event, context) {
         }
 
         const data = await response.json();
-        const coinData = data.data?.[symbol];
+        const coinMap = {};
 
-        if (!coinData) {
-            return {
-                statusCode: 404,
-                headers,
-                body: JSON.stringify({ error: 'Crypto symbol not found on CoinMarketCap' })
-            };
+        // Durchlaufe alle zurückgegebenen Daten und mappe sie auf das Symbol
+        if (data.data) {
+            for (const [sym, coinData] of Object.entries(data.data)) {
+                const quote = coinData.quote?.EUR || {};
+                coinMap[sym] = {
+                    name: coinData.name,
+                    regularMarketPrice: quote.price || 0,
+                    percentChange24h: quote.percent_change_24h || 0,
+                    marketCap: quote.market_cap || 0,
+                    currency: 'EUR'
+                };
+            }
         }
-
-        const quote = coinData.quote?.EUR || {};
-
-        const responseData = {
-            symbol: coinData.symbol,
-            name: coinData.name,
-            regularMarketPrice: quote.price || 0,
-            percentChange24h: quote.percent_change_24h || 0,
-            marketCap: quote.market_cap || 0,
-            currency: 'EUR'
-        };
 
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify(responseData)
+            body: JSON.stringify({ coins: coinMap })
         };
 
     } catch (error) {

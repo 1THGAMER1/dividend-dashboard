@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient'
 
 const BASE = '/api'
 const YAHOO_FN = '/.netlify/functions/yahoo-dividends'
-const CMC_FN = '/.netlify/functions/coinmarketcap' // CoinMarketCap Fallback
+const CMC_FN = '/.netlify/functions/coinmarketcap' // CoinMarketCap Abfrage & Fallback
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 const CACHE_TTL_DAYS = 30
 const NOT_FOUND_TTL_DAYS = 7   // Negativ-Cache: nach 7 Tagen nochmal versuchen
@@ -267,7 +267,7 @@ async function resolveIsinsToTickers(isins) {
   return result
 }
 
-// --- Kurs- & Dividendendaten (Yahoo mit CoinMarketCap Fallback) ---
+// --- Kurs- & Dividendendaten (Smart Routing für Yahoo & CoinMarketCap) ---
 
 export async function fetchYahooDividends(ticker) {
   if (!ticker) return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
@@ -286,16 +286,17 @@ export async function fetchYahooDividends(ticker) {
   }
 }
 
-// CoinMarketCap Abfrage als Backup
-async function fetchCryptoPriceFromCMC(symbol) {
-  if (!symbol) return null
+// Sammel-Abfrage für Krypto-Assets via CoinMarketCap
+async function fetchCryptoPricesBatch(symbols = []) {
+  if (symbols.length === 0) return {}
   try {
-    const res = await fetch(`${CMC_FN}?symbol=${encodeURIComponent(symbol)}`)
-    if (!res.ok) return null
+    const joined = symbols.join(',')
+    const res = await fetch(`${CMC_FN}?symbols=${encodeURIComponent(joined)}`)
+    if (!res.ok) return {}
     const data = await res.json()
-    return data.regularMarketPrice || null
+    return data.coins || {}
   } catch {
-    return null
+    return {}
   }
 }
 
@@ -303,59 +304,108 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   const allIsins = Object.keys(tickers)
   if (allIsins.length === 0) return {}
 
-  // Wir ignorieren absolut typ-basierte Ausschlüsse vorab, da Assets über den Fallback geprüft werden
-  const relevant = allIsins
+  const cryptoSymbolsToFetch = []
+  const cryptoIsinMap = {}
+  const standardIsins = []
 
-  const toResolve = relevant.filter(isin => needsResolution(tickers[isin]))
-  console.log(`[Yahoo] ${toResolve.length}/${relevant.length} benötigen Resolver`)
+  // 1. Vorab-Filter: Krypto-Assets (wie Bitcoin etc.) direkt für CoinMarketCap vormerken
+  for (const isin of allIsins) {
+    const rawType = (types[isin] || '').toLowerCase()
+    const rawTicker = (tickers[isin] || '').toUpperCase()
 
-  const tickerMap = await resolveIsinsToTickers(toResolve)
+    const isCrypto = rawType.includes('crypto') ||
+        rawType.includes('coin') ||
+        rawType.includes('token') ||
+        ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'MATIC'].includes(rawTicker)
 
-  const resolvedTickers = {}
-  for (const isin of relevant) {
-    const raw = tickers[isin]
-    if (isEurTicker(raw)) {
-      resolvedTickers[isin] = raw
+    if (isCrypto) {
+      cryptoSymbolsToFetch.push(rawTicker)
+      cryptoIsinMap[rawTicker] = isin
     } else {
-      resolvedTickers[isin] = tickerMap[isin] || raw || null
+      standardIsins.push(isin)
     }
   }
 
-  const withTicker = relevant.filter(isin => resolvedTickers[isin])
-  console.log(`[Yahoo] ${withTicker.length}/${relevant.length} bereit für Yahoo-Abfrage`)
-
-  // Intelligente Abfrage mit automatischem Krypto-Fallback
-  const results = await Promise.allSettled(
-      withTicker.map(async isin => {
-        const symbol = resolvedTickers[isin]
-        const rawTicker = tickers[isin] || ''
-
-        // 1. Versuch: Ganz normal über Yahoo Finance
-        let { dividends, price } = await fetchYahooDividends(symbol)
-
-        // 2. Fallback: Wenn Yahoo keinen Kurs liefert (z.B. weil es ein Krypto-Token ohne Yahoo-Daten ist), probiere CoinMarketCap
-        if (price == null || isNaN(price) || price === 0) {
-          console.log(`[Fallback] Yahoo hat keinen Kurs für ${symbol} (${isin}) geliefert – versuche CoinMarketCap...`)
-          const cmcPrice = await fetchCryptoPriceFromCMC(rawTicker)
-          if (cmcPrice != null && cmcPrice > 0) {
-            price = cmcPrice
-            console.log(`[Fallback erfolgreich] Kurs für ${rawTicker} via CoinMarketCap: ${price} €`)
-          }
-        }
-
-        return { isin, dividends, price }
-      })
-  )
-
   const map = {}
-  for (const r of results) {
-    if (r.status === 'fulfilled') {
-      map[r.value.isin] = {
-        dividends: r.value.dividends,
-        price: r.value.price
+
+  // 2. Krypto direkt gesammelt über CoinMarketCap laden (umgeht Yahoo-Fehler bei Krypto)
+  if (cryptoSymbolsToFetch.length > 0) {
+    console.log(`[CMC Batch] Lade ${cryptoSymbolsToFetch.length} Krypto-Assets direkt von CoinMarketCap...`)
+    const cmcCoins = await fetchCryptoPricesBatch(cryptoSymbolsToFetch)
+
+    for (const [rawSymbol, coinData] of Object.entries(cmcCoins)) {
+      const isin = cryptoIsinMap[rawSymbol]
+      if (isin && coinData.regularMarketPrice > 0) {
+        map[isin] = {
+          dividends: [],
+          price: coinData.regularMarketPrice
+        }
+        console.log(`[CMC Direkt] ${rawSymbol} -> ${coinData.regularMarketPrice} €`)
       }
     }
   }
+
+  // 3. Reguläre Aktien & ETFs über Yahoo verarbeiten
+  if (standardIsins.length > 0) {
+    const standardTickers = {}
+    standardIsins.forEach(isin => standardTickers[isin] = tickers[isin])
+
+    const toResolve = standardIsins.filter(isin => needsResolution(tickers[isin]))
+    const tickerMap = await resolveIsinsToTickers(toResolve)
+
+    const resolvedTickers = {}
+    for (const isin of standardIsins) {
+      const raw = tickers[isin]
+      if (isEurTicker(raw)) {
+        resolvedTickers[isin] = raw
+      } else {
+        resolvedTickers[isin] = tickerMap[isin] || raw || null
+      }
+    }
+
+    const withTicker = standardIsins.filter(isin => resolvedTickers[isin])
+
+    const results = await Promise.allSettled(
+        withTicker.map(async isin => {
+          const symbol = resolvedTickers[isin]
+          const { dividends, price } = await fetchYahooDividends(symbol)
+          return { isin, dividends, price, symbol }
+        })
+    )
+
+    const failedIsins = []
+    const symbolToIsinMap = {}
+
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        const { isin, dividends, price, symbol } = r.value
+        if (price != null && !isNaN(price) && price > 0) {
+          map[isin] = { dividends, price }
+        } else {
+          failedIsins.push(isin)
+          const rawTicker = tickers[isin] || symbol
+          symbolToIsinMap[rawTicker] = isin
+        }
+      }
+    }
+
+    // Fallback für restliche nicht gefundene Assets
+    if (failedIsins.length > 0) {
+      const rawSymbolsToFetch = failedIsins.map(isin => tickers[isin] || resolvedTickers[isin]).filter(Boolean)
+      const cmcCoins = await fetchCryptoPricesBatch(rawSymbolsToFetch)
+
+      for (const [rawSymbol, coinData] of Object.entries(cmcCoins)) {
+        const isin = symbolToIsinMap[rawSymbol]
+        if (isin && coinData.regularMarketPrice > 0) {
+          map[isin] = {
+            dividends: [],
+            price: coinData.regularMarketPrice
+          }
+        }
+      }
+    }
+  }
+
   return map
 }
 
@@ -423,7 +473,8 @@ export async function fetchCurrentPrice(tickerOrIsin) {
     let price = data.regularMarketPrice || data.price || null
 
     if (!price) {
-      price = await fetchCryptoPriceFromCMC(tickerOrIsin)
+      const cmcData = await fetchCryptoPricesBatch([tickerOrIsin])
+      price = cmcData[tickerOrIsin?.toUpperCase()]?.regularMarketPrice || null
     }
     return price
   } catch (e) {
