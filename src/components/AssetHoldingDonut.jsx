@@ -33,53 +33,87 @@ export default function AssetHoldingDonut({ holdings = [] }) {
     }))
 
     return (
-        <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24, marginBottom: 20 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: '#e0e6f0', marginBottom: 4 }}>
-                📊 Verteilung nach einzelnen Werten
-            </h3>
-            <p style={{ color: '#7a8ba0', fontSize: 12, marginBottom: 16 }}>Nur aktive Bestände</p>
-
-            <div style={{ width: '100%', height: 280, minWidth: 250 }}>
-                <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                        <Pie
-                            data={coloredData}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={95}
-                            paddingAngle={2}
-                            stroke="#161b27"
-                            strokeWidth={2}
-                            isAnimationActive={false}
-                        />
-                        <Tooltip
-                            contentStyle={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 8, color: '#e0e6f0', fontSize: 12 }}
-                            formatter={(value, name) => {
-                                const percent = totalValue > 0 ? ((value / totalValue) * 100).toFixed(1) : 0
-                                return [`${fmtVal(value)} (${percent.replace('.', ',')} %)`, name]
-                            }}
-                        />
-                    </PieChart>
-                </ResponsiveContainer>
+        <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 28, marginBottom: 24 }}>
+            <div style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>
+                    📊 Verteilung nach einzelnen Werten
+                </h3>
+                <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aktuelle Allokation deiner aktiven Bestände</p>
             </div>
 
-            {/* Kompakte, scrollbare Liste der Werte unter dem Chart statt der kaputten Legende */}
-            <div style={{ marginTop: 12, maxHeight: 120, overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {coloredData.map((item, idx) => {
-                    const percent = totalValue > 0 ? ((item.value / totalValue) * 100).toFixed(1) : 0
-                    return (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#c0ccd8' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 10 }}>
-                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.fill, flexShrink: 0 }} />
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+            {/* Layout: Links der große Donut, rechts/darunter die saubere Parqet-Legende */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center' }}>
+
+                {/* Donut Chart Container */}
+                <div style={{ width: '100%', height: 320, position: 'relative' }}>
+                    <ResponsiveContainer width="100%" height={320}>
+                        <PieChart>
+                            <Pie
+                                data={coloredData}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={85}
+                                outerRadius={125}
+                                paddingAngle={3}
+                                stroke="#161b27"
+                                strokeWidth={3}
+                                isAnimationActive={false}
+                            />
+                            <Tooltip
+                                contentStyle={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, color: '#e0e6f0', fontSize: 13, padding: '10px 14px' }}
+                                formatter={(value, name) => {
+                                    const percent = totalValue > 0 ? ((value / totalValue) * 100).toFixed(1) : 0
+                                    return [`${fmtVal(value)} (${percent.replace('.', ',')} %)`, name]
+                                }}
+                            />
+                        </PieChart>
+                    </ResponsiveContainer>
+
+                    {/* Zentraler Gesamtwert im Donut (Parqet-Stil) */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        textAlign: 'center',
+                        pointerEvents: 'none'
+                    }}>
+                        <div style={{ fontSize: 12, color: '#7a8ba0', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Gesamtwert</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', marginTop: 2 }}>{fmtVal(totalValue)}</div>
+                    </div>
+                </div>
+
+                {/* Große, saubere Legende im Parqet-Stil */}
+                <div style={{ width: '100%', maxHeight: 220, overflowY: 'auto', paddingRight: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {coloredData.map((item, idx) => {
+                        const percent = totalValue > 0 ? ((item.value / totalValue) * 100).toFixed(1) : 0
+                        return (
+                            <div key={idx} style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: 13,
+                                color: '#d0dce8',
+                                background: '#10141f',
+                                padding: '10px 14px',
+                                borderRadius: 10,
+                                border: '1px solid #1a2233'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', marginRight: 12 }}>
+                                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: item.fill, flexShrink: 0 }} />
+                                    <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 12, flexShrink: 0, alignItems: 'center' }}>
+                                    <span style={{ color: '#7a8ba0', fontSize: 12 }}>{percent.replace('.', ',')} %</span>
+                                    <span style={{ fontWeight: 600, color: '#e0e6f0', minWidth: 80, textAlign: 'right' }}>{fmtVal(item.value)}</span>
+                                </div>
                             </div>
-                            <span style={{ fontWeight: 600, flexShrink: 0 }}>{fmtVal(item.value)} ({percent.replace('.', ',')} %)</span>
-                        </div>
-                    )
-                })}
+                        )
+                    })}
+                </div>
+
             </div>
         </div>
     )

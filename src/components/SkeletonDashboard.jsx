@@ -1,17 +1,5 @@
 import SkeletonCard from './SkeletonCard'
 
-/**
- * SkeletonDashboard – komplettes Lade-Skelett für den Dashboard-Tab.
- * Struktur entspricht exakt dem echten Dashboard:
- *   1. Range-Pills
- *   2. KPI-Grid (4 Cards)
- *   3. KPI-Grid (1 Card – CAGR)
- *   4. Abschnittslabel "Prognose"
- *   5. KPI-Grid (3 Cards – Prognose)
- *   6. Großer Chart-Block
- *   7. Heatmap-Block
- *   8. Tabellen-Block
- */
 export default function SkeletonDashboard() {
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 12px' }}>

@@ -1,7 +1,3 @@
-/**
- * SkeletonCard – spiegelt die exakte Struktur von KpiCard wider.
- * Gleiche minHeight (110px), gleiches Padding, gleiche Border-Radius.
- */
 export default function SkeletonCard() {
   return (
     <div style={{

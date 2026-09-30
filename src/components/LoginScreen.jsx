@@ -11,6 +11,15 @@ const FEATURES = [
     { icon: '➕', title: 'Und vieles mehr',         desc: 'Weitere Funktionen folgen bald!' },
 ]
 
+// Wiederverwendbares Parqet-Logo als sicheres Inline-SVG
+function ParqetLogo({ style }) {
+    return (
+        <svg viewBox="0 0 24 24" fill="#009991" style={style} xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-5h2v5h-2zm0-7v-2h2v2h-2z" />
+        </svg>
+    )
+}
+
 function AnimatedBackground() {
     const canvasRef = useRef(null)
 
@@ -27,11 +36,11 @@ function AnimatedBackground() {
         window.addEventListener('resize', resize)
 
         const particles = Array.from({ length: 40 }, () => ({
-            x:    Math.random() * canvas.width,
-            y:    Math.random() * canvas.height,
-            r:    Math.random() * 2 + 1,
-            vx:   (Math.random() - 0.5) * 0.4,
-            vy:   (Math.random() - 0.5) * 0.4,
+            x:     Math.random() * canvas.width,
+            y:     Math.random() * canvas.height,
+            r:     Math.random() * 2 + 1,
+            vx:    (Math.random() - 0.5) * 0.4,
+            vy:    (Math.random() - 0.5) * 0.4,
             alpha: Math.random() * 0.4 + 0.1,
         }))
 
@@ -123,7 +132,6 @@ export default function LoginScreen({ onLogin, loading, error }) {
         }}>
             <AnimatedBackground />
 
-            {/* Abmelden oben rechts */}
             <button
                 onClick={handleSignOut}
                 style={{
@@ -148,10 +156,7 @@ export default function LoginScreen({ onLogin, loading, error }) {
             }}>
                 {/* Logo + Titel */}
                 <div style={{ textAlign: 'center' }}>
-                    <img
-                        src="https://developer.parqet.com/img/parqet-icon-trans.svg"
-                        style={{ width: 56, height: 56, marginBottom: 16 }}
-                    />
+                    <ParqetLogo style={{ width: 56, height: 56, marginBottom: 16 }} />
                     <h1 style={{ fontSize: 26, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>
                         Dividenden Dashboard
                     </h1>
@@ -213,12 +218,7 @@ export default function LoginScreen({ onLogin, loading, error }) {
                     onMouseOver={e => { if (!loading) e.currentTarget.style.backgroundColor = '#5bcec2' }}
                     onMouseOut={e  => { if (!loading) e.currentTarget.style.backgroundColor = '#009991' }}
                 >
-                    <img
-                        src="https://developer.parqet.com/img/parqet-icon-trans.svg"
-                        alt=""
-                        aria-hidden="true"
-                        style={{ width:'1.6em', height:'1.6em', marginBlock:'-0.25em', flexShrink:0 }}
-                    />
+                    <ParqetLogo style={{ width:'1.6em', height:'1.6em', marginBlock:'-0.25em', flexShrink:0, fill: 'white' }} />
                     {loading ? 'Verbinde…' : 'Connect with Parqet'}
                 </button>
 

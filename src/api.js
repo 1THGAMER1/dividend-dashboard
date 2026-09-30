@@ -227,7 +227,7 @@ async function resolveIsinsToTickers(isins) {
 
   const cachedFound    = Object.values(cached).filter(v => v !== null).length
   const cachedNotFound = Object.values(cached).filter(v => v === null).length
-  console.log(`[Cache] ${cachedFound} gecacht, ${cachedNotFound} gecacht (nicht gefunden), ${missing.length} aufzuloesen`)
+  console.log(`[Cache] ${cachedFound} gecacht, ${cachedNotFound} gecacht (nicht gefunden), ${missing.length} aufzulösen`)
 
   if (missing.length === 0) return cached
 
@@ -236,7 +236,7 @@ async function resolveIsinsToTickers(isins) {
   const result     = { ...cached }
   const newEntries = []
 
-  emitProgress(0, total, 'Ticker werden aufgeloest\u2026')
+  emitProgress(0, total, 'Ticker werden aufgelöst\u2026')
 
   for (let i = 0; i < missing.length; i += BATCH_SIZE) {
     const batch = missing.slice(i, i + BATCH_SIZE)
@@ -254,7 +254,7 @@ async function resolveIsinsToTickers(isins) {
       console.log(`[Resolve] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
     }
 
-    emitProgress(done, total, `Ticker aufgeloest: ${done}/${total}`)
+    emitProgress(done, total, `Ticker aufgelöst: ${done}/${total}`)
 
     if (i + BATCH_SIZE < missing.length) {
       await new Promise(r => setTimeout(r, BATCH_DELAY_MS))
@@ -297,7 +297,7 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   })
 
   const toResolve = relevant.filter(isin => needsResolution(tickers[isin]))
-  console.log(`[Yahoo] ${toResolve.length}/${relevant.length} benoetigen Resolver`)
+  console.log(`[Yahoo] ${toResolve.length}/${relevant.length} benötigen Resolver`)
 
   const tickerMap = await resolveIsinsToTickers(toResolve)
 

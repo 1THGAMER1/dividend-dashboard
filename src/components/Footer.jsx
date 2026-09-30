@@ -3,8 +3,8 @@
  */
 
 const FOOTER_LINKS = [
-  // { label: 'Datenschutz', href: '#' },
-  // { label: 'Impressum',   href: '#' },
+  { label: 'Datenschutz', href: 'privacy' },
+  //{ label: 'Impressum',   href: '#' },
 ]
 
 function DashLogo({ size = 20 }) {
