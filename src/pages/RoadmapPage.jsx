@@ -45,14 +45,14 @@ const ROADMAP = [
   {
     phase: '03',
     status: 'active',
-    title: 'Sicherheit & Zuverlässigkeit',
+    title: 'Portfolio Erweiterung',
     period: 'Q3 2026',
     items: [
       { text: 'Erste Übersicht für die Porfolio-Übersicht',                             done: true },
+      { text: 'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)',     done: true  },
       { text: 'Stabile Erkennung von vorher unbekannten Assets und richtige Zuordnung', done: true },
       { text: 'Portfolio-Pie',                                                          done: true },
-      { text: 'Portfolio-Pie inkl. X-Ray Funktion',                                     done: true },
-      { text: 'QoL Verbesserungen',                                                     done: true },
+      { text: 'Portfolio-Pie inkl. X-Ray Funktion',                                     done: false},
     ],
   },
   {
@@ -62,8 +62,8 @@ const ROADMAP = [
     period: 'Q3-Q4 2026',
     items: [
       { text: 'Steuer-Export (CSV / PDF)',                                          done: false },
-      { text: 'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)', done: true  },
       { text: 'Inflationsbereingte Renditeansicht',                                 done: false },
+      { text: 'Weitere QoL Verbesserungen',                                         done: false },
     ],
   },
   {

@@ -8,7 +8,7 @@ const MONTHS_SHORT = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Ok
 const typeLabel = (type, name = '') => {
     const n = (name || '').toUpperCase()
     if (n.endsWith('ETF') || n.includes('UCITS') || n.includes('INDEX FUND')) return 'ETF'
-    if (type === 'crypto' || ['ADA','BTC','ETH','SOL','DOGE'].some(s => n.includes(s))) return 'Crypto'
+    if (type === 'crypto' || ['ADA','BTC','ETH','SOL','DOGE', 'BONK', 'AVAX', 'ATOM', 'KSM', 'LTC', 'GRT'].some(s => n.includes(s))) return 'Crypto'
     if (type === 'etf')      return 'ETF'
     if (type === 'security') return 'Aktie'
     if (type === 'fund')     return 'Fonds'
