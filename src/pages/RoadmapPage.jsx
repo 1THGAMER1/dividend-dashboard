@@ -84,7 +84,7 @@ const ROADMAP = [
     title: 'Social & Sharing',
     period: 'Q1 2027',
     items: [
-      { text: 'Portfolio-Snapshot teilen (anonymisiert)',          done: false },
+      { text: 'Portfolio-Snapshot teilen (anonymisiert)',          done: true },
       { text: 'Community-Vergleich (anonymisiertes Ranking)',      done: false },
       { text: 'Öffentliches Dividenden-Tagebuch (opt-in)',         done: false },
     ],

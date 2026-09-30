@@ -40,20 +40,27 @@ export default function ProfilePage({ appUser }) {
     // Stabiler Share-Link (wird aktualisiert, aber der Link-Token bleibt immer derselbe!)
     const handleSharePortfolio = async () => {
         try {
-            setLoading(tab => true)
+            setLoading(true)
 
-            // Entweder den vorhandenen Token nutzen oder einmalig einen neuen generieren
-            let token = existingToken
-            if (!token) {
-                token = Math.random().toString(36).substring(2) + Date.now().toString(36)
-                setexistingToken(token)
+            // Falls die Daten noch nicht da sind, kurz warnen
+            if (!enrichedHoldings || enrichedHoldings.length === 0) {
+                setMessage({ type: 'error', text: 'Bitte warte einen Moment, bis die Daten komplett geladen sind.' })
+                setLoading(false)
+                return
             }
 
-            const dataToShare = enrichedHoldings && enrichedHoldings.length > 0 ? enrichedHoldings : holdings
-            const portfolioPayload = { currentValue, holdings: dataToShare, monthly, kpi, byHolding }
+            const token = existingToken || (Math.random().toString(36).substring(2) + Date.now().toString(36))
+            if (!existingToken) setexistingToken(token)
 
-            // 1. In der shared_portfolios Tabelle speichern/aktualisieren (Upsert über share_token)
-            const { error: shareError } = await supabase.from('shared_portfolios').upsert([
+            const portfolioPayload = {
+                currentValue,
+                holdings: enrichedHoldings,
+                monthly,
+                kpi,
+                byHolding
+            }
+
+            await supabase.from('shared_portfolios').upsert([
                 {
                     share_token: token,
                     portfolio_data: portfolioPayload,
@@ -61,24 +68,15 @@ export default function ProfilePage({ appUser }) {
                 }
             ], { onConflict: 'share_token' })
 
-            if (shareError) throw shareError
-
-            // 2. Den Token direkt im Profil des Users hinterlegen, damit er dauerhaft erhalten bleibt
-            const { error: profileError } = await supabase.from('profiles').upsert([
-                {
-                    id: appUser.id,
-                    share_token: token,
-                    parqet_client_id: parqetId.trim()
-                }
+            await supabase.from('profiles').upsert([
+                { id: appUser.id, share_token: token, parqet_client_id: parqetId.trim() }
             ])
-
-            if (profileError) throw profileError
 
             const shareUrl = `${window.location.origin}/#share/${token}`
             await navigator.clipboard.writeText(shareUrl)
-            setMessage({ type: 'success', text: 'Dein fester Share-Link wurde in die Zwischenablage kopiert!' })
+            setMessage({ type: 'success', text: 'Der Share-Link wurde in deiner Zwischenablage kopiert!' })
         } catch (err) {
-            setMessage({ type: 'error', text: 'Fehler beim Erstellen des Links: ' + err.message })
+            setMessage({ type: 'error', text: 'Fehler: ' + err.message })
         } finally {
             setLoading(false)
         }
@@ -100,7 +98,7 @@ export default function ProfilePage({ appUser }) {
                 })
 
             if (error) throw error
-            setMessage({ type: 'success', text: 'Parqet Client ID erfolgreich gespeichert!' })
+            setMessage({ type: 'success', text: 'Neue Parqet Client ID erfolgreich gespeichert!' })
         } catch (err) {
             setMessage({ type: 'error', text: err.message })
         } finally {

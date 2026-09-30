@@ -218,7 +218,7 @@ export default function App() {
                 </div>
 
                 <a href="/" style={{ background: '#1e3a5f', color: '#93c5fd', padding: '8px 14px', borderRadius: 8, fontSize: 12, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                  Eigenes Dashboard
+                  Erstelle dein eigenes Dashboard
                 </a>
               </div>
             </div>
