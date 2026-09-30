@@ -87,11 +87,9 @@ export default function PortfolioDashboard({
                             const sharesNum = getShares(item);
 
                             return (
-                                // Stabiler Key durch ISIN oder Index
                                 <tr key={item.isin || idx} style={{ borderBottom: '1px solid #0f1420' }}>
                                     <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
                                         <div>{getDisplayName(item)}</div>
-                                        {/* Zeigt die ISIN/den Ticker (z.B. "BTC") darunter an, solange er nicht leer ist */}
                                         {item.isin && item.isin !== item.name && (
                                             <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>
                                         )}
