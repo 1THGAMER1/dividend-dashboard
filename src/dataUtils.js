@@ -80,6 +80,60 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   // --- PRÄZISE FIFO-BERECHNUNG DER EINSTANDSWERTE & RESTANTEILE ---
   const valueMap = {}
   const exactSharesMap = {}
+  const realizedGainMap = {}
+
+  for (const isin of allKnownIsins) {
+    const buys = buyActivities
+        .filter(b => getCleanIsin(b) === isin)
+        .map(b => ({
+          date: new Date(b.datetime || 0),
+          shares: b.shares ?? 0,
+          cost: parseFloat(String(b.amount || b.total || 0).replace(',', '.')) || 0
+        }))
+        .sort((a, b) => a.date - b.date)
+
+    const sells = sellActivities
+        .filter(s => getCleanIsin(s) === isin)
+        .map(s => ({
+          date: new Date(s.datetime || 0),
+          shares: s.shares ?? 0,
+          totalEarning: parseFloat(String(s.amount || s.total || s.value || 0).replace(',', '.')) || 0
+        }))
+        .sort((a, b) => a.date - b.date)
+
+    let lots = buys.map(b => ({
+      shares: b.shares,
+      costPerShare: b.shares > 0 ? b.cost / b.shares : 0
+    }))
+
+    let totalRealizedGain = 0
+
+    for (const sell of sells) {
+      let sellSharesToProcess = sell.shares
+      let costOfSoldShares = 0
+
+      while (sellSharesToProcess > 0 && lots.length > 0) {
+        const oldestLot = lots[0]
+        const sharesToTake = Math.min(oldestLot.shares, sellSharesToProcess)
+
+        costOfSoldShares += sharesToTake * oldestLot.costPerShare
+        sellSharesToProcess -= sharesToTake
+        oldestLot.shares -= sharesToTake
+
+        if (oldestLot.shares <= 0.000001) {
+          lots.shift()
+        }
+      }
+
+      // Gewinn/Verlust für diesen spezifischen Verkauf = Erlös - Einstandswert der verkauften Anteile
+      const estimatedEarning = sell.totalEarning || 0
+      if (estimatedEarning > 0) {
+        totalRealizedGain += (estimatedEarning - costOfSoldShares)
+      }
+    }
+
+    realizedGainMap[isin] = totalRealizedGain
+  }
 
   for (const isin of allKnownIsins) {
     const buys = buyActivities
@@ -123,6 +177,19 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
     exactSharesMap[isin] = remainingShares > 0.000001 ? remainingShares : 0
     valueMap[isin] = remainingShares > 0.000001 ? remainingCost : 0
+
+    // --- NETFLIX & ALLGEMEINER DEBUG-CHECK IN DER KONSOLE ---
+    const currentName = names[isin] || ''
+    if (isin.includes('US64110L1061') || currentName.toLowerCase().includes('netflix')) {
+      console.log('--- DEBUG ASSET (z.B. Netflix) ---', {
+        isin,
+        name: currentName,
+        gefundeneKaeufe: buys,
+        gefundeneVerkaeufe: sells,
+        verbleibendeShares: remainingShares,
+        berechneterEinstandswert: remainingCost
+      })
+    }
   }
   // ---------------------------------------------------------------------
 
@@ -265,6 +332,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
       value: marketValue,
       costValue: costVal,
       soldValue: soldValueMap[isin] || 0,
+      realizedGain: realizedGainMap[isin] || 0,
       type: cleanType
     }
 

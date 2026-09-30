@@ -129,7 +129,7 @@ export default function PortfolioDashboard({
 
             {/* 2. TABELLE: VERKAUFTE POSITIONEN */}
             {soldHoldings.length > 0 && (
-                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto', opacity: 0.8 }}>
+                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, overflowX: 'auto', opacity: 0.9 } }>
                     <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#94a3b8' }}>
                         📦 Verkaufte & Historische Positionen
                     </h3>
@@ -139,29 +139,37 @@ export default function PortfolioDashboard({
                         <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 12 }}>
                             <th style={{ paddingBottom: 10 }}>Asset</th>
                             <th style={{ paddingBottom: 10 }}>Typ</th>
-                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Erlös / Status</th>
-                            <span style={{ marginLeft: 8, fontSize: 12, background: '#1e2a3a', color: '#94a3b8', padding: '1px 6px', borderRadius: 4, fontStyle: 'normal' }}>Beta</span>
+                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Erlös</th>
+                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Realisierter Gewinn / Verlust</th>
                         </tr>
                         </thead>
                         <tbody>
-                        {soldHoldings.map((item, idx) => (
-                            <tr key={item.isin || idx} style={{ borderBottom: '1px solid #161b27' }}>
-                                <td style={{ padding: '12px 0', fontWeight: 500, color: '#94a3b8' }}>
-                                    <div>{getDisplayName(item)}</div>
-                                    {item.isin && !item.isin.startsWith('hld_') && item.isin !== item.name && (
-                                        <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>
-                                    )}
-                                </td>
-                                <td style={{ padding: '12px 0' }}>
-                    <span style={{ background: '#161b27', border: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                      {item.type || 'Aktie'}
-                    </span>
-                                </td>
-                                <td style={{ padding: '12px 0', textAlign: 'right', color: '#64748b', fontStyle: 'italic' }}>
-                                    <span>Position geschlossen</span>
-                                </td>
-                            </tr>
-                        ))}
+                        {soldHoldings.map((item, idx) => {
+                            const gain = item.realizedGain || 0;
+                            const isPositive = gain >= 0;
+
+                            return (
+                                <tr key={item.isin || idx} style={{ borderBottom: '1px solid #161b27' }}>
+                                    <td style={{ padding: '12px 0', fontWeight: 500, color: '#94a3b8' }}>
+                                        <div>{getDisplayName(item)}</div>
+                                        {item.isin && !item.isin.startsWith('hld_') && item.isin !== item.name && (
+                                            <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: '12px 0' }}>
+                                        <span style={{ background: '#161b27', border: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
+                                          {item.type || 'Aktie'}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '12px 0', textAlign: 'right', color: '#94a3b8' }}>
+                                        {item.soldValue > 0 ? fmt(item.soldValue) : 'Position geschlossen'}
+                                    </td>
+                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444' }}>
+                                        {gain !== 0 ? `${isPositive ? '+' : ''}${fmt(gain)}` : '—'}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         </tbody>
                     </table>
                 </div>
