@@ -52,10 +52,6 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
                         <span style={{
                             color:        detail.color || '#7c9db5',
                             fontWeight:   700,
-                            background:   '#1e2d40',
-                            borderRadius: 4,
-                            padding:      '2px 7px',
-                            fontSize:     13,
                             whiteSpace:   'nowrap',
                         }}>
                             {detail.value}

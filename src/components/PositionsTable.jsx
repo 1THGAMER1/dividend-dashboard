@@ -63,8 +63,8 @@ function DividendHistoryPanel({ holding }) {
     const maxVal = mode === 'cumulative'
         ? Math.max(...yearDataCum.flatMap(yd => yd.months), 0.01)
         : mode === 'performance'
-        ? Math.max(...perfPoints.map(p => p.value), 0.01)
-        : Math.max(...yearData.flatMap(yd => yd.months), 0.01)
+            ? Math.max(...perfPoints.map(p => p.value), 0.01)
+            : Math.max(...yearData.flatMap(yd => yd.months), 0.01)
 
     const yearSums = yearData.map(yd => ({
         year:  yd.year,
@@ -73,11 +73,10 @@ function DividendHistoryPanel({ holding }) {
     }))
 
     // SVG koordinaten — viewBox passt sich an CHART_H an
-    // PB = Platz für X-Achsen-Labels (Monatsnamen)
     const VW = 500, PB = 18, PT = 6, PL = 4, PR = 4
     const VH = CHART_H + PT + PB
     const CW = VW - PL - PR
-    const CH = CHART_H // == CHART_H damit alle drei Höhen identisch sind
+    const CH = CHART_H
 
     // Akkumuliert
     const cumX = i => PL + (i / 11) * CW
@@ -94,7 +93,6 @@ function DividendHistoryPanel({ holding }) {
         if (firstIdx > 0) yearBoundaries.push({ x: perfX(firstIdx), year: y })
     })
 
-    // Gemeinsamer äußerer Container-Style (entspricht dem Monatlich-div)
     const chartContainerStyle = {
         width: '100%',
         minWidth: 320,
@@ -195,15 +193,15 @@ function DividendHistoryPanel({ holding }) {
                                     <g key={yd.year}>
                                         <polygon points={area} fill={`url(#cumGrad${yd.year})`} />
                                         <polyline points={pts} fill="none" stroke={yd.color}
-                                            strokeWidth={yd.year === currentYear ? 2 : 1.5}
-                                            strokeLinejoin="round" strokeLinecap="round"
-                                            opacity={yd.year === currentYear ? 1 : 0.55}
+                                                  strokeWidth={yd.year === currentYear ? 2 : 1.5}
+                                                  strokeLinejoin="round" strokeLinecap="round"
+                                                  opacity={yd.year === currentYear ? 1 : 0.55}
                                         />
                                         {yd.months.map((v, i) => v === 0 ? null : (
                                             <circle key={i} cx={cumX(i)} cy={cumY(v)}
-                                                r={yd.year === currentYear ? 2.5 : 2}
-                                                fill={yd.color} stroke="#1a2540" strokeWidth="1.5"
-                                                opacity={yd.year === currentYear ? 1 : 0.55}
+                                                    r={yd.year === currentYear ? 2.5 : 2}
+                                                    fill={yd.color} stroke="#1a2540" strokeWidth="1.5"
+                                                    opacity={yd.year === currentYear ? 1 : 0.55}
                                             >
                                                 <title>{MONTHS_SHORT[i]} {yd.year}: {fmt(v)} kum.</title>
                                             </circle>
@@ -254,11 +252,11 @@ function DividendHistoryPanel({ holding }) {
                             )}
                             {perfPoints.length > 1 && (
                                 <polyline points={linePoints} fill="none" stroke="#22c55e"
-                                    strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                                          strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
                             )}
                             {perfPoints.map((p, i) => p.raw === 0 ? null : (
                                 <circle key={i} cx={perfX(i)} cy={perfY(p.value)} r="2.5"
-                                    fill="#22c55e" stroke="#1a2540" strokeWidth="1.5">
+                                        fill="#22c55e" stroke="#1a2540" strokeWidth="1.5">
                                     <title>{MONTHS_SHORT[p.month]} {p.year}: +{fmt(p.raw)} → {fmt(p.value)} gesamt</title>
                                 </circle>
                             ))}
@@ -271,9 +269,9 @@ function DividendHistoryPanel({ holding }) {
                                 return (
                                     <g>
                                         <rect x={lx - labelW / 2} y={y - 18} width={labelW} height={15} rx="4"
-                                            fill="#1a3a1a" stroke="#22c55e" strokeWidth="0.75" />
+                                              fill="#1a3a1a" stroke="#22c55e" strokeWidth="0.75" />
                                         <text x={lx} y={y - 7} textAnchor="middle" fontSize="9"
-                                            fill="#4ade80" fontWeight="bold">{fmt(last.value)}</text>
+                                              fill="#4ade80" fontWeight="bold">{fmt(last.value)}</text>
                                     </g>
                                 )
                             })()}
