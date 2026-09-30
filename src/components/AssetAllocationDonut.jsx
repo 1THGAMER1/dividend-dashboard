@@ -1,5 +1,5 @@
 import React from 'react'
-import { PieChart, Pie, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, ResponsiveContainer, Tooltip } from 'recharts'
 import { getAssetAllocation } from '/src/dataUtils.js'
 
 const COLORS = ['#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#fb923c', '#facc15']
@@ -36,6 +36,20 @@ export default function AssetAllocationDonut({ holdings = [], currentValue = 0 }
                 <div style={{ width: '100%', height: 320, position: 'relative' }}>
                     <ResponsiveContainer width="100%" height={320}>
                         <PieChart>
+                            <Tooltip
+                                content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                        const data = payload[0].payload
+                                        return (
+                                            <div style={{ background: '#1e2a3a', border: '1px solid #2a3a50', padding: '8px 12px', borderRadius: 8, color: '#e0e6f0', fontSize: 12 }}>
+                                                <div style={{ fontWeight: 600 }}>{data.name}</div>
+                                                <div style={{ color: '#38bdf8', marginTop: 2 }}>{fmtVal(data.value)}</div>
+                                            </div>
+                                        )
+                                    }
+                                    return null
+                                }}
+                            />
                             <Pie
                                 data={coloredData}
                                 dataKey="value"
@@ -48,7 +62,6 @@ export default function AssetAllocationDonut({ holdings = [], currentValue = 0 }
                                 stroke="#161b27"
                                 strokeWidth={3}
                                 isAnimationActive={false}
-                                activeIndex={-1}
                             />
                         </PieChart>
                     </ResponsiveContainer>

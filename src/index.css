@@ -131,3 +131,7 @@ input, select, button {
 ::-webkit-scrollbar-track  { background: #0f1420; }
 ::-webkit-scrollbar-thumb  { background: #2a3a50; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #3b5268; }
+
+.recharts-sector:focus, .recharts-pie-sector:focus {
+  outline: none !important;
+}

@@ -13,26 +13,19 @@ export default function PortfolioDashboard({
                                                forecast12m,
                                                holdings = []
                                            }) {
-    // Fallback für den Marktwert, falls die API "currentVal" statt "currentValue" nutzt
-    const displayValue = currentValue ?? currentVal ?? 0;
+    const displayValue = currentValue ?? currentVal ?? 0
 
-    // Macht sicherheitshalber aus jedem Input (String oder Number) eine echte Zahl
-    const getShares = (item) => parseFloat(item.shares) || 0;
+    const getShares = (item) => parseFloat(item.shares) || 0
 
-    // Filtert mit einer sehr niedrigen Grenze (1e-6), um auch kleinste Krypto-Bruchteile als "Aktiv" zu erkennen
     const activeHoldings = holdings
         .filter(item => getShares(item) > 0.000001)
         .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 
-    // Alles was exakt 0 ist (oder darunter liegt), wandert in die Verkauft-Tabelle
     const soldHoldings = holdings
         .filter(item => getShares(item) <= 0.000001)
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
-    // Fallback-Logik für Namen
-    const getDisplayName = (item) => {
-        return item.name || item.isin || 'Unbekanntes Asset';
-    }
+    const getDisplayName = (item) => item.name || item.isin || 'Unbekanntes Asset'
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -49,7 +42,7 @@ export default function PortfolioDashboard({
                     label="Aktive Positionen"
                     value={activeHoldings.length.toString()}
                     color="#a78bfa"
-                    sub="Alle Assets im Depot (inkl. Krypto)"
+                    sub="Alle Assets im Depot"
                 />
                 <KpiCard
                     label="Progn. Jahresausschüttung"
@@ -59,120 +52,129 @@ export default function PortfolioDashboard({
                 />
             </div>
 
-            {/* 1. TABELLE: AKTIVE BESTÄNDE */}
-            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            {/* 1. SEKTION: AKTIVE BESTÄNDE (Parqet App Style) */}
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px' }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#f1f5f9' }}>
                     💼 Aktive Bestände
                 </h3>
 
-                <div style={{ minWidth: 650 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                        <thead>
-                        <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                            <th style={{ paddingBottom: 10 }}>Asset</th>
-                            <th style={{ paddingBottom: 10 }}>Typ</th>
-                            <th style={{ paddingBottom: 10 }}>Anteile</th>
-                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Einstandswert</th>
-                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Position</th>
-                            <th style={{ paddingBottom: 10, textAlign: 'right' }}>Kursgewinn</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {activeHoldings.length === 0 ? (
-                            <tr>
-                                <td colSpan={6} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
-                                    Keine aktiven Bestände gefunden.
-                                </td>
-                            </tr>
-                        ) : (
-                            activeHoldings.map((item, idx) => {
-                                const sharesNum = getShares(item);
-                                const cost = item.costValue || 0;
-                                const val = item.value || 0;
-                                const profitPercent = cost > 0 ? ((val - cost) / cost) * 100 : 0;
+                {activeHoldings.length === 0 ? (
+                    <div style={{ padding: '20px 0', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                        Keine aktiven Bestände gefunden.
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {activeHoldings.map((item, idx) => {
+                            const sharesNum = getShares(item)
+                            const cost = item.costValue || 0
+                            const val = item.value || 0
+                            const profit = val - cost
+                            const profitPercent = cost > 0 ? (profit / cost) * 100 : 0
+                            const isPositive = profit >= 0
 
-                                return (
-                                    <tr key={item.isin || idx} style={{ borderBottom: '1px solid #0f1420' }}>
-                                        <td style={{ padding: '12px 0', fontWeight: 500, color: '#e2e8f0' }}>
-                                            <div>{getDisplayName(item)}</div>
-                                            {item.isin && item.isin !== item.name && (
-                                                <div style={{ fontSize: 11, color: '#64748b' }}>{item.isin}</div>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: '12px 0' }}>
-                                          <span style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#38bdf8', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                                            {item.type || 'N/A'}
-                                          </span>
-                                        </td>
-                                        <td style={{ padding: '12px 0', color: '#94a3b8' }}>
-                                            {sharesNum > 0
-                                                ? sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 5 })
-                                                : '—'}
-                                        </td>
-                                        <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 500, color: '#94a3b8' }}>
-                                            {cost > 0 ? fmt(cost) : '---'}
-                                        </td>
-                                        <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
-                                            {val > 0 ? fmt(val) : '---'}
-                                        </td>
-                                        <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: profitPercent >= 0 ? '#22c55e' : '#ef4444' }}>
-                                            {cost > 0 ? `${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')} %` : '—'}
-                                        </td>
-                                    </tr>
-                                )
-                            })
-                        )}
-                        </tbody>
-                    </table>
-                </div>
+                            return (
+                                <div key={item.isin || idx} style={{
+                                    background: '#10141f',
+                                    border: '1px solid #1a2233',
+                                    borderRadius: 12,
+                                    padding: '14px 16px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 10
+                                }}>
+                                    {/* Obere Zeile: Name & Aktueller Wert */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                                        <div>
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
+                                                {getDisplayName(item)}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                                <span style={{
+                                                    background: '#1e293b',
+                                                    color: '#38bdf8',
+                                                    fontSize: 10,
+                                                    padding: '2px 6px',
+                                                    borderRadius: 6,
+                                                    fontWeight: 500
+                                                }}>
+                                                    {item.type || 'Asset'}
+                                                </span>
+                                                {sharesNum > 0 && (
+                                                    <span style={{ fontSize: 12, color: '#64748b' }}>
+                                                        {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>
+                                                {val > 0 ? fmt(val) : '—'}
+                                            </div>
+                                            <div style={{ fontSize: 12, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444', marginTop: 2 }}>
+                                                {cost > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Untere Zeile: Einstandswert dezent */}
+                                    {cost > 0 && (
+                                        <div style={{
+                                            borderTop: '1px solid #1a2233',
+                                            paddingTop: 8,
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            fontSize: 11,
+                                            color: '#64748b'
+                                        }}>
+                                            <span>Einstandswert</span>
+                                            <span style={{ color: '#94a3b8' }}>{fmt(cost)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
             </div>
 
-            {/* 2. TABELLE: VERKAUFTE POSITIONEN */}
+            {/* 2. SEKTION: VERKAUFTE POSITIONEN */}
             {soldHoldings.length > 0 && (
-                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 16, padding: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', opacity: 0.9 }}>
+                <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px', opacity: 0.9 }}>
                     <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#94a3b8' }}>
                         📦 Verkaufte & Historische Positionen
                     </h3>
 
-                    <div style={{ minWidth: 550 }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                            <thead>
-                            <tr style={{ borderBottom: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
-                                <th style={{ paddingBottom: 10 }}>Asset</th>
-                                <th style={{ paddingBottom: 10 }}>Typ</th>
-                                <th style={{ paddingBottom: 10, textAlign: 'right' }}>Erlös</th>
-                                <th style={{ paddingBottom: 10, textAlign: 'right' }}>Realisierter Gewinn / Verlust</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {soldHoldings.map((item, idx) => {
-                                const gain = item.realizedGain || 0;
-                                const isPositive = gain >= 0;
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {soldHoldings.map((item, idx) => {
+                            const gain = item.realizedGain || 0
+                            const isPositive = gain >= 0
 
-                                return (
-                                    <tr key={item.isin || idx} style={{ borderBottom: '1px solid #161b27' }}>
-                                        <td style={{ padding: '12px 0', fontWeight: 500, color: '#94a3b8' }}>
-                                            <div>{getDisplayName(item)}</div>
-                                            {item.isin && !item.isin.startsWith('hld_') && item.isin !== item.name && (
-                                                <div style={{ fontSize: 11, color: '#556070' }}>{item.isin}</div>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: '12px 0' }}>
-                                            <span style={{ background: '#161b27', border: '1px solid #1e2a3a', color: '#64748b', fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
-                                              {item.type || 'Aktie'}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '12px 0', textAlign: 'right', color: '#94a3b8' }}>
-                                            {item.soldValue > 0 ? fmt(item.soldValue) : 'Position geschlossen'}
-                                        </td>
-                                        <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444' }}>
+                            return (
+                                <div key={item.isin || idx} style={{
+                                    background: '#10141f',
+                                    border: '1px solid #1a2233',
+                                    borderRadius: 12,
+                                    padding: '12px 16px',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: 13, fontWeight: 500, color: '#94a3b8' }}>
+                                            {getDisplayName(item)}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: '#556070', marginTop: 2 }}>
+                                            Position geschlossen
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444' }}>
                                             {gain !== 0 ? `${isPositive ? '+' : ''}${fmt(gain)}` : '—'}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            </tbody>
-                        </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
             )}
