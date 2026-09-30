@@ -8,8 +8,7 @@ export default function ProfilePage({ appUser }) {
     const [message, setMessage] = useState(null)
     const [imgError, setImgError] = useState(false)
 
-    // Holen uns die Portfolio-Daten direkt aus dem Hook für den Share-Export
-    const { currentValue, holdings, monthly, kpi } = useDividendData()
+    const { currentValue, holdings, enrichedHoldings, monthly, kpi } = useDividendData()
 
     const handleSharePortfolio = async () => {
         try {
@@ -17,11 +16,19 @@ export default function ProfilePage({ appUser }) {
             // Generiere einen sicheren Share-Token
             const token = Math.random().toString(36).substring(2) + Date.now().toString(36)
 
+            // Nutze angereicherte Holdings, falls vorhanden, sonst Fallback auf Standard-Holdings
+            const dataToShare = enrichedHoldings && enrichedHoldings.length > 0 ? enrichedHoldings : holdings
+
             // Speichere die aktuellen Portfolio-Daten anonym in Supabase
             const { error } = await supabase.from('shared_portfolios').insert([
                 {
                     share_token: token,
-                    portfolio_data: { currentValue, holdings, monthly, kpi }
+                    portfolio_data: {
+                        currentValue,
+                        holdings: dataToShare,
+                        monthly,
+                        kpi
+                    }
                 }
             ])
 
@@ -201,8 +208,26 @@ export default function ProfilePage({ appUser }) {
                     🔗 Anonymes Portfolio teilen
                 </h3>
                 <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#94a3b8' }}>
-                    Generiere einen sicheren Nur-Lese-Link, um dein Portfolio anonym mit anderen zu teilen.
+                    Generiere einen sicheren Nur-Lese-Link, um dein Portfolio inklusive aller Asset-Namen anonym mit anderen zu teilen.
                 </p>
+
+                {message && (
+                    <div
+                        style={{
+                            padding: '10px 14px',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            marginBottom: 16,
+                            background: message.type === 'success' ? '#0a2d1a' : '#2d0a0a',
+                            border: `1px solid ${message.type === 'success' ? '#14532d' : '#7f1d1d'}`,
+                            color: message.type === 'success' ? '#86efac' : '#fca5a5',
+                        }}
+                    >
+                        {message.type === 'success' ? '✓ ' : '⚠ '}
+                        {message.text}
+                    </div>
+                )}
+
                 <button
                     onClick={handleSharePortfolio}
                     disabled={loading}
@@ -236,23 +261,6 @@ export default function ProfilePage({ appUser }) {
                 <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#94a3b8' }}>
                     Hinterlege hier deine Parqet Client ID, um dein Portfolio automatisch im Dashboard zu synchronisieren.
                 </p>
-
-                {message && (
-                    <div
-                        style={{
-                            padding: '10px 14px',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            marginBottom: 16,
-                            background: message.type === 'success' ? '#0a2d1a' : '#2d0a0a',
-                            border: `1px solid ${message.type === 'success' ? '#14532d' : '#7f1d1d'}`,
-                            color: message.type === 'success' ? '#86efac' : '#fca5a5',
-                        }}
-                    >
-                        {message.type === 'success' ? '✓ ' : '⚠ '}
-                        {message.text}
-                    </div>
-                )}
 
                 <form onSubmit={handleSaveParqetId} style={{ display: 'flex', gap: 10 }}>
                     <input
