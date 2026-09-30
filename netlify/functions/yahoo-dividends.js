@@ -32,7 +32,7 @@ export const handler = async function(event, context) {
                 });
                 const searchData = await searchRes.json();
                 if (searchData.quotes && searchData.quotes.length > 0) {
-                    symbol = searchData.quotes[0].symbol; // Wandelt z.B. ISIN in "NVDA" um
+                    symbol = searchData.quotes[0].symbol;
                 }
             } catch (e) {
                 console.warn('ISIN-Suche in Netlify-Function fehlgeschlagen:', e.message);
@@ -76,6 +76,26 @@ export const handler = async function(event, context) {
         const meta = result.meta;
         const events = result.events;
 
+        let marketPrice = meta.regularMarketPrice;
+        let currency = meta.currency || 'EUR';
+
+        // USD zu EUR Umrechnung falls nötig
+        if (currency === 'USD') {
+            try {
+                const fxRes = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/EURUSD=X?range=1d&interval=1d', {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+                });
+                const fxData = await fxRes.json();
+                const eurUsdRate = fxData.chart?.result?.[0]?.meta?.regularMarketPrice;
+                if (eurUsdRate && eurUsdRate > 0) {
+                    marketPrice = marketPrice / eurUsdRate;
+                    currency = 'EUR';
+                }
+            } catch (e) {
+                console.warn('Wechselkurs-Abfrage fehlgeschlagen:', e.message);
+            }
+        }
+
         let dividends = [];
         if (events && events.dividends) {
             dividends = Object.values(events.dividends).map(div => ({
@@ -93,10 +113,10 @@ export const handler = async function(event, context) {
 
         const responseData = {
             symbol: meta.symbol,
-            resolvedTicker: symbol, // Gibt den aufgelösten Ticker an den Client zurück
-            currency: meta.currency,
+            resolvedTicker: symbol,
+            currency: currency,
             instrumentType: meta.instrumentType,
-            regularMarketPrice: meta.regularMarketPrice,
+            regularMarketPrice: marketPrice,
             fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
             fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
             dividends: dividends,

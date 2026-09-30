@@ -72,21 +72,22 @@ export default function PortfolioDashboard({
                         <th style={{ paddingBottom: 10 }}>Asset</th>
                         <th style={{ paddingBottom: 10 }}>Typ</th>
                         <th style={{ paddingBottom: 10 }}>Anteile</th>
-                        <th style={{ paddingBottom: 10}}>Einstandswert</th>
-                        <th style={{ paddingBottom: 10}}>Position</th>
+                        <th style={{ paddingBottom: 10 }}>Einstandswert</th>
+                        <th style={{ paddingBottom: 10 }}>Position</th>
                         <th style={{ paddingBottom: 10, textAlign: 'right' }}>Kursgewinn in %</th>
                     </tr>
                     </thead>
                     <tbody>
                     {activeHoldings.length === 0 ? (
                         <tr>
-                            <td colSpan={4} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
+                            <td colSpan={6} style={{ padding: '20px 0', textAlign: 'center', color: '#64748b' }}>
                                 Keine aktiven Bestände gefunden.
                             </td>
                         </tr>
                     ) : (
                         activeHoldings.map((item, idx) => {
                             const sharesNum = getShares(item);
+                            const profitPercent = cost > 0 ? ((val - cost) / cost) * 100 : 0;
 
                             return (
                                 <tr key={item.isin || idx} style={{ borderBottom: '1px solid #0f1420' }}>
@@ -102,16 +103,19 @@ export default function PortfolioDashboard({
                       </span>
                                     </td>
                                     <td style={{ padding: '12px 0', color: '#94a3b8' }}>
-                                        {/* Erlaubt bis zu 8 Nachkommastellen für Kryptowährungen */}
+                                        {/* Erlaubt bis zu 5 Nachkommastellen für Kryptowährungen */}
                                         {sharesNum > 0
-                                            ? sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 8 })
+                                            ? sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 5 })
                                             : '—'}
                                     </td>
-                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
+                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 500, color: '#94a3b8' }}>
                                         {(item.value ?? 0) > 0 ? fmt(item.costValue) : '---'}
                                     </td>
                                     <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
                                         {(item.value ?? 0) > 0 ? fmt(item.value) : '---'}
+                                    </td>
+                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: profitPercent >= 0 ? '#22c55e' : '#ef4444' }}>
+                                        {cost > 0 ? `${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')} %` : '—'}
                                     </td>
                                 </tr>
                             )
