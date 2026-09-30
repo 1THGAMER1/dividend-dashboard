@@ -37,9 +37,15 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   const mergeMap = buildIsinMergeMap(activities, names)
   const resolve  = makeResolver(mergeMap)
 
+  // Einheitlicher Helper zur sauberen ISIN-Ermittlung
+  const getCleanIsin = (item) => {
+    const raw = item?.asset?.isin || item?.asset?.symbol || item?.isin || 'unknown'
+    return resolve(raw)
+  }
+
   const byIsin = {}
   for (const a of activities) {
-    const isin = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
+    const isin = getCleanIsin(a)
     const d    = new Date(a.datetime)
     const y    = d.getFullYear()
     const m    = d.getMonth()
@@ -54,22 +60,75 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   const sharesFromSells = {}
 
   for (const buy of buyActivities) {
-    const isin = resolve(buy.asset?.isin || buy.asset?.symbol || 'unknown')
+    const isin = getCleanIsin(buy)
     sharesFromBuys[isin] = (sharesFromBuys[isin] || 0) + (buy.shares ?? 0)
   }
   for (const sell of sellActivities) {
-    const isin = resolve(sell.asset?.isin || sell.asset?.symbol || 'unknown')
+    const isin = getCleanIsin(sell)
     sharesFromSells[isin] = (sharesFromSells[isin] || 0) + (sell.shares ?? 0)
   }
 
   const netSharesMap = {}
-  for (const isin of Object.keys(sharesFromBuys)) {
-    const net = (sharesFromBuys[isin] || 0) - (sharesFromSells[isin] || 0)
-    netSharesMap[isin] = net
+  const allKnownIsins = new Set([...Object.keys(sharesFromBuys), ...Object.keys(sharesFromSells), ...Object.keys(byIsin), ...Object.keys(names), ...Object.keys(yahooByIsin)])
+
+  for (const isin of allKnownIsins) {
+    const bShares = sharesFromBuys[isin] || 0
+    const sShares = sharesFromSells[isin] || 0
+    netSharesMap[isin] = Math.max(0, bShares - sShares)
   }
 
+  // --- PRÄZISE FIFO-BERECHNUNG DER EINSTANDSWERTE & RESTANTEILE ---
+  const valueMap = {}
+  const exactSharesMap = {}
+
+  for (const isin of allKnownIsins) {
+    const buys = buyActivities
+        .filter(b => getCleanIsin(b) === isin)
+        .map(b => ({
+          date: new Date(b.datetime || 0),
+          shares: b.shares ?? 0,
+          cost: parseFloat(String(b.amount || b.total || 0).replace(',', '.')) || 0
+        }))
+        .sort((a, b) => a.date - b.date)
+
+    const sells = sellActivities
+        .filter(s => getCleanIsin(s) === isin)
+        .map(s => ({
+          date: new Date(s.datetime || 0),
+          shares: s.shares ?? 0
+        }))
+        .sort((a, b) => a.date - b.date)
+
+    let lots = buys.map(b => ({
+      shares: b.shares,
+      costPerShare: b.shares > 0 ? b.cost / b.shares : 0
+    }))
+
+    for (const sell of sells) {
+      let sellSharesToProcess = sell.shares
+      while (sellSharesToProcess > 0 && lots.length > 0) {
+        const oldestLot = lots[0]
+        if (oldestLot.shares <= sellSharesToProcess) {
+          sellSharesToProcess -= oldestLot.shares
+          lots.shift()
+        } else {
+          oldestLot.shares -= sellSharesToProcess
+          sellSharesToProcess = 0
+        }
+      }
+    }
+
+    const remainingShares = lots.reduce((sum, lot) => sum + lot.shares, 0)
+    const remainingCost = lots.reduce((sum, lot) => sum + (lot.shares * lot.costPerShare), 0)
+
+    exactSharesMap[isin] = remainingShares > 0.000001 ? remainingShares : 0
+    valueMap[isin] = remainingShares > 0.000001 ? remainingCost : 0
+  }
+  // ---------------------------------------------------------------------
+
   function currentShares(isin) {
-    if (isin in netSharesMap) return Math.max(0, netSharesMap[isin])
+    if (isin in exactSharesMap) return exactSharesMap[isin]
+    if (isin in netSharesMap) return netSharesMap[isin]
     const years = Object.keys(byIsin[isin] || {}).map(Number).sort()
     for (const y of [...years].reverse()) {
       for (let m = 11; m >= 0; m--) {
@@ -155,14 +214,11 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     return { dps: avg, source: 'yahoo-avg', detail: `avg(${monthMatches.length}): ${avg.toFixed(6)}` }
   }
 
-  const isinsFromDivs  = Object.keys(byIsin)
-  const isinsFromBuys  = Object.keys(sharesFromBuys).filter(isin => (netSharesMap[isin] ?? 0) > 0)
-  const isinsFromNames = Object.keys(names)
-  const isinsAll       = [...new Set([...isinsFromDivs, ...isinsFromBuys, ...isinsFromNames])]
+  const isinsAll = [...allKnownIsins]
 
   const isins = isinsAll.filter(isin => {
-    if (!(isin in netSharesMap)) return true
-    return netSharesMap[isin] > 0
+    const shares = currentShares(isin)
+    return shares > 0.000001
   })
 
   for (const isin of isinsFromBuys) {
@@ -177,53 +233,9 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
-  // --- PRÄZISE FIFO-BERECHNUNG DER EINSTANDSWERTE (BEI TEILVERKÄUFEN) ---
-  const valueMap = {}
-  for (const isin of isinsAll) {
-    const buys = buyActivities
-        .filter(b => resolve(b.asset?.isin || b.asset?.symbol || 'unknown') === isin)
-        .map(b => ({
-          date: new Date(b.datetime),
-          shares: b.shares ?? 0,
-          cost: parseFloat(String(b.amount || b.total || 0).replace(',', '.')) || 0
-        }))
-        .sort((a, b) => a.date - b.date)
-
-    const sells = sellActivities
-        .filter(s => resolve(s.asset?.isin || s.asset?.symbol || 'unknown') === isin)
-        .map(s => ({
-          date: new Date(s.datetime),
-          shares: s.shares ?? 0
-        }))
-        .sort((a, b) => a.date - b.date)
-
-    let lots = buys.map(b => ({
-      shares: b.shares,
-      costPerShare: b.shares > 0 ? b.cost / b.shares : 0
-    }))
-
-    for (const sell of sells) {
-      let sellSharesToProcess = sell.shares
-      while (sellSharesToProcess > 0 && lots.length > 0) {
-        const oldestLot = lots[0]
-        if (oldestLot.shares <= sellSharesToProcess) {
-          sellSharesToProcess -= oldestLot.shares
-          lots.shift()
-        } else {
-          oldestLot.shares -= sellSharesToProcess
-          sellSharesToProcess = 0
-        }
-      }
-    }
-
-    const remainingCost = lots.reduce((sum, lot) => sum + (lot.shares * lot.costPerShare), 0)
-    valueMap[isin] = remainingCost > 0 ? remainingCost : 0
-  }
-  // ---------------------------------------------------------------------
-
   const soldValueMap = {}
   for (const sell of sellActivities) {
-    const isin = resolve(sell.asset?.isin || sell.asset?.symbol || 'unknown')
+    const isin = getCleanIsin(sell)
     const rawAmount = sell.amountNet ?? sell.amount ?? sell.total ?? sell.value ?? 0
     const amount = parseFloat(String(rawAmount).replace(',', '.')) || 0
     soldValueMap[isin] = (soldValueMap[isin] || 0) + amount

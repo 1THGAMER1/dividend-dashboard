@@ -23,7 +23,7 @@ export const handler = async function(event, context) {
 
         // --- DIREKTES MAPPING FÜR BEKANNTE PROBLEM-ISINS ---
         const ISIN_MAPPING = {
-            'JE00B588CD74': 'GZUR.DE', // WisdomTree Physical Swiss Gold (Xetra in EUR)
+            'JE00B588CD74': 'SGBS.MI', // WisdomTree Physical Swiss Gold (Xetra in EUR)
         };
 
         if (ISIN_MAPPING[symbol]) {
@@ -101,24 +101,36 @@ export const handler = async function(event, context) {
         const events = result.events;
 
         let marketPrice = meta.regularMarketPrice;
-        let currency = meta.currency || 'EUR';
+        let currency = (meta.currency || 'EUR').toUpperCase();
 
-        // USD zu EUR Umrechnung falls nötig
-        if (currency === 'USD') {
+        // --- FLEXIBLE FREMDWÄHRUNGS-UMRECHNUNG IN EUR ---
+        if (currency !== 'EUR' && marketPrice != null) {
             try {
-                const fxRes = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/EURUSD=X?range=1d&interval=1d', {
+                let fxSymbol = `${currency}EUR=X`;
+
+                if (currency === 'USD') {
+                    fxSymbol = 'EURUSD=X';
+                }
+
+                const fxRes = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${fxSymbol}?range=1d&interval=1d`, {
                     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
                 });
                 const fxData = await fxRes.json();
-                const eurUsdRate = fxData.chart?.result?.[0]?.meta?.regularMarketPrice;
-                if (eurUsdRate && eurUsdRate > 0) {
-                    marketPrice = marketPrice / eurUsdRate;
+                const fxRate = fxData.chart?.result?.[0]?.meta?.regularMarketPrice;
+
+                if (fxRate && fxRate > 0) {
+                    if (currency === 'USD') {
+                        marketPrice = marketPrice / fxRate; // Bei EURUSD=X wird durch den Kurs geteilt
+                    } else {
+                        marketPrice = marketPrice * fxRate; // Bei direktem X-EUR Paar (z.B. GBPEUR) wird multipliziert
+                    }
                     currency = 'EUR';
                 }
             } catch (e) {
-                console.warn('Wechselkurs-Abfrage fehlgeschlagen:', e.message);
+                console.warn(`Wechselkurs-Abfrage für ${currency} fehlgeschlagen:`, e.message);
             }
         }
+        // ------------------------------------------------
 
         let dividends = [];
         if (events && events.dividends) {
