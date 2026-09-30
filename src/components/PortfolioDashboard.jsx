@@ -72,7 +72,9 @@ export default function PortfolioDashboard({
                         <th style={{ paddingBottom: 10 }}>Asset</th>
                         <th style={{ paddingBottom: 10 }}>Typ</th>
                         <th style={{ paddingBottom: 10 }}>Anteile</th>
-                        <th style={{ paddingBottom: 10, textAlign: 'right' }}>Einstandswert</th>
+                        <th style={{ paddingBottom: 10}}>Einstandswert</th>
+                        <th style={{ paddingBottom: 10}}>Position</th>
+                        <th style={{ paddingBottom: 10, textAlign: 'right' }}>Kursgewinn in %</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -104,6 +106,9 @@ export default function PortfolioDashboard({
                                         {sharesNum > 0
                                             ? sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 8 })
                                             : '—'}
+                                    </td>
+                                    <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
+                                        {(item.value ?? 0) > 0 ? fmt(item.costValue) : '---'}
                                     </td>
                                     <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 600, color: '#f1f5f9' }}>
                                         {(item.value ?? 0) > 0 ? fmt(item.value) : '---'}
