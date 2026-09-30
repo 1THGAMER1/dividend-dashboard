@@ -3,10 +3,10 @@ import { supabase } from './supabaseClient'
 
 const BASE = '/api'
 const YAHOO_FN = '/.netlify/functions/yahoo-dividends'
-const CMC_FN = '/.netlify/functions/coinmarketcap' // CoinMarketCap Abfrage & Fallback
+const CMC_FN = '/.netlify/functions/coinmarketcap' // CoinMarketCap Abfrage
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
 const CACHE_TTL_DAYS = 30
-const NOT_FOUND_TTL_DAYS = 7   // Negativ-Cache: nach 7 Tagen nochmal versuchen
+const NOT_FOUND_TTL_DAYS = 7
 const NOT_FOUND_SENTINEL = 'NOT_FOUND'
 const BATCH_SIZE = 5
 const BATCH_DELAY_MS = 500
@@ -15,18 +15,22 @@ const RETRY_DELAYS = [1000, 2000, 4000]
 const GBX_SUFFIXES = ['.L', '.IL']
 const EUR_SUFFIXES = ['.AS', '.DE', '.F', '.MI', '.PA', '.BR', '.VI', '.MC']
 
+// Bekannte Krypto-Symbole, die niemals durch den Yahoo-Resolver laufen dürfen
+const KNOWN_CRYPTO_SYMBOLS = ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'MATIC', 'BNB', 'USDT', 'USDC']
+
 function isGbxTicker(ticker) {
   return ticker ? GBX_SUFFIXES.some(s => ticker.endsWith(s)) : false
 }
 function isEurTicker(ticker) {
   return ticker ? EUR_SUFFIXES.some(s => ticker.endsWith(s)) : false
 }
-// Ticker der durch den Resolver muss: ISIN, GBX, oder kein EUR-Suffix
 function needsResolution(ticker) {
   if (!ticker) return true
+  // Wenn es sich um ein bekanntes Krypto-Symbol handelt, NIEMALS durch den Yahoo-Resolver jagen!
+  if (KNOWN_CRYPTO_SYMBOLS.includes(ticker.toUpperCase())) return false
   if (ISIN_REGEX.test(ticker)) return true
   if (isGbxTicker(ticker)) return true
-  if (!isEurTicker(ticker)) return true  // z.B. AAPL, MSFT, VWRL -> durch Resolver
+  if (!isEurTicker(ticker)) return true
   return false
 }
 
@@ -155,9 +159,8 @@ async function invalidateNonEurTickerCache(isins) {
       .select('isin, ticker')
       .in('isin', isins)
   if (!data) return
-  const badIsins = data.filter(r => r.ticker !== NOT_FOUND_SENTINEL && !isEurTicker(r.ticker)).map(r => r.isin)
+  const badIsins = data.filter(r => r.ticker !== NOT_FOUND_SENTINEL && !isEurTicker(r.ticker) && !KNOWN_CRYPTO_SYMBOLS.includes(r.ticker?.toUpperCase())).map(r => r.isin)
   if (badIsins.length === 0) return
-  console.log(`[Cache] Invalidiere ${badIsins.length} non-EUR Eintraege`)
   await supabase.from('isin_ticker_cache').delete().in('isin', badIsins)
 }
 
@@ -175,11 +178,9 @@ async function loadTickerCache(isins) {
     if (!row.ticker) continue
     const ts = new Date(row.updated_at).getTime()
     if (row.ticker === NOT_FOUND_SENTINEL) {
-      if (ts > notFoundCutoff) {
-        map[row.isin] = null
-      }
+      if (ts > notFoundCutoff) map[row.isin] = null
     } else {
-      if (isEurTicker(row.ticker) && ts > eurCutoff) {
+      if ((isEurTicker(row.ticker) || KNOWN_CRYPTO_SYMBOLS.includes(row.ticker.toUpperCase())) && ts > eurCutoff) {
         map[row.isin] = row.ticker
       }
     }
@@ -226,15 +227,11 @@ async function resolveIsinsToTickers(isins) {
   const cached  = await loadTickerCache(isins)
   const missing = isins.filter(i => !(i in cached))
 
-  const cachedFound    = Object.values(cached).filter(v => v !== null).length
-  const cachedNotFound = Object.values(cached).filter(v => v === null).length
-  console.log(`[Cache] ${cachedFound} gecacht, ${cachedNotFound} gecacht (nicht gefunden), ${missing.length} aufzulösen`)
-
   if (missing.length === 0) return cached
 
-  const total      = missing.length
-  let   done       = 0
-  const result     = { ...cached }
+  const total  = missing.length
+  let   done   = 0
+  const result = { ...cached }
   const newEntries = []
 
   emitProgress(0, total, 'Ticker werden aufgelöst…')
@@ -252,7 +249,6 @@ async function resolveIsinsToTickers(isins) {
       result[isin] = ticker
       newEntries.push({ isin, ticker })
       done++
-      console.log(`[Resolve] ${isin} -> ${ticker ?? 'nicht gefunden'}`)
     }
 
     emitProgress(done, total, `Ticker aufgelöst: ${done}/${total}`)
@@ -267,7 +263,7 @@ async function resolveIsinsToTickers(isins) {
   return result
 }
 
-// --- Kurs- & Dividendendaten (Smart Routing für Yahoo & CoinMarketCap) ---
+// --- Kurs- & Dividendendaten (Smart Routing) ---
 
 export async function fetchYahooDividends(ticker) {
   if (!ticker) return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
@@ -286,7 +282,6 @@ export async function fetchYahooDividends(ticker) {
   }
 }
 
-// Sammel-Abfrage für Krypto-Assets via CoinMarketCap
 async function fetchCryptoPricesBatch(symbols = []) {
   if (symbols.length === 0) return {}
   try {
@@ -308,7 +303,7 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
   const cryptoIsinMap = {}
   const standardIsins = []
 
-  // 1. Vorab-Filter: Krypto-Assets (wie Bitcoin etc.) direkt für CoinMarketCap vormerken
+  // 1. Strenge Vorab-Trennung: Krypto (wie BTC) direkt für CoinMarketCap einplanen
   for (const isin of allIsins) {
     const rawType = (types[isin] || '').toLowerCase()
     const rawTicker = (tickers[isin] || '').toUpperCase()
@@ -316,7 +311,7 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
     const isCrypto = rawType.includes('crypto') ||
         rawType.includes('coin') ||
         rawType.includes('token') ||
-        ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'MATIC'].includes(rawTicker)
+        KNOWN_CRYPTO_SYMBOLS.includes(rawTicker)
 
     if (isCrypto) {
       cryptoSymbolsToFetch.push(rawTicker)
@@ -328,9 +323,9 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
 
   const map = {}
 
-  // 2. Krypto direkt gesammelt über CoinMarketCap laden (umgeht Yahoo-Fehler bei Krypto)
+  // 2. Krypto direkt über CoinMarketCap abfragen (kein Yahoo-Kontakt!)
   if (cryptoSymbolsToFetch.length > 0) {
-    console.log(`[CMC Batch] Lade ${cryptoSymbolsToFetch.length} Krypto-Assets direkt von CoinMarketCap...`)
+    console.log(`[CMC Batch] Lade Krypto direkt:`, cryptoSymbolsToFetch)
     const cmcCoins = await fetchCryptoPricesBatch(cryptoSymbolsToFetch)
 
     for (const [rawSymbol, coinData] of Object.entries(cmcCoins)) {
@@ -340,16 +335,13 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
           dividends: [],
           price: coinData.regularMarketPrice
         }
-        console.log(`[CMC Direkt] ${rawSymbol} -> ${coinData.regularMarketPrice} €`)
+        console.log(`[CMC Erfolg] ${rawSymbol} -> ${coinData.regularMarketPrice} €`)
       }
     }
   }
 
-  // 3. Reguläre Aktien & ETFs über Yahoo verarbeiten
+  // 3. Reguläre Aktien & ETFs über Yahoo abwickeln
   if (standardIsins.length > 0) {
-    const standardTickers = {}
-    standardIsins.forEach(isin => standardTickers[isin] = tickers[isin])
-
     const toResolve = standardIsins.filter(isin => needsResolution(tickers[isin]))
     const tickerMap = await resolveIsinsToTickers(toResolve)
 
@@ -373,34 +365,11 @@ export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
         })
     )
 
-    const failedIsins = []
-    const symbolToIsinMap = {}
-
     for (const r of results) {
       if (r.status === 'fulfilled') {
-        const { isin, dividends, price, symbol } = r.value
+        const { isin, dividends, price } = r.value
         if (price != null && !isNaN(price) && price > 0) {
           map[isin] = { dividends, price }
-        } else {
-          failedIsins.push(isin)
-          const rawTicker = tickers[isin] || symbol
-          symbolToIsinMap[rawTicker] = isin
-        }
-      }
-    }
-
-    // Fallback für restliche nicht gefundene Assets
-    if (failedIsins.length > 0) {
-      const rawSymbolsToFetch = failedIsins.map(isin => tickers[isin] || resolvedTickers[isin]).filter(Boolean)
-      const cmcCoins = await fetchCryptoPricesBatch(rawSymbolsToFetch)
-
-      for (const [rawSymbol, coinData] of Object.entries(cmcCoins)) {
-        const isin = symbolToIsinMap[rawSymbol]
-        if (isin && coinData.regularMarketPrice > 0) {
-          map[isin] = {
-            dividends: [],
-            price: coinData.regularMarketPrice
-          }
         }
       }
     }
@@ -468,15 +437,15 @@ export async function fetchCurrentValue() {
 
 export async function fetchCurrentPrice(tickerOrIsin) {
   try {
+    const upper = (tickerOrIsin || '').toUpperCase()
+    if (KNOWN_CRYPTO_SYMBOLS.includes(upper)) {
+      const cmcData = await fetchCryptoPricesBatch([upper])
+      return cmcData[upper]?.regularMarketPrice || null
+    }
+
     const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(tickerOrIsin)}`)
     const data = await res.json()
-    let price = data.regularMarketPrice || data.price || null
-
-    if (!price) {
-      const cmcData = await fetchCryptoPricesBatch([tickerOrIsin])
-      price = cmcData[tickerOrIsin?.toUpperCase()]?.regularMarketPrice || null
-    }
-    return price
+    return data.regularMarketPrice || data.price || null
   } catch (e) {
     console.warn(`Konnte Kurs für ${tickerOrIsin} nicht laden:`, e.message)
     return null
