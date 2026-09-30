@@ -28,6 +28,64 @@ import AssetHoldingDonut from "./components/AssetHoldingDonut.jsx";
 
 const fmt    = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
+// Prüfen, ob ein Share-Token in der URL ist
+const [sharedToken, setSharedToken] = useState(() => {
+  const hash = window.location.hash
+  if (hash.startsWith('#share/')) {
+    return hash.replace('#share/', '')
+  }
+  return null
+})
+
+const [sharedData, setSharedData] = useState(null)
+const [sharedLoading, setSharedLoading] = useState(!!sharedToken)
+
+// Wenn ein Share-Token da ist, lade die Daten anonym aus Supabase
+useEffect(() => {
+  if (!sharedToken) return
+  async function loadShared() {
+    const { data, error } = await supabase
+        .from('shared_portfolios')
+        .select('portfolio_data')
+        .eq('share_token', sharedToken)
+        .single()
+
+    if (data) {
+      setSharedData(data.portfolio_data)
+    }
+    setSharedLoading(false)
+  }
+  loadShared()
+}, [sharedToken])
+
+// Wenn im Share-Modus, zeige eine abgespeckte, anonyme Ansicht
+if (sharedToken) {
+  if (sharedLoading) return <LoadingScreen text="Geteiltes Portfolio wird geladen…" />
+  if (!sharedData) return <div style={{ color: '#fff', textAlign: 'center', padding: 50 }}>Portfolio nicht gefunden oder Link abgelaufen.</div>
+
+  return (
+      <div style={{ minHeight: '100vh', background: '#0f1420', color: '#c8d4e0', padding: 20 }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, background: '#161b27', padding: '16px 20px', borderRadius: 16, border: '1px solid #1e2a3a' }}>
+            <div>
+              <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: 0 }}>📊 Anonymes Portfolio</h2>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>Read-Only Ansicht</p>
+            </div>
+            <a href="/" style={{ background: '#1e3a5f', color: '#93c5fd', padding: '8px 14px', borderRadius: 8, fontSize: 12, textDecoration: 'none', fontWeight: 600 }}>
+              Eigenes Dashboard erstellen
+            </a>
+          </div>
+
+          {/* Hier kannst du die Komponenten mit den sharedData befüllen */}
+          <PortfolioDashboard
+              currentValue={sharedData.currentValue}
+              forecast12m={{ net: sharedData.kpi?.['all']?.net || 0 }}
+              holdings={sharedData.holdings || []}
+          />
+        </div>
+      </div>
+  )
+}
 
 const KPI_RANGES = [
   { key: 'all', label: 'Gesamt' },
