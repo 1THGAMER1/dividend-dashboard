@@ -21,38 +21,47 @@ export const handler = async function(event, context) {
             };
         }
 
-        // --- AUTOMATISCHER ISIN-ZU-TICKER-FALLBACK ---
-        const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/;
-        if (ISIN_REGEX.test(symbol)) {
-            try {
-                const searchRes = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}`, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    }
-                });
-                const searchData = await searchRes.json();
-                if (searchData.quotes && searchData.quotes.length > 0) {
-                    const quotes = searchData.quotes;
-                    const validQuotes = quotes.filter(q => {
-                        const type = (q.quoteType || '').toUpperCase();
-                        return type === 'ETF' || type === 'EQUITY' || type === 'MUTUALFUND';
+        // --- DIREKTES MAPPING FÜR BEKANNTE PROBLEM-ISINS ---
+        const ISIN_MAPPING = {
+            'JE00B588CD74': 'GZUR.DE', // WisdomTree Physical Swiss Gold (Xetra in EUR)
+        };
+
+        if (ISIN_MAPPING[symbol]) {
+            symbol = ISIN_MAPPING[symbol];
+        } else {
+            // --- AUTOMATISCHER ISIN-ZU-TICKER-FALLBACK ---
+            const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/;
+            if (ISIN_REGEX.test(symbol)) {
+                try {
+                    const searchRes = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}`, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        }
                     });
-                    let bestMatch = validQuotes.find(q => q.symbol.endsWith('.DE') || q.symbol.endsWith('.F') || q.symbol.endsWith('.PA') || q.symbol.endsWith('.AS'));
+                    const searchData = await searchRes.json();
+                    if (searchData.quotes && searchData.quotes.length > 0) {
+                        const quotes = searchData.quotes;
 
-                    if (!bestMatch && validQuotes.length > 0) {
-                        bestMatch = validQuotes[0];
-                    }
-                    if (!bestMatch) {
-                        bestMatch = quotes[0];
-                    }
+                        // Keine Indizes zulassen
+                        const validQuotes = quotes.filter(q => {
+                            const type = (q.quoteType || '').toUpperCase();
+                            return type === 'ETF' || type === 'EQUITY' || type === 'MUTUALFUND';
+                        });
 
-                    symbol = bestMatch.symbol;
+                        let bestMatch = validQuotes.find(q => q.symbol.endsWith('.DE') || q.symbol.endsWith('.F') || q.symbol.endsWith('.PA') || q.symbol.endsWith('.AS'));
+                        if (!bestMatch && validQuotes.length > 0) {
+                            bestMatch = validQuotes[0];
+                        }
+                        if (!bestMatch) {
+                            bestMatch = quotes[0];
+                        }
+                        symbol = bestMatch.symbol;
+                    }
+                } catch (e) {
+                    console.warn('ISIN-Suche in Netlify-Function fehlgeschlagen:', e.message);
                 }
-            } catch (e) {
-                console.warn('ISIN-Suche in Netlify-Function fehlgeschlagen:', e.message);
             }
         }
-        // ---------------------------------------------
         // ---------------------------------------------
 
         if (!/^[A-Za-z0-9.-]+$/.test(symbol)) {
@@ -69,7 +78,7 @@ export const handler = async function(event, context) {
 
         const response = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
         });
 

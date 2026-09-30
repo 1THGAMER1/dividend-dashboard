@@ -177,12 +177,49 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     }
   }
 
+  // --- PRÄZISE FIFO-BERECHNUNG DER EINSTANDSWERTE (BEI TEILVERKÄUFEN) ---
   const valueMap = {}
-  for (const buy of buyActivities) {
-    const isin = resolve(buy.asset?.isin || buy.asset?.symbol || 'unknown')
-    const amount = parseFloat(String(buy.amount || buy.total || 0).replace(',', '.')) || 0
-    valueMap[isin] = (valueMap[isin] || 0) + amount
+  for (const isin of isinsAll) {
+    const buys = buyActivities
+        .filter(b => resolve(b.asset?.isin || b.asset?.symbol || 'unknown') === isin)
+        .map(b => ({
+          date: new Date(b.datetime),
+          shares: b.shares ?? 0,
+          cost: parseFloat(String(b.amount || b.total || 0).replace(',', '.')) || 0
+        }))
+        .sort((a, b) => a.date - b.date)
+
+    const sells = sellActivities
+        .filter(s => resolve(s.asset?.isin || s.asset?.symbol || 'unknown') === isin)
+        .map(s => ({
+          date: new Date(s.datetime),
+          shares: s.shares ?? 0
+        }))
+        .sort((a, b) => a.date - b.date)
+
+    let lots = buys.map(b => ({
+      shares: b.shares,
+      costPerShare: b.shares > 0 ? b.cost / b.shares : 0
+    }))
+
+    for (const sell of sells) {
+      let sellSharesToProcess = sell.shares
+      while (sellSharesToProcess > 0 && lots.length > 0) {
+        const oldestLot = lots[0]
+        if (oldestLot.shares <= sellSharesToProcess) {
+          sellSharesToProcess -= oldestLot.shares
+          lots.shift()
+        } else {
+          oldestLot.shares -= sellSharesToProcess
+          sellSharesToProcess = 0
+        }
+      }
+    }
+
+    const remainingCost = lots.reduce((sum, lot) => sum + (lot.shares * lot.costPerShare), 0)
+    valueMap[isin] = remainingCost > 0 ? remainingCost : 0
   }
+  // ---------------------------------------------------------------------
 
   const soldValueMap = {}
   for (const sell of sellActivities) {
