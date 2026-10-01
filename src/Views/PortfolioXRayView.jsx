@@ -1,8 +1,12 @@
 import React, { useState } from 'react'
-import {PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, Bar} from 'recharts'
+import { PieChart, Pie, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { computePortfolioXRay, getRegion } from '../utils/portfolioXray'
 
-const COLORS = ['#009991', '#4f98a3', '#cedcd8', '#bb653b', '#d19900', '#006494', '#7a39bb', '#22c55e', '#3b82f6', '#f472b6']
+const COLORS = [
+    '#009991', '#4f98a3', '#cedcd8', '#bb653b', '#d19900',
+    '#006494', '#7a39bb', '#22c55e', '#3b82f6', '#f472b6',
+    '#f59e0b', '#10b981', '#6366f1', '#ec4899', '#84cc16'
+]
 
 export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, currentValue }) {
     const [topLimit, setTopLimit] = useState(15)
@@ -39,7 +43,7 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
                 <div>
                     <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: 0 }}>🔬 Portfolio X-Ray (Look-Through)</h2>
-                    <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>Automatische Aggregation über Live-Depotwerte & ETF-Dateien</p>
+                    <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>Aufschlüsselung deiner ETFs in echte Einzelwerte</p>
                 </div>
 
                 <div style={{ display: 'flex', background: '#0f1420', padding: 3, borderRadius: 8, border: '1px solid #1e2a3a' }}>
@@ -59,16 +63,30 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                 </div>
             )}
 
-            <div style={{ width: '100%', height: 400 }}>
+            <div style={{ width: '100%', height: 450 }}>
                 <ResponsiveContainer>
                     <PieChart>
-                        <Pie data={activeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={140} innerRadius={60} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(1)}%)`}>
-                            {activeData.map((_, index) => (
-                                <Bar key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, color: '#fff' }} formatter={(val) => `${val.toFixed(2)} %`} />
-                        <Legend layout="horizontal" align="center" verticalAlign="bottom" wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
+                        <Pie
+                            data={activeData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="45%"
+                            outerRadius={130}
+                            innerRadius={65}
+                            label={false}
+                            fill="#009991"
+                        />
+                        <Tooltip
+                            contentStyle={{ background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, color: '#fff', fontSize: 12 }}
+                            formatter={(val) => [`${val.toFixed(2)} %`, 'Anteil']}
+                        />
+                        <Legend
+                            layout="horizontal"
+                            align="center"
+                            verticalAlign="bottom"
+                            wrapperStyle={{ fontSize: 11, paddingTop: 20 }}
+                        />
                     </PieChart>
                 </ResponsiveContainer>
             </div>
