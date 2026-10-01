@@ -22,6 +22,23 @@ export function parseWeight(val) {
     return parseFloat(cleaned) || 0
 }
 
+// --- Regionen-Zuordnung ---
+export function getRegion(country) {
+    if (!country) return 'Unbekannt'
+    const c = country.toUpperCase()
+
+    if (['VEREINIGTE STAATEN', 'KANADA', 'MEXIKO', 'BERMUDA', 'PUERTO RICO'].includes(c)) return 'Nordamerika'
+    if (['VEREINIGTES KOENIGREICH', 'UNITED KINGDOM', 'DAENEMARK', 'DENMARK', 'DEUTSCHLAND', 'FRANKREICH', 'SCHWEIZ', 'NIEDERLANDE', 'SCHWEDEN', 'ITALIEN', 'SPANIEN', 'IRLAND', 'BELGIEN', 'NORWEGEN', 'FINNLAND', 'OESTERREICH', 'OSTERREICH', 'PORTUGAL', 'POLEN', 'TSCHECHIEN', 'UNGARN', 'GRIECHENLAND', 'TÜRKEI', 'TUERKEI', 'LUXEMBURG', 'JERSEY', 'ZYPERN', 'ISLAND'].some(x => c.includes(x))) return 'Europa'
+    if (['JAPAN', 'TAIWAN', 'INDIEN', 'CHINA', 'HONGKONG', 'SINGAPUR', 'SUEDKOREA', 'NEUSEELAND', 'SAUDI-ARABIEN', 'INDONESIEN', 'MALAYSIA', 'THAILAND', 'KATAR', 'PHILIPPINEN', 'KUWAIT', 'ISRAEL', 'VIETNAM'].some(x => c.includes(x))) return 'Asien'
+    if (['AUSTRALIEN'].includes(c)) return 'Ozeanien und Australien'
+    if (['SUEDAFRIKA', 'AEGYPTEN', 'MAROKKO', 'KENIA'].some(x => c.includes(x))) return 'Afrika'
+    if (c === 'KRYPTO') return 'Krypto'
+    if (c === 'GLOBAL') return 'Global'
+
+    return 'Sonstige'
+}
+
+// --- X-Ray Berechnung ---
 export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue) {
     const aggregated = {}
     if (!currentValue || currentValue <= 0 || !userHoldings) return []
