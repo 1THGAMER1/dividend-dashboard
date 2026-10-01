@@ -1,6 +1,6 @@
 import React from 'react'
 import { PieChart, Pie, ResponsiveContainer, Tooltip } from 'recharts'
-import { getAssetAllocation } from '/src/dataUtils.js'
+import { getAssetAllocation } from '/src/utils/dataUtils.js'
 
 const COLORS = ['#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#fb923c', '#facc15']
 const fmtVal = n => (+n).toFixed(2).replace('.', ',') + ' €'

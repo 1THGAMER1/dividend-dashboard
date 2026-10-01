@@ -1,4 +1,4 @@
-import { buildIsinMergeMap, makeResolver } from './isinMerge'
+import { buildIsinMergeMap, makeResolver } from './isinMerge.js'
 
 export const MONTHS = ['Jan','Feb','Mrz','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
 

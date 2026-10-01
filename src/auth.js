@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient'
-import { decrypt, encrypt, isEncrypted, clearCachedKey } from './crypto'
-import { getPassword } from './passwordStore'
+import { decrypt, encrypt, isEncrypted, clearCachedKey } from './utils/crypto.js'
+import { getPassword } from './passwordStore.js'
 
 // _clientIdPromise bleibt nach dem ersten Resolve stehen (aufgelöstes Promise)
 // damit alle späteren Aufrufe sofort dasselbe resolved Promise zurückbekommen

@@ -3,7 +3,7 @@ import {
     BarChart, Bar, LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { MONTHS, YEAR_COLORS } from '../dataUtils'
+import { MONTHS, YEAR_COLORS } from '../utils/dataUtils.js'
 import { cumulativeInflationFactor, inflationRate } from '../inflation'
 
 const MODES = [

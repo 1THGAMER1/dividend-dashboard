@@ -2,6 +2,7 @@ import React from 'react'
 import PortfolioDashboard from '../components/PortfolioDashboard.jsx'
 import AssetAllocationDonut from '../components/AssetAllocationDonut.jsx'
 import AssetHoldingDonut from '../components/AssetHoldingDonut.jsx'
+import EtfUploadWidget from "../components/EtfUploadWidget.jsx";
 
 export default function PortfolioPageView({
                                               page,
@@ -40,6 +41,10 @@ export default function PortfolioPageView({
                         <AssetAllocationDonut holdings={activeHoldings} />
                     </div>
                 </>
+            )}
+
+            {page === 'portfolio-xray' && (
+                <EtfUploadWidget holdings={activeHoldings} currentValue={currentValue} />
             )}
         </div>
     )

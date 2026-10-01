@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { handleCallback, isLoggedIn } from '../auth'
-import { groupByYearMonth, toCumulative, buildForecast, groupByHolding } from '../dataUtils'
+import { groupByYearMonth, toCumulative, buildForecast, groupByHolding } from '../utils/dataUtils.js'
 import {
     fetchDividendActivities,
     fetchBuyActivities,

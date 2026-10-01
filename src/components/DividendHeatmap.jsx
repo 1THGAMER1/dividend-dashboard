@@ -1,4 +1,4 @@
-import { heatColor } from '../dataUtils'
+import { heatColor } from '../utils/dataUtils.js'
 
 const MONTHS = ['Jan','Feb','Mrz','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
 

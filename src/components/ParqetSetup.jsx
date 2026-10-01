@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { encrypt } from '../crypto'
-import { getPassword } from '../passwordStore'
+import { encrypt } from '../utils/crypto.js'
+import { getPassword } from '../passwordStore.js'
 
 const REDIRECT_URI = 'https://dividenddashboard.netlify.app/callback'
 
