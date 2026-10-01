@@ -1,3 +1,27 @@
+// --- Namensbereinigung ---
+export function normalizeName(name) {
+    if (!name) return ''
+    return name
+        .toUpperCase()
+        .trim()
+        .replace(/['"`]/g, '')
+        .replace(/\bCLASS\s+[A-Z]\b/g, '')
+        .replace(/\bCL\s+[A-Z]\b/g, '')
+        .replace(/\([A-Z]\)/g, '')
+        .replace(/\b(SE|AG|B|A\/S|SA|NV|PLC|INC|CORP|LTD|LLC|GMBH|SPA|AB|ASA|OYJ|ADR|REG|REGISTERED|SHS|ORD|NEW|HOLDINGS|HOLDING)\b/g, '')
+        .replace(/[-/]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+}
+
+// --- Gewichtung parsen ---
+export function parseWeight(val) {
+    if (typeof val === 'number') return val
+    if (!val) return 0
+    const cleaned = String(val).replace(',', '.')
+    return parseFloat(cleaned) || 0
+}
+
 export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue) {
     const aggregated = {}
     if (!currentValue || currentValue <= 0 || !userHoldings) return []
