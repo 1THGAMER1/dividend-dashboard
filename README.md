@@ -11,6 +11,7 @@ Moderne Web-Anwendung zur Visualisierung und Analyse von Finanz-Assets deines Pa
 
 ## Tech-Stack
 
+- **Build:** Vite.js
 - **Frontend:** React, JavaScript, CSS3
 - **Visualisierung:** Recharts
 - **API & Daten:** Parqet API, JSON, PostgreSQL (Supabase)
@@ -43,4 +44,6 @@ npm install
 _Hinweis: Für den vollen Funktionsumfang der Live-Daten ist ein entsprechender API-Zugang / Account bei Parqet erforderlich._
 
 # Lizenz
-Dieses Projekt ist für Demonstrationszwecke erstellt worden.
+Dieses Projekt ist für Demonstrationszwecke erstellt worden. 
+
+_Das Projekt wird derzeit zeitgleich mithilfe von Netlify und Supabase gehostet daher die entsprechenden Module._
