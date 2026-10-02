@@ -1,6 +1,6 @@
 # Parqet Portfolio & Dividend Tracker
 
-Moderne Web-Anwendung zur Visualisierung und Analyse von Finanz-Assets. Das Projekt stellt Portfolio-Metriken (die u. a. sonst nur mit Parqet Plus erhältlich sind) mithilfe von React und Recharts übersichtlich dar.
+Moderne Web-Anwendung zur Visualisierung und Analyse von Finanz-Assets deines Parqet Accounts. Das Projekt stellt Portfolio-Metriken (die u. a. sonst nur mit Parqet Plus erhältlich sind) mithilfe von React und Recharts übersichtlich dar.
 
 ## Features
 
