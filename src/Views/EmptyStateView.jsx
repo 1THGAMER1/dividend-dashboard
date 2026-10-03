@@ -1,8 +1,8 @@
 /**
- * EmptyState – wird angezeigt wenn nach dem Laden keine Dividendendaten
+ * EmptyStateView – wird angezeigt wenn nach dem Laden keine Dividendendaten
  * vorhanden sind (leeres Portfolio, neue Verbindung, API-Fehler).
  */
-export default function EmptyState({ onRefresh, loading, error }) {
+export default function EmptyStateView({ onRefresh, loading, error }) {
   return (
     <div style={{
       minHeight: 'calc(100vh - 52px)',

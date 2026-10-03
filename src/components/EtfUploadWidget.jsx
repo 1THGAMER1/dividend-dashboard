@@ -6,22 +6,23 @@ import {
     importXtrackersHoldings,
     importGenericEtfHoldings
 } from '../utils/etfFileParser'
-
-import PortfolioXRayView from "../Views/PortfolioXRayView.jsx";
-import { normalizeName } from "../utils/portfolioXray.js"
+import PortfolioXRayView from '../Views/PortfolioXRayView.jsx'
 
 export default function EtfUploadWidget({ holdings, currentValue }) {
     const [etfHoldingsMap, setEtfHoldingsMap] = useState({})
     const [loadingFile, setLoadingFile] = useState(null)
     const [uploadedFiles, setUploadedFiles] = useState([])
 
-    // 1. Filtere alle Positionen aus deinen Holdings heraus, die ETFs sind
+    // 1. Nur aktive ETFs filtern (verkaufte Positionen mit Menge <= 0 werden komplett ignoriert)
     const portfolioEtfs = (holdings || []).filter(h => {
+        const shares = h.shares !== undefined ? h.shares : (h.quantity !== undefined ? h.quantity : h.amount)
+        const isSold = shares !== undefined && shares <= 0
+        if (isSold) return false // Verkaufte Positionen ausschließen!
+
         const name = (h.name || h.title || '').toLowerCase()
         return name.includes('etf') || name.includes('ucits') || name.includes('msci') || name.includes('stoxx')
     })
 
-    // Universeller Parser-Mapper je nach ETF-Namen
     const getParserForEtf = (etfName) => {
         const lower = etfName.toLowerCase()
         if (lower.includes('vanguard')) return importVanguardHoldings
@@ -40,11 +41,7 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
             const parserFn = getParserForEtf(etfName)
             const parsedData = await parserFn(file)
 
-            setEtfHoldingsMap(prev => ({
-                ...prev,
-                [etfName]: parsedData
-            }))
-
+            setEtfHoldingsMap(prev => ({ ...prev, [etfName]: parsedData }))
             if (!uploadedFiles.includes(etfName)) {
                 setUploadedFiles(prev => [...prev, etfName])
             }
@@ -58,7 +55,7 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
     if (!portfolioEtfs.length) {
         return (
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }}>
-                Keine ETFs in deinem aktuellen Portfolio gefunden.
+                Keine aktiven ETFs in deinem Portfolio gefunden.
             </div>
         )
     }
@@ -68,7 +65,7 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, color: '#c8d4e0' }}>
                 <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: '0 0 8px 0' }}>📁 ETF-Holdings für dein Portfolio hochladen</h2>
                 <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 16px 0' }}>
-                    Hier siehst du automatisch alle ETFs, die aktuell in deinem Depot liegen. Lade für diese die entsprechenden Excel-Dateien hoch, um den X-Ray zu starten.
+                    Hier erscheinen nur deine aktiven Depot-ETFs (verkaufte Positionen werden automatisch ausgeblendet).
                 </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
@@ -105,12 +102,11 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
                 )}
             </div>
 
-            {/* X-Ray Ansicht wird aktiv, sobald mindestens eine Datei für ein echtes Portfolio-ETF hochgeladen wurde */}
             {uploadedFiles.length > 0 ? (
                 <PortfolioXRayView etfHoldingsMap={etfHoldingsMap} userHoldings={holdings} currentValue={currentValue} />
             ) : (
                 <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }}>
-                    Bitte lade für mindestens einen deiner Portfolio-ETFs die Excel-Datei hoch, um die X-Ray-Durchleuchtung zu sehen.
+                    Bitte lade für mindestens einen aktiven ETF eine Datei hoch.
                 </div>
             )}
         </div>

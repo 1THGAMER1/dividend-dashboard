@@ -5,7 +5,7 @@ import DividendHeatmap from '../components/DividendHeatmap.jsx'
 import PositionsTable from '../components/PositionsTable.jsx'
 import DividendDonut from '../components/DividendDonut.jsx'
 import SkeletonDashboard from '../components/SkeletonDashboard.jsx'
-import EmptyState from '../components/EmptyState.jsx'
+import EmptyStateView from './EmptyStateView.jsx'
 
 const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -43,7 +43,7 @@ export default function DividendDashboardView({
                                                   yearTotal
                                               }) {
     if (showSkeleton) return <SkeletonDashboard />
-    if (showEmpty)    return <EmptyState onRefresh={loadData} loading={loading} error={error} />
+    if (showEmpty)    return <EmptyStateView onRefresh={loadData} loading={loading} error={error} />
 
     const calcForecastNext12mNet = () => {
         let total = 0

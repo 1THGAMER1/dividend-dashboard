@@ -28,7 +28,7 @@ export default defineConfig({
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
       'Content-Security-Policy': [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-eval'",   // unsafe-eval nötig für Vite HMR (nur dev)
+        "script-src 'self' 'unsafe-eval'",
         "style-src 'self' 'unsafe-inline'",  // React inline-styles
         "connect-src 'self' ws://localhost:* https://*.supabase.co wss://*.supabase.co https://connect.parqet.com",
         "img-src 'self' data: blob:",

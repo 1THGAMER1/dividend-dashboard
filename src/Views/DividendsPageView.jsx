@@ -3,7 +3,7 @@ import UpcomingDividends from "../components/UpcomingDividends.jsx";
 import DividendCalendar from "../components/DividendCalendar.jsx";
 import DividendCalculator from '../pages/DividendCalculator'
 import DripSimulator from '../pages/DripSimulator'
-import EmptyState from "../components/EmptyState.jsx";
+import EmptyStateView from "./EmptyStateView.jsx";
 
 export default function DividendsPageView({
                                               page,
@@ -26,7 +26,7 @@ export default function DividendsPageView({
                     <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
                 </div>
                 {Object.keys(monthly || {}).length === 0 ? (
-                    <EmptyState onRefresh={loadData} loading={loading} error={error} />
+                    <EmptyStateView onRefresh={loadData} loading={loading} error={error} />
                 ) : (
                     <>
                         <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />

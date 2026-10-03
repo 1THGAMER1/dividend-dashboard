@@ -22,6 +22,7 @@ export function parseWeight(val) {
     return parseFloat(cleaned) || 0
 }
 
+// --- Regionen-Zuordnung ---
 export function getRegion(country) {
     if (!country) return 'Unbekannt'
     const c = country.toUpperCase()
@@ -30,7 +31,7 @@ export function getRegion(country) {
     if (['VEREINIGTES KOENIGREICH', 'UNITED KINGDOM', 'DAENEMARK', 'DENMARK', 'DEUTSCHLAND', 'FRANKREICH', 'SCHWEIZ', 'NIEDERLANDE', 'SCHWEDEN', 'ITALIEN', 'SPANIEN', 'IRLAND', 'BELGIEN', 'NORWEGEN', 'FINNLAND', 'OESTERREICH', 'OSTERREICH', 'PORTUGAL', 'POLEN', 'TSCHECHIEN', 'UNGARN', 'GRIECHENLAND', 'TÜRKEI', 'TUERKEI', 'LUXEMBURG', 'JERSEY', 'ZYPERN', 'ISLAND'].some(x => c.includes(x))) return 'Europa'
     if (['JAPAN', 'TAIWAN', 'INDIEN', 'CHINA', 'HONGKONG', 'SINGAPUR', 'SUEDKOREA', 'NEUSEELAND', 'SAUDI-ARABIEN', 'INDONESIEN', 'MALAYSIA', 'THAILAND', 'KATAR', 'PHILIPPINEN', 'KUWAIT', 'ISRAEL', 'VIETNAM'].some(x => c.includes(x))) return 'Asien'
     if (['AUSTRALIEN'].includes(c)) return 'Ozeanien und Australien'
-    if (['SUEDAFRIKA', 'AEGYPTEN', 'MAROKKO', 'KENIA'].some(x => c.includes(x))) return 'Afrika'
+    if (['SUEDAFRIKA', 'AEGYPTEN', 'MAROKKO', 'KENIA'].some(x => x === c)) return 'Afrika'
     if (c === 'KRYPTO') return 'Krypto'
     if (c === 'GLOBAL') return 'Global'
 
@@ -42,8 +43,14 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
     const aggregated = {}
     if (!currentValue || currentValue <= 0 || !userHoldings) return []
 
+    // Nur aktive Holdings einbeziehen (keine verkauften mit Menge <= 0)
+    const activeHoldings = userHoldings.filter(item => {
+        const shares = item.shares !== undefined ? item.shares : (item.quantity !== undefined ? item.quantity : item.amount)
+        return shares === undefined || shares > 0
+    })
+
     const portfolioWeights = {}
-    for (const item of userHoldings) {
+    for (const item of activeHoldings) {
         const nameKey = normalizeName(item.name || item.title || '')
         const itemValue = item.value || 0
         portfolioWeights[nameKey] = itemValue / currentValue
@@ -51,7 +58,6 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
 
     for (const [etfName, holdings] of Object.entries(etfHoldingsMap)) {
         const normalizedEtfName = normalizeName(etfName)
-
         const matchingPortfolioKey = Object.keys(portfolioWeights).find(pKey => pKey.includes(normalizedEtfName) || normalizedEtfName.includes(pKey))
 
         if (!matchingPortfolioKey) continue
@@ -73,12 +79,14 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         }
     }
 
-    // Direktkäufe (Aktien, Krypto) hinzufügen, die keine ETFs sind
-    for (const item of userHoldings) {
+    for (const item of activeHoldings) {
         const name = normalizeName(item.name || item.title || '')
         const rawNameLower = (item.name || item.title || '').toLowerCase()
 
-        const isEtf = /\betf\b/.test(rawNameLower) || rawNameLower.includes('ucits') || rawNameLower.includes('msci')
+        const hasEtfWord = /\betf\b/.test(rawNameLower) || /\bfund\b/.test(rawNameLower)
+        const hasIndexTerms = rawNameLower.includes('ucits') || rawNameLower.includes('msci') || rawNameLower.includes('stoxx') || rawNameLower.includes('ftse') || rawNameLower.includes('vanguard') || rawNameLower.includes('vaneck') || rawNameLower.includes('xtrackers')
+
+        const isEtf = hasEtfWord || hasIndexTerms
         const hasBeenExpandedAsEtf = Object.keys(etfHoldingsMap).some(eKey => name.includes(normalizeName(eKey)))
 
         if (!isEtf && !hasBeenExpandedAsEtf) {
