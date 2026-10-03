@@ -54,10 +54,9 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
     for (const [etfName, holdings] of Object.entries(etfHoldingsMap)) {
         const normalizedEtfName = normalizeName(etfName)
 
-        // Suche im Portfolio nach einem passenden Eintrag
         const matchingPortfolioKey = Object.keys(portfolioWeights).find(pKey => pKey.includes(normalizedEtfName) || normalizedEtfName.includes(pKey))
 
-        if (!matchingPortfolioKey) continue // Überspringen, wenn nicht im Portfolio!
+        if (!matchingPortfolioKey) continue
 
         const etfPortfolioWeight = portfolioWeights[matchingPortfolioKey] || 0
         if (etfPortfolioWeight <= 0 || !Array.isArray(holdings)) continue
@@ -76,12 +75,13 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         }
     }
 
-    // Direktkäufe (Aktien, Krypto) hinzufügen, die keine ETFs sind
+    // Direktkäufe (Aktien, Krypto) hinzufügen, die keine ETFs sind (mit sauberer Wortgrenzen-Prüfung)
     for (const item of userHoldings) {
         const name = normalizeName(item.name || item.title || '')
         const rawNameLower = (item.name || item.title || '').toLowerCase()
 
-        const isEtf = rawNameLower.includes('etf') || rawNameLower.includes('ucits') || rawNameLower.includes('msci')
+        // \betf\b sorgt dafür, dass nur das echte Wort "etf" und nicht "netflix"matched!
+        const isEtf = /\betf\b/.test(rawNameLower) || rawNameLower.includes('ucits') || rawNameLower.includes('msci')
         const hasBeenExpandedAsEtf = Object.keys(etfHoldingsMap).some(eKey => name.includes(normalizeName(eKey)))
 
         if (!isEtf && !hasBeenExpandedAsEtf) {
