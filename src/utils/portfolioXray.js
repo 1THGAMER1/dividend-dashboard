@@ -22,7 +22,6 @@ export function parseWeight(val) {
     return parseFloat(cleaned) || 0
 }
 
-// --- Regionen-Zuordnung ---
 export function getRegion(country) {
     if (!country) return 'Unbekannt'
     const c = country.toUpperCase()
@@ -50,7 +49,6 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         portfolioWeights[nameKey] = itemValue / currentValue
     }
 
-    // Nur ETFs aufdröseln, die im etfHoldingsMap UND im Portfolio sind
     for (const [etfName, holdings] of Object.entries(etfHoldingsMap)) {
         const normalizedEtfName = normalizeName(etfName)
 
@@ -75,12 +73,11 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         }
     }
 
-    // Direktkäufe (Aktien, Krypto) hinzufügen, die keine ETFs sind (mit sauberer Wortgrenzen-Prüfung)
+    // Direktkäufe (Aktien, Krypto) hinzufügen, die keine ETFs sind
     for (const item of userHoldings) {
         const name = normalizeName(item.name || item.title || '')
         const rawNameLower = (item.name || item.title || '').toLowerCase()
 
-        // \betf\b sorgt dafür, dass nur das echte Wort "etf" und nicht "netflix"matched!
         const isEtf = /\betf\b/.test(rawNameLower) || rawNameLower.includes('ucits') || rawNameLower.includes('msci')
         const hasBeenExpandedAsEtf = Object.keys(etfHoldingsMap).some(eKey => name.includes(normalizeName(eKey)))
 
