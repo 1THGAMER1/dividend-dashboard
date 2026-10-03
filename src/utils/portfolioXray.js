@@ -1,4 +1,3 @@
-// --- Namensbereinigung ---
 export function normalizeName(name) {
     if (!name) return ''
     return name
@@ -14,7 +13,6 @@ export function normalizeName(name) {
         .trim()
 }
 
-// --- Gewichtung parsen ---
 export function parseWeight(val) {
     if (typeof val === 'number') return val
     if (!val) return 0
@@ -22,7 +20,6 @@ export function parseWeight(val) {
     return parseFloat(cleaned) || 0
 }
 
-// --- Regionen-Zuordnung ---
 export function getRegion(country) {
     if (!country) return 'Unbekannt'
     const c = country.toUpperCase()
@@ -38,12 +35,10 @@ export function getRegion(country) {
     return 'Sonstige'
 }
 
-// --- X-Ray Berechnung ---
 export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue) {
     const aggregated = {}
     if (!currentValue || currentValue <= 0 || !userHoldings) return []
 
-    // Nur aktive Holdings einbeziehen (keine verkauften mit Menge <= 0)
     const activeHoldings = userHoldings.filter(item => {
         const shares = item.shares !== undefined ? item.shares : (item.quantity !== undefined ? item.quantity : item.amount)
         return shares === undefined || shares > 0
@@ -56,6 +51,7 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         portfolioWeights[nameKey] = itemValue / currentValue
     }
 
+    // 1. Nur echte ETFs aufdröseln, die in etfHoldingsMap liegen
     for (const [etfName, holdings] of Object.entries(etfHoldingsMap)) {
         const normalizedEtfName = normalizeName(etfName)
         const matchingPortfolioKey = Object.keys(portfolioWeights).find(pKey => pKey.includes(normalizedEtfName) || normalizedEtfName.includes(pKey))
@@ -79,14 +75,18 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         }
     }
 
+    // 2. Direktkäufe (Aktien wie Netflix, Krypto, etc.)
     for (const item of activeHoldings) {
         const name = normalizeName(item.name || item.title || '')
         const rawNameLower = (item.name || item.title || '').toLowerCase()
 
-        const hasEtfWord = /\betf\b/.test(rawNameLower) || /\bfund\b/.test(rawNameLower)
+        // Ausschluss von bekannten Aktienbegriffen, damit Netflix & Co nie als ETF laufen
+        const isKnownStock = rawNameLower.includes('netflix') || rawNameLower.includes('apple') || rawNameLower.includes('amazon') || rawNameLower.includes('tesla') || rawNameLower.includes('microsoft') || rawNameLower.includes('nvidia')
+
+        const hasEtfWord = /\betf\b/.test(rawNameLower)
         const hasIndexTerms = rawNameLower.includes('ucits') || rawNameLower.includes('msci') || rawNameLower.includes('stoxx') || rawNameLower.includes('ftse') || rawNameLower.includes('vanguard') || rawNameLower.includes('vaneck') || rawNameLower.includes('xtrackers')
 
-        const isEtf = hasEtfWord || hasIndexTerms
+        const isEtf = !isKnownStock && (hasEtfWord || hasIndexTerms)
         const hasBeenExpandedAsEtf = Object.keys(etfHoldingsMap).some(eKey => name.includes(normalizeName(eKey)))
 
         if (!isEtf && !hasBeenExpandedAsEtf) {

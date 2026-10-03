@@ -14,10 +14,11 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
 
     const rawData = computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
 
+    // Top-N Schnitt und Rest-Berechnung für das Chart
     const topHoldings = rawData.slice(0, topLimit)
-    const restWeight = rawData.slice(topLimit).reduce((sum, item) => sum + item.Weight, 0)
+    const restHoldings = rawData.slice(topLimit)
+    const restWeight = restHoldings.reduce((sum, item) => sum + item.Weight, 0)
 
-    // Farben direkt an die Datenobjekte hängen (kein <Cell> nötig!)
     const chartHoldingsData = [
         ...topHoldings.map((item, index) => ({
             name: item.Name,
@@ -94,6 +95,8 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                     ))}
                 </div>
             )}
+
+            {/* Chart */}
             <div style={{ width: '100%', height: 450 }}>
                 <ResponsiveContainer>
                     <PieChart>

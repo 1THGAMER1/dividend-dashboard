@@ -9,7 +9,14 @@ html, body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
-
+.desktop-only-timestamp {
+  display: none;
+}
+@media (min-width: 768px) {
+  .desktop-only-timestamp {
+    display: inline-block;
+  }
+}
 body {
   min-height: 100dvh;
   overflow-x: hidden;

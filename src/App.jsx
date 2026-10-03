@@ -221,8 +221,21 @@ export default function App() {
                 </button>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-            <button onClick={loadData} disabled={loading} style={{ background: loading ? '#1a2233' : '#1e3a5f', border: '1px solid #3b82f6', color: '#93c5fd', padding: '5px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 11 }}>↻</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+            {/* Status / Fehler: Auf Handys versteckt, auf PC sichtbar */}
+            <span className="desktop-only-timestamp" style={{ fontSize: 11, color: error ? '#fca5a5' : '#7a8ba0', whiteSpace: 'nowrap' }}>
+              {error ? `⚠️ ${error}` : 'Stand: Aktuell'}
+            </span>
+
+            <button
+                onClick={loadData}
+                disabled={loading}
+                title={error || "Daten aktualisieren"}
+                style={{ background: loading ? '#1a2233' : '#1e3a5f', border: `1px solid ${error ? '#ef4444' : '#3b82f6'}`, color: error ? '#fca5a5' : '#93c5fd', padding: '5px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 11 }}
+            >
+              {loading ? '⏳' : '↻'}
+            </button>
+
             <div style={{ position: 'relative' }} ref={menuRef}>
               <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ background: '#1e2a3a', border: '1px solid #2a3a50', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, overflow: 'hidden' }}>
                 {appUser?.user_metadata?.avatar_url ? <img src={appUser.user_metadata.avatar_url} alt="Profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ color: '#93c5fd', fontSize: 12, fontWeight: 700 }}>{appUser?.email?.[0]?.toUpperCase()}</span>}
