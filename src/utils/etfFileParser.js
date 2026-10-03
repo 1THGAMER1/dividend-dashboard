@@ -40,3 +40,23 @@ export async function importStoxx600Holdings(file) {
     const items = await parseExcelRows(file, 19, 'Name', 'Gewichtung', 'Land')
     return items.map(i => ({ ...i, Weight: i.Weight * 100 }))
 }
+export async function importGenericEtfHoldings(file) {
+    const data = await file.arrayBuffer()
+    const workbook = XLSX.read(data, { type: 'array' })
+    const sheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json(worksheet, { range: 2 })
+
+    return rows.map(row => {
+        const rawName = row['Name'] || row['Holding name'] || row['Bezeichnung der Position'] || row['Security Description']
+        const rawWeight = row['Weight'] || row['Gewichtung (%)'] || row['% des Fondsvolumens'] || row['% of market value'] || row['Weighting']
+
+        if (!rawName) return null
+
+        return {
+            Name: normalizeName(rawName),
+            Weight: parseWeight(rawWeight),
+            Country: row['Country'] || row['Standort'] || row['Land'] || 'GLOBAL'
+        }
+    }).filter(Boolean)
+}
