@@ -39,6 +39,7 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
     const aggregated = {}
     if (!currentValue || currentValue <= 0 || !userHoldings) return []
 
+    // Nur aktive Positionen (Menge > 0)
     const activeHoldings = userHoldings.filter(item => {
         const shares = item.shares !== undefined ? item.shares : (item.quantity !== undefined ? item.quantity : item.amount)
         return shares === undefined || shares > 0
@@ -51,7 +52,7 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         portfolioWeights[nameKey] = itemValue / currentValue
     }
 
-    // 1. Nur echte ETFs aufdröseln, die in etfHoldingsMap liegen
+    // 1. ETFs aufdröseln, die in der etfHoldingsMap gemappt wurden
     for (const [etfName, holdings] of Object.entries(etfHoldingsMap)) {
         const normalizedEtfName = normalizeName(etfName)
         const matchingPortfolioKey = Object.keys(portfolioWeights).find(pKey => pKey.includes(normalizedEtfName) || normalizedEtfName.includes(pKey))
@@ -79,17 +80,16 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
     for (const item of activeHoldings) {
         const name = normalizeName(item.name || item.title || '')
         const rawNameLower = (item.name || item.title || '').toLowerCase()
+        const isTrueEtf = /\betf\b/.test(rawNameLower) ||
+            rawNameLower.includes('ucits') ||
+            rawNameLower.includes('msci') ||
+            rawNameLower.includes('stoxx') ||
+            rawNameLower.includes('ftse')
 
-        // Ausschluss von bekannten Aktienbegriffen, damit Netflix & Co nie als ETF laufen
-        const isKnownStock = rawNameLower.includes('netflix') || rawNameLower.includes('apple') || rawNameLower.includes('amazon') || rawNameLower.includes('tesla') || rawNameLower.includes('microsoft') || rawNameLower.includes('nvidia')
-
-        const hasEtfWord = /\betf\b/.test(rawNameLower)
-        const hasIndexTerms = rawNameLower.includes('ucits') || rawNameLower.includes('msci') || rawNameLower.includes('stoxx') || rawNameLower.includes('ftse') || rawNameLower.includes('vanguard') || rawNameLower.includes('vaneck') || rawNameLower.includes('xtrackers')
-
-        const isEtf = !isKnownStock && (hasEtfWord || hasIndexTerms)
         const hasBeenExpandedAsEtf = Object.keys(etfHoldingsMap).some(eKey => name.includes(normalizeName(eKey)))
 
-        if (!isEtf && !hasBeenExpandedAsEtf) {
+        // Wenn es KEIN ETF ist, wird es als direktes Asset (Aktie/Krypto) in die Gesamtsicht aufgenommen
+        if (!isTrueEtf && !hasBeenExpandedAsEtf) {
             const directWeight = ((item.value || 0) / currentValue) * 100
             if (directWeight > 0) {
                 if (!aggregated[name]) {
