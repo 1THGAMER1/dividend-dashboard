@@ -94,3 +94,17 @@ export const importVanEckHoldings = importEtfHoldings
 export const importXtrackersHoldings = importEtfHoldings
 export const importStoxx600Holdings = importEtfHoldings
 export const importGenericEtfHoldings = importEtfHoldings
+
+// Text oberhalb der Tabelle (Fondsname etc.), um zu prüfen, ob die Datei zum ETF passt
+export async function readFileMeta(file) {
+    const data = await file.arrayBuffer()
+    const workbook = XLSX.read(data, { type: 'array' })
+    const grid = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' })
+    const lines = []
+    for (let r = 0; r < Math.min(grid.length, 80); r++) {
+        const cells = grid[r].map(clean)
+        if (findColumn(cells, NAME_SYNONYMS) !== -1 && findColumn(cells, WEIGHT_SYNONYMS) !== -1) break
+        lines.push(grid[r].map(c => String(c ?? '').trim()).filter(Boolean).join(' '))
+    }
+    return lines.join(' ')
+}
