@@ -5,7 +5,19 @@ const NAME_SYNONYMS = ['holding name', 'bezeichnung der position', 'security des
 const WEIGHT_SYNONYMS = ['percent of fund', '% der assets', '% of market value', '% des fondsvolumens', '% of net assets', '% of fund', 'weighting', 'weight', 'gewichtung', 'gewicht', 'anteil']
 const COUNTRY_SYNONYMS = ['trade country name', 'country', 'land', 'standort', 'location', 'sitz', 'region']
 
-// Ländercodes (z. B. Vanguard-Spalte "Region") -> deutsche Ländernamen, wie getRegion sie kennt
+// Englische Ländernamen -> deutsche Ländernamen, wie getRegion sie kennt
+const COUNTRY_EN_DE = {
+    'UNITED STATES': 'Vereinigte Staaten', 'USA': 'Vereinigte Staaten', 'UNITED KINGDOM': 'Vereinigtes Königreich',
+    'GERMANY': 'Deutschland', 'FRANCE': 'Frankreich', 'SWITZERLAND': 'Schweiz', 'NETHERLANDS': 'Niederlande',
+    'SWEDEN': 'Schweden', 'ITALY': 'Italien', 'SPAIN': 'Spanien', 'IRELAND': 'Irland', 'BELGIUM': 'Belgien',
+    'NORWAY': 'Norwegen', 'FINLAND': 'Finnland', 'AUSTRIA': 'Österreich', 'DENMARK': 'Dänemark',
+    'CANADA': 'Kanada', 'MEXICO': 'Mexiko', 'HONG KONG': 'Hongkong', 'SINGAPORE': 'Singapur',
+    'SOUTH KOREA': 'Südkorea', 'KOREA (SOUTH)': 'Südkorea', 'INDIA': 'Indien', 'AUSTRALIA': 'Australien',
+    'NEW ZEALAND': 'Neuseeland', 'SOUTH AFRICA': 'Südafrika', 'SAUDI ARABIA': 'Saudi-Arabien',
+    'LUXEMBOURG': 'Luxemburg', 'TURKEY': 'Türkei', 'GREECE': 'Griechenland', 'POLAND': 'Polen'
+}
+
+// Ländercodes (z. B. Vanguard-Spalte "Region") -> deutsche Ländernamen
 const ISO_TO_DE = {
     US: 'Vereinigte Staaten', CA: 'Kanada', MX: 'Mexiko', BM: 'Bermuda', PR: 'Puerto Rico',
     GB: 'Vereinigtes Königreich', UK: 'Vereinigtes Königreich', DE: 'Deutschland', FR: 'Frankreich',
