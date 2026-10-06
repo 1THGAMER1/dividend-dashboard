@@ -99,7 +99,7 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
             {/* Chart mit funktionierendem Tooltip */}
             <div style={{ width: '100%', height: 450 }}>
                 <ResponsiveContainer>
-                    <PieChart>
+                    <PieChart key={activeTab + topLimit}>
                         <Pie
                             data={activeData}
                             dataKey="value"
@@ -111,6 +111,7 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                             label={false}
                             stroke="#161b27"
                             strokeWidth={2}
+                            isAnimationActive={false}
                         />
                         <Tooltip
                             contentStyle={{ background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, color: '#fff', fontSize: 12 }}

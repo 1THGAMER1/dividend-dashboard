@@ -1,62 +1,81 @@
 import * as XLSX from 'xlsx'
-import { normalizeName, parseWeight } from './portfolioXray'
+import { parseWeight } from './portfolioXray'
 
-async function parseExcelRows(file, skipRows, nameField, weightField, countryField = null) {
+const NAME_SYNONYMS = ['holding name', 'bezeichnung der position', 'security description', 'security name', 'name', 'emittent', 'issuer', 'holding', 'bezeichnung', 'wertpapier']
+const WEIGHT_SYNONYMS = ['% of market value', '% des fondsvolumens', '% of net assets', '% of fund', 'weighting', 'weight', 'gewichtung', 'gewicht', 'anteil']
+const COUNTRY_SYNONYMS = ['country', 'land', 'standort', 'location', 'sitz']
+
+const COUNTRY_EN_DE = {
+    'UNITED STATES': 'Vereinigte Staaten', 'USA': 'Vereinigte Staaten', 'UNITED KINGDOM': 'Vereinigtes Königreich',
+    'GERMANY': 'Deutschland', 'FRANCE': 'Frankreich', 'SWITZERLAND': 'Schweiz', 'NETHERLANDS': 'Niederlande',
+    'SWEDEN': 'Schweden', 'ITALY': 'Italien', 'SPAIN': 'Spanien', 'IRELAND': 'Irland', 'BELGIUM': 'Belgien',
+    'NORWAY': 'Norwegen', 'FINLAND': 'Finnland', 'AUSTRIA': 'Österreich', 'DENMARK': 'Dänemark',
+    'CANADA': 'Kanada', 'MEXICO': 'Mexiko', 'HONG KONG': 'Hongkong', 'SINGAPORE': 'Singapur',
+    'SOUTH KOREA': 'Südkorea', 'KOREA (SOUTH)': 'Südkorea', 'INDIA': 'Indien', 'AUSTRALIA': 'Australien',
+    'NEW ZEALAND': 'Neuseeland', 'SOUTH AFRICA': 'Südafrika', 'SAUDI ARABIA': 'Saudi-Arabien',
+    'LUXEMBOURG': 'Luxemburg', 'TURKEY': 'Türkei', 'GREECE': 'Griechenland', 'POLAND': 'Polen'
+}
+
+const clean = v => String(v ?? '').trim().toLowerCase()
+
+function findColumn(headerCells, synonyms) {
+    for (const s of synonyms) {
+        const i = headerCells.findIndex(c => c === s)
+        if (i !== -1) return i
+    }
+    for (const s of synonyms) {
+        const i = headerCells.findIndex(c => c.startsWith(s))
+        if (i !== -1) return i
+    }
+    return -1
+}
+
+function parseSheet(ws) {
+    const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+    for (let r = 0; r < Math.min(grid.length, 80); r++) {
+        const cells = grid[r].map(clean)
+        const nameCol = findColumn(cells, NAME_SYNONYMS)
+        const weightCol = findColumn(cells, WEIGHT_SYNONYMS)
+        if (nameCol === -1 || weightCol === -1) continue
+        const countryCol = findColumn(cells, COUNTRY_SYNONYMS)
+
+        const rows = []
+        for (const row of grid.slice(r + 1)) {
+            const name = String(row[nameCol] ?? '').trim()
+            const weight = parseWeight(row[weightCol])
+            if (!name || !(weight > 0) || /^(total|gesamt|summe|sum)\b/i.test(name)) continue
+            let country = countryCol !== -1 ? String(row[countryCol] ?? '').trim() : ''
+            country = COUNTRY_EN_DE[country.toUpperCase()] || country || 'GLOBAL'
+            rows.push({ Name: name, Weight: weight, Country: country })
+        }
+        if (rows.length) return rows
+    }
+    return []
+}
+
+// Einheit automatisch erkennen: Summe soll ~100 % ergeben (Bruchteile, %, Basispunkte, ...)
+function scaleToPercent(rows) {
+    const sum = rows.reduce((s, r) => s + r.Weight, 0)
+    if (!(sum > 0)) return rows
+    let factor = 1
+    while (sum * factor * 10 <= 105) factor *= 10
+    while (sum * factor > 105 && factor > 1e-9) factor /= 10
+    return rows.map(r => ({ ...r, Weight: r.Weight * factor }))
+}
+
+export async function importEtfHoldings(file) {
     const data = await file.arrayBuffer()
     const workbook = XLSX.read(data, { type: 'array' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const rows = XLSX.utils.sheet_to_json(worksheet, { range: skipRows })
-
-    return rows.map(row => {
-        const rawName = row[nameField]
-        const rawWeight = row[weightField]
-        const rawCountry = countryField ? row[countryField] : 'GLOBAL'
-        if (!rawName) return null
-
-        return {
-            Name: normalizeName(rawName),
-            Weight: parseWeight(rawWeight),
-            Country: rawCountry ? String(rawCountry).trim() : 'GLOBAL'
-        }
-    }).filter(Boolean)
+    for (const sheetName of workbook.SheetNames) {
+        const rows = parseSheet(workbook.Sheets[sheetName])
+        if (rows.length) return scaleToPercent(rows)
+    }
+    throw new Error('Keine Holdings-Tabelle gefunden: Spalten für Name und Gewichtung wurden nicht erkannt.')
 }
 
-export async function importVanguardHoldings(file) {
-    const items = await parseExcelRows(file, 6, 'Holding name', '% of market value')
-    return items.map(i => ({ ...i, Weight: i.Weight / 10000 }))
-}
-
-export async function importVanEckHoldings(file) {
-    return await parseExcelRows(file, 2, 'Bezeichnung der Position', '% des Fondsvolumens')
-}
-
-export async function importXtrackersHoldings(file) {
-    const items = await parseExcelRows(file, 3, 'Name', 'Weighting', 'Country')
-    return items.map(i => ({ ...i, Weight: i.Weight / 1000000 }))
-}
-
-export async function importStoxx600Holdings(file) {
-    const items = await parseExcelRows(file, 19, 'Name', 'Gewichtung', 'Land')
-    return items.map(i => ({ ...i, Weight: i.Weight * 100 }))
-}
-export async function importGenericEtfHoldings(file) {
-    const data = await file.arrayBuffer()
-    const workbook = XLSX.read(data, { type: 'array' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const rows = XLSX.utils.sheet_to_json(worksheet, { range: 2 })
-
-    return rows.map(row => {
-        const rawName = row['Name'] || row['Holding name'] || row['Bezeichnung der Position'] || row['Security Description']
-        const rawWeight = row['Weight'] || row['Gewichtung (%)'] || row['% des Fondsvolumens'] || row['% of market value'] || row['Weighting']
-
-        if (!rawName) return null
-
-        return {
-            Name: normalizeName(rawName),
-            Weight: parseWeight(rawWeight),
-            Country: row['Country'] || row['Standort'] || row['Land'] || 'GLOBAL'
-        }
-    }).filter(Boolean)
-}
+// Alte Export-Namen bleiben bestehen, damit EtfUploadWidget.jsx unverändert funktioniert
+export const importVanguardHoldings = importEtfHoldings
+export const importVanEckHoldings = importEtfHoldings
+export const importXtrackersHoldings = importEtfHoldings
+export const importStoxx600Holdings = importEtfHoldings
+export const importGenericEtfHoldings = importEtfHoldings

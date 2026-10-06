@@ -6,45 +6,56 @@ import {
     importXtrackersHoldings,
     importGenericEtfHoldings
 } from '../utils/etfFileParser'
+import { extractHoldingRows, isEtfName } from '../utils/portfolioXray'
 import PortfolioXRayView from '../Views/PortfolioXRayView.jsx'
 
 export default function EtfUploadWidget({ holdings, currentValue }) {
     const [etfHoldingsMap, setEtfHoldingsMap] = useState({})
+    const [etfStats, setEtfStats] = useState({}) // name -> { count, sum }
     const [loadingFile, setLoadingFile] = useState(null)
-    const [uploadedFiles, setUploadedFiles] = useState([])
 
-    // 1. Nur aktive ETFs filtern (verkaufte Positionen mit Menge <= 0 werden komplett ignoriert)
+    const uploadedFiles = Object.keys(etfStats)
+
+    // Nur aktive ETFs (verkaufte Positionen mit Menge <= 0 werden ignoriert)
     const portfolioEtfs = (holdings || []).filter(h => {
         const shares = h.shares !== undefined ? h.shares : (h.quantity !== undefined ? h.quantity : h.amount)
-        const isSold = shares !== undefined && shares <= 0
-        if (isSold) return false // Verkaufte Positionen ausschließen!
-
-        const name = (h.name || h.title || '').toLowerCase()
-        return name.includes('etf') || name.includes('ucits') || name.includes('msci') || name.includes('stoxx')
+        if (shares !== undefined && shares <= 0) return false
+        return isEtfName(h.name || h.title || '')
     })
 
     const getParserForEtf = (etfName) => {
         const lower = etfName.toLowerCase()
         if (lower.includes('vanguard')) return importVanguardHoldings
         if (lower.includes('vaneck')) return importVanEckHoldings
+        if (lower.includes('xtrackers')) return importXtrackersHoldings // vor 'stoxx'!
         if (lower.includes('stoxx')) return importStoxx600Holdings
-        if (lower.includes('xtrackers')) return importXtrackersHoldings
         return importGenericEtfHoldings
     }
 
     const handleFileUpload = async (e, etfName) => {
         const file = e.target.files[0]
+        e.target.value = '' // gleiche Datei darf erneut gewählt werden
         if (!file) return
 
         setLoadingFile(etfName)
         try {
-            const parserFn = getParserForEtf(etfName)
-            const parsedData = await parserFn(file)
+            const parsedData = await getParserForEtf(etfName)(file)
+            console.info('[X-Ray]', etfName, '→ Rohdaten, erste 2 Zeilen:', Array.isArray(parsedData) ? parsedData.slice(0, 2) : parsedData)
 
-            setEtfHoldingsMap(prev => ({ ...prev, [etfName]: parsedData }))
-            if (!uploadedFiles.includes(etfName)) {
-                setUploadedFiles(prev => [...prev, etfName])
+            let rows = extractHoldingRows(parsedData)
+            if (!rows.length) {
+                throw new Error('Keine Zeilen mit Name und Gewicht gefunden. Wahrscheinlich passen Parser oder Spaltenüberschriften nicht (siehe Konsole).')
             }
+
+            // Anteile als Bruchteile (z. B. 0,052) auf Prozent umrechnen
+            let sum = rows.reduce((s, r) => s + r.Weight, 0)
+            if (sum <= 1.5) {
+                rows = rows.map(r => ({ ...r, Weight: r.Weight * 100 }))
+                sum *= 100
+            }
+
+            setEtfHoldingsMap(prev => ({ ...prev, [etfName]: rows }))
+            setEtfStats(prev => ({ ...prev, [etfName]: { count: rows.length, sum } }))
         } catch (err) {
             alert(`Fehler beim Einlesen von ${file.name}: ${err.message}`)
         } finally {
@@ -71,16 +82,21 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
                     {portfolioEtfs.map((etf, index) => {
                         const etfName = etf.name || etf.title || `ETF ${index + 1}`
-                        const isUploaded = uploadedFiles.includes(etfName)
+                        const stats = etfStats[etfName]
                         const isLoading = loadingFile === etfName
+                        const sumOk = stats && stats.sum >= 90 && stats.sum <= 101
 
                         return (
-                            <div key={index} style={{ background: '#0f1420', padding: 14, borderRadius: 10, border: `1px solid ${isUploaded ? '#22c55e' : '#2a3a50'}` }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div key={index} style={{ background: '#0f1420', padding: 14, borderRadius: 10, border: `1px solid ${stats ? (sumOk ? '#22c55e' : '#f59e0b') : '#2a3a50'}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
                                     <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={etfName}>
                                         {etfName}
                                     </p>
-                                    {isUploaded && <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>✓ Bereit</span>}
+                                    {stats && (
+                                        <span style={{ fontSize: 11, color: sumOk ? '#22c55e' : '#f59e0b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                            {sumOk ? '✓' : '⚠'} {stats.count} Pos. · Σ {stats.sum.toFixed(1)} %
+                                        </span>
+                                    )}
                                 </div>
 
                                 <input
