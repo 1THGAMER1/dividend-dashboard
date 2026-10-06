@@ -90,6 +90,8 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
     if (rescale && total > 0) {
         activeData = activeData.map(d => ({ ...d, value: +((d.value / total) * 100).toFixed(2) }))
     }
+    const globalAll = rawData.filter(i => String(i.Country).toUpperCase() === 'GLOBAL')
+    const globalTotal = globalAll.reduce((s, i) => s + i.Weight, 0)
 
     return (
         <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, color: '#c8d4e0' }}>
@@ -169,6 +171,21 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                     </PieChart>
                 </ResponsiveContainer>
             </div>
+            {globalTotal > 0 && (
+                <details style={{ marginTop: 12, fontSize: 12, color: '#c8d4e0' }}>
+                    <summary style={{ cursor: 'pointer', color: '#93c5fd' }}>
+                        Was steckt in „Global“? ({fmt(globalTotal)} %)
+                    </summary>
+                    <div style={{ marginTop: 8, display: 'grid', gap: 4 }}>
+                        {globalAll.slice(0, 20).map(i => (
+                            <div key={i.Name} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                <span>{i.Name}</span>
+                                <span>{fmt(i.Weight)} %</span>
+                            </div>
+                        ))}
+                    </div>
+                </details>
+            )}
         </div>
     )
 }
