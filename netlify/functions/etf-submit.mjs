@@ -92,9 +92,16 @@ export const handler = async (event) => {
     try {
         if (event.httpMethod !== 'POST') return json(405, { error: 'Nur POST erlaubt.' })
 
-        const url = process.env.SUPABASE_URL
+        const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-        if (!url || !serviceKey) return json(500, { error: 'Server nicht konfiguriert.' })
+
+        const missing = []
+        if (!url) missing.push('SUPABASE_URL')
+        if (!serviceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
+        if (missing.length) {
+            console.error('[etf-submit] Fehlende Umgebungsvariablen:', missing.join(', '))
+            return json(500, { error: `Server nicht konfiguriert (fehlt: ${missing.join(', ')}).` })
+        }
         const admin = createClient(url, serviceKey, { auth: { persistSession: false } })
 
         // 1. Login erzwingen
