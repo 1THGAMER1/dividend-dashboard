@@ -1,21 +1,24 @@
 import * as XLSX from 'xlsx'
 import { parseWeight } from './portfolioXray'
 
-const NAME_SYNONYMS = ['holding name', 'bezeichnung der position', 'security description', 'security name', 'name', 'emittent', 'issuer', 'holding', 'bezeichnung', 'wertpapier']
-const WEIGHT_SYNONYMS = ['% of market value', '% des fondsvolumens', '% of net assets', '% of fund', 'weighting', 'weight', 'gewichtung', 'gewicht', 'anteil']
-const COUNTRY_SYNONYMS = ['country', 'land', 'standort', 'location', 'sitz']
+const NAME_SYNONYMS = ['holding name', 'bezeichnung der position', 'security description', 'security name', 'wertpapiere', 'name', 'emittent', 'issuer', 'holding', 'bezeichnung', 'wertpapier']
+const WEIGHT_SYNONYMS = ['percent of fund', '% der assets', '% of market value', '% des fondsvolumens', '% of net assets', '% of fund', 'weighting', 'weight', 'gewichtung', 'gewicht', 'anteil']
+const COUNTRY_SYNONYMS = ['trade country name', 'country', 'land', 'standort', 'location', 'sitz', 'region']
 
-const COUNTRY_EN_DE = {
-    'UNITED STATES': 'Vereinigte Staaten', 'USA': 'Vereinigte Staaten', 'UNITED KINGDOM': 'Vereinigtes Königreich',
-    'GERMANY': 'Deutschland', 'FRANCE': 'Frankreich', 'SWITZERLAND': 'Schweiz', 'NETHERLANDS': 'Niederlande',
-    'SWEDEN': 'Schweden', 'ITALY': 'Italien', 'SPAIN': 'Spanien', 'IRELAND': 'Irland', 'BELGIUM': 'Belgien',
-    'NORWAY': 'Norwegen', 'FINLAND': 'Finnland', 'AUSTRIA': 'Österreich', 'DENMARK': 'Dänemark',
-    'CANADA': 'Kanada', 'MEXICO': 'Mexiko', 'HONG KONG': 'Hongkong', 'SINGAPORE': 'Singapur',
-    'SOUTH KOREA': 'Südkorea', 'KOREA (SOUTH)': 'Südkorea', 'INDIA': 'Indien', 'AUSTRALIA': 'Australien',
-    'NEW ZEALAND': 'Neuseeland', 'SOUTH AFRICA': 'Südafrika', 'SAUDI ARABIA': 'Saudi-Arabien',
-    'LUXEMBOURG': 'Luxemburg', 'TURKEY': 'Türkei', 'GREECE': 'Griechenland', 'POLAND': 'Polen'
+// Ländercodes (z. B. Vanguard-Spalte "Region") -> deutsche Ländernamen, wie getRegion sie kennt
+const ISO_TO_DE = {
+    US: 'Vereinigte Staaten', CA: 'Kanada', MX: 'Mexiko', BM: 'Bermuda', PR: 'Puerto Rico',
+    GB: 'Vereinigtes Königreich', UK: 'Vereinigtes Königreich', DE: 'Deutschland', FR: 'Frankreich',
+    CH: 'Schweiz', NL: 'Niederlande', SE: 'Schweden', IT: 'Italien', ES: 'Spanien', IE: 'Irland',
+    BE: 'Belgien', NO: 'Norwegen', FI: 'Finnland', AT: 'Österreich', DK: 'Dänemark', PT: 'Portugal',
+    PL: 'Polen', CZ: 'Tschechien', HU: 'Ungarn', GR: 'Griechenland', TR: 'Türkei', LU: 'Luxemburg',
+    JE: 'Jersey', CY: 'Zypern', IS: 'Island',
+    JP: 'Japan', TW: 'Taiwan', IN: 'Indien', CN: 'China', HK: 'Hongkong', SG: 'Singapur',
+    KR: 'Südkorea', NZ: 'Neuseeland', SA: 'Saudi-Arabien', ID: 'Indonesien', MY: 'Malaysia',
+    TH: 'Thailand', QA: 'Katar', PH: 'Philippinen', KW: 'Kuwait', IL: 'Israel', VN: 'Vietnam',
+    AU: 'Australien', ZA: 'Südafrika', EG: 'Ägypten', MA: 'Marokko', KE: 'Kenia',
+    BR: 'Brasilien', CL: 'Chile', AE: 'Vereinigte Arabische Emirate'
 }
-
 const clean = v => String(v ?? '').trim().toLowerCase()
 
 function findColumn(headerCells, synonyms) {
@@ -45,7 +48,7 @@ function parseSheet(ws) {
             const weight = parseWeight(row[weightCol])
             if (!name || !(weight > 0) || /^(total|gesamt|summe|sum)\b/i.test(name)) continue
             let country = countryCol !== -1 ? String(row[countryCol] ?? '').trim() : ''
-            country = COUNTRY_EN_DE[country.toUpperCase()] || country || 'GLOBAL'
+            country = COUNTRY_EN_DE[country.toUpperCase()] || ISO_TO_DE[country.toUpperCase()] || country || 'GLOBAL'
             rows.push({ Name: name, Weight: weight, Country: country })
         }
         if (rows.length) return rows

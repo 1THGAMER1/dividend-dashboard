@@ -73,7 +73,12 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
     const aggregated = {}
     const add = (name, country, weight) => {
         if (!name || !(weight > 0)) return
-        if (!aggregated[name]) aggregated[name] = { Name: name, Country: country, Weight: 0 }
+        if (!aggregated[name]) {
+            aggregated[name] = { Name: name, Country: country, Weight: 0 }
+        } else if (aggregated[name].Country === 'GLOBAL' && country && country !== 'GLOBAL') {
+            // Ein späterer ETF kennt das Land: übernehmen
+            aggregated[name].Country = country
+        }
         aggregated[name].Weight += weight
     }
 
