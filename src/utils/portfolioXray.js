@@ -1,4 +1,4 @@
-import { lookupCountry } from './countryOverrides'
+import { lookupCountry } from './countryOverrides.js'
 
 export function normalizeName(name) {
     if (!name) return ''
