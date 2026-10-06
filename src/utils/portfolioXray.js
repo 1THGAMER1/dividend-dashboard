@@ -75,6 +75,15 @@ export function getRegion(country) {
 
     return 'Sonstige'
 }
+const SHARE_KEYS = ['shares', 'quantity', 'amount']
+
+export function getShares(item) {
+    for (const k of SHARE_KEYS) {
+        const v = item?.[k]
+        if (v !== undefined && v !== null) return v
+    }
+    return undefined
+}
 
 export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue) {
     if (!currentValue || currentValue <= 0 || !userHoldings) return []
@@ -92,7 +101,7 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
 
     const positions = userHoldings
         .filter(item => {
-            const shares = item.shares ?? item.quantity ?? item.amount
+            const shares = getShares(item)
             return shares === undefined || shares > 0
         })
         .map(item => {
