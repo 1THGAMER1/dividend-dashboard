@@ -1,6 +1,21 @@
 import * as XLSX from 'xlsx'
 import { parseWeight } from './portfolioXray'
 
+const SAFE_READ_OPTIONS = {
+    type: 'array',
+    sheetRows: 20000,
+    cellFormula: false,
+    cellHTML: false,
+    cellStyles: false,
+    cellNF: false,
+    bookVBA: false
+}
+
+async function readWorkbook(file) {
+    const data = await file.arrayBuffer()
+    return XLSX.read(data, SAFE_READ_OPTIONS)
+}
+
 const NAME_SYNONYMS = ['holding name', 'bezeichnung der position', 'security description', 'security name', 'wertpapiere', 'name', 'emittent', 'issuer', 'holding', 'bezeichnung', 'wertpapier']
 const WEIGHT_SYNONYMS = ['percent of fund', '% der assets', '% of market value', '% des fondsvolumens', '% of net assets', '% of fund', 'weighting', 'weight', 'gewichtung', 'gewicht', 'anteil']
 const COUNTRY_SYNONYMS = ['trade country name', 'country', 'land', 'standort', 'location', 'sitz', 'region']
@@ -79,8 +94,7 @@ function scaleToPercent(rows) {
 }
 
 export async function importEtfHoldings(file) {
-    const data = await file.arrayBuffer()
-    const workbook = XLSX.read(data, { type: 'array' })
+    const workbook = await readWorkbook(file)
     for (const sheetName of workbook.SheetNames) {
         const rows = parseSheet(workbook.Sheets[sheetName])
         if (rows.length) return scaleToPercent(rows)

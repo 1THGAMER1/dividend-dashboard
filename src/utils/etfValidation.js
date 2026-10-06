@@ -1,6 +1,20 @@
 import { normalizeName } from './portfolioXray'
 
-const MAX_FILE_MB = 10
+const MAX_ROWS = 20000
+const UNSAFE_CHARS = /[\u0000-\u001F\u007F<>{}\[\]\\`]/g
+
+export function sanitizeRows(rows) {
+    const clean = []
+    for (const r of rows.slice(0, MAX_ROWS)) {
+        const name = String(r.Name ?? '').replace(UNSAFE_CHARS, '').replace(/\s+/g, ' ').trim().slice(0, 120)
+        const country = String(r.Country ?? 'GLOBAL').replace(UNSAFE_CHARS, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'GLOBAL'
+        const weight = Number(r.Weight)
+        if (!name || !Number.isFinite(weight) || weight <= 0 || weight > 100) continue
+        clean.push({ Name: name, Country: country, Weight: +weight.toFixed(6) })
+    }
+    return clean
+}
+const MAX_FILE_MB = 5
 const STOP_TOKENS = new Set([
     'UCITS', 'ETF', 'USD', 'EUR', 'GBP', 'CHF', 'ACC', 'ACCUMULATING',
     'DIST', 'DIS', 'DISTRIBUTING', 'INCOME', 'FUND', 'INDEX'

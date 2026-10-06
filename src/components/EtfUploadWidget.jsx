@@ -7,10 +7,10 @@ import {
     importGenericEtfHoldings,
     readFileMeta
 } from '../utils/etfFileParser'
-import { checkFile, validateEtfUpload } from '../utils/etfValidation'
 import { extractHoldingRows, isEtfName } from '../utils/portfolioXray'
 import { loadStoredHoldings, saveHoldings } from '../utils/etfHoldingsStore'
 import PortfolioXRayView from '../Views/PortfolioXRayView.jsx'
+import { checkFile, validateEtfUpload, sanitizeRows } from '../utils/etfValidation'
 
 const STALE_DAYS = 120
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '')
@@ -80,7 +80,7 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
         setStoreError(null)
         try {
             const parsedData = await getParserForEtf(etfName)(file)
-            const rows = extractHoldingRows(parsedData)
+            const rows = sanitizeRows(extractHoldingRows(parsedData))
             const sum = rows.reduce((s, r) => s + r.Weight, 0)
 
             let metaText = ''
