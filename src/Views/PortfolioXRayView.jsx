@@ -14,6 +14,13 @@ const TABS = [
     ['countries', 'Länder']
 ]
 
+// Standard je Ansicht: true = wird ausgeblendet
+const DEFAULT_FILTERS = {
+    holdings: { crypto: false, commodities: false },
+    regions: { crypto: true, commodities: true },
+    countries: { crypto: true, commodities: true }
+}
+
 const tabStyle = (active) => ({
     background: active ? '#009991' : 'transparent',
     color: active ? '#fff' : '#64748b',
@@ -34,14 +41,24 @@ const fmt = (n) => n.toFixed(1).replace('.', ',')
 export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, currentValue }) {
     const [topLimit, setTopLimit] = useState(15)
     const [activeTab, setActiveTab] = useState('holdings')
-    const [hideCrypto, setHideCrypto] = useState(false)
+    const [filters, setFilters] = useState(DEFAULT_FILTERS)
     const [hideOther, setHideOther] = useState(false)
+
+    const hideCrypto = filters[activeTab].crypto
+    const hideCommodities = filters[activeTab].commodities
+    const toggleFilter = (key) =>
+        setFilters(f => ({ ...f, [activeTab]: { ...f[activeTab], [key]: !f[activeTab][key] } }))
 
     const allData = computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
 
-    // Krypto-Anteil (am Gesamtdepot) und optionales Ausblenden
+    // Anteile am Gesamtdepot (für die Beschriftung der Knöpfe)
     const cryptoWeight = allData.filter(i => i.Country === 'Krypto').reduce((s, i) => s + i.Weight, 0)
-    const rawData = hideCrypto ? allData.filter(i => i.Country !== 'Krypto') : allData
+    const commodityWeight = allData.filter(i => i.Country === 'Rohstoffe').reduce((s, i) => s + i.Weight, 0)
+
+    const rawData = allData.filter(i =>
+        !(hideCrypto && i.Country === 'Krypto') &&
+        !(hideCommodities && i.Country === 'Rohstoffe')
+    )
 
     // --- Top Aktien ---
     const topHoldings = rawData.slice(0, topLimit)
@@ -65,7 +82,6 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
     const chartRegionsData = Object.entries(regionMap)
         .filter(([name]) => !(hideOther && name === 'Sonstige'))
         .map(([name, value], index) => ({ name, value: +value.toFixed(2), fill: PALETTE[index % PALETTE.length] }))
-        .sort((a, b) => b.value - a.value)
 
     // --- Länder ---
     const countryMap = {}
@@ -78,18 +94,34 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
         .sort((a, b) => b.value - a.value)
         .slice(0, 15)
 
-    // "Sonstige" gibt es nur in Top Aktien (Rest hinter Top-N) und Regionen (nicht zuordenbare Länder)
+    // "Sonstige" gibt es nur in Top Aktien (Rest hinter Top-N) und Regionen
     const otherAvailable = activeTab !== 'countries'
     const otherWeight = activeTab === 'holdings' ? restWeight : activeTab === 'regions' ? regionsOther : 0
 
     let activeData = activeTab === 'holdings' ? chartHoldingsData : activeTab === 'regions' ? chartRegionsData : chartCountriesData
 
     // Nach dem Ausblenden auf 100 % der sichtbaren Positionen hochrechnen
-    const rescale = hideCrypto || (hideOther && otherAvailable)
+    const rescale = hideCrypto || hideCommodities || (hideOther && otherAvailable)
     const total = activeData.reduce((s, d) => s + d.value, 0)
     if (rescale && total > 0) {
         activeData = activeData.map(d => ({ ...d, value: +((d.value / total) * 100).toFixed(2) }))
     }
+
+    // Kreis und Legende: nach Größe sortiert
+    const sortedData = [...activeData].sort((a, b) => b.value - a.value)
+
+    const renderLegend = () => (
+        <ul style={{ listStyle: 'none', margin: 0, padding: '20px 0 0', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px 16px', fontSize: 11 }}>
+            {sortedData.map(d => (
+                <li key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#c8d4e0' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.fill, display: 'inline-block' }} />
+                    {d.name} <span style={{ color: '#64748b' }}>{fmt(d.value)} %</span>
+                </li>
+            ))}
+        </ul>
+    )
+
+    // Was steckt noch in "Global"?
     const globalAll = rawData.filter(i => String(i.Country).toUpperCase() === 'GLOBAL')
     const globalTotal = globalAll.reduce((s, i) => s + i.Weight, 0)
 
@@ -119,12 +151,20 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                 <span style={{ flex: 1 }} />
 
                 <button
-                    onClick={() => setHideCrypto(v => !v)}
+                    onClick={() => toggleFilter('crypto')}
                     disabled={cryptoWeight <= 0}
-                    style={toggleStyle(hideCrypto, cryptoWeight <= 0)}
-                    title="Krypto-Positionen aus der Auswertung entfernen"
+                    style={toggleStyle(hideCrypto && cryptoWeight > 0, cryptoWeight <= 0)}
+                    title="Krypto-Positionen aus dieser Ansicht entfernen"
                 >
-                    {hideCrypto ? '✓ ' : ''}Krypto ausblenden{cryptoWeight > 0 ? ` (${fmt(cryptoWeight)} %)` : ''}
+                    {hideCrypto && cryptoWeight > 0 ? '✓ ' : ''}Krypto ausblenden{cryptoWeight > 0 ? ` (${fmt(cryptoWeight)} %)` : ''}
+                </button>
+                <button
+                    onClick={() => toggleFilter('commodities')}
+                    disabled={commodityWeight <= 0}
+                    style={toggleStyle(hideCommodities && commodityWeight > 0, commodityWeight <= 0)}
+                    title="Rohstoffe (z. B. Gold) aus dieser Ansicht entfernen"
+                >
+                    {hideCommodities && commodityWeight > 0 ? '✓ ' : ''}Rohstoffe ausblenden{commodityWeight > 0 ? ` (${fmt(commodityWeight)} %)` : ''}
                 </button>
                 <button
                     onClick={() => setHideOther(v => !v)}
@@ -144,9 +184,9 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
 
             <div style={{ width: '100%', height: 450 }}>
                 <ResponsiveContainer>
-                    <PieChart key={activeTab + topLimit + hideCrypto + hideOther}>
+                    <PieChart key={[activeTab, topLimit, hideCrypto, hideCommodities, hideOther].join('-')}>
                         <Pie
-                            data={activeData}
+                            data={sortedData}
                             dataKey="value"
                             nameKey="name"
                             cx="50%"
@@ -162,15 +202,11 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                             contentStyle={{ background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, color: '#fff', fontSize: 12 }}
                             formatter={(val, name) => [`${val.toFixed(2)} %`, name]}
                         />
-                        <Legend
-                            layout="horizontal"
-                            align="center"
-                            verticalAlign="bottom"
-                            wrapperStyle={{ fontSize: 11, paddingTop: 20 }}
-                        />
+                        <Legend verticalAlign="bottom" content={renderLegend} />
                     </PieChart>
                 </ResponsiveContainer>
             </div>
+
             {globalTotal > 0 && (
                 <details style={{ marginTop: 12, fontSize: 12, color: '#c8d4e0' }}>
                     <summary style={{ cursor: 'pointer', color: '#93c5fd' }}>

@@ -1,3 +1,5 @@
+import { lookupCountry } from './countryOverrides'
+
 export function normalizeName(name) {
     if (!name) return ''
     return String(name)
@@ -66,6 +68,8 @@ export function getRegion(country) {
     if (['JAPAN', 'TAIWAN', 'INDIEN', 'CHINA', 'HONGKONG', 'SINGAPUR', 'SUEDKOREA', 'NEUSEELAND', 'SAUDI-ARABIEN', 'INDONESIEN', 'MALAYSIA', 'THAILAND', 'KATAR', 'PHILIPPINEN', 'KUWAIT', 'ISRAEL', 'VIETNAM'].some(x => c.includes(x))) return 'Asien'
     if (c === 'AUSTRALIEN') return 'Ozeanien und Australien'
     if (['SUEDAFRIKA', 'AEGYPTEN', 'MAROKKO', 'KENIA'].includes(c)) return 'Afrika'
+    if (c === 'ROHSTOFFE') return 'Rohstoffe'
+    if (c === 'BARGELD') return 'Bargeld'
     if (c === 'KRYPTO') return 'Krypto'
     if (c === 'GLOBAL') return 'Global'
 
@@ -125,6 +129,13 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         add(looksLikeEtf ? p.key + ' (NICHT AUFGESCHLÜSSELT)' : p.key,
             isCrypto ? 'Krypto' : 'GLOBAL',
             p.weight * 100)
+    }
+
+    for (const entry of Object.values(aggregated)) {
+        if (String(entry.Country).toUpperCase() === 'GLOBAL') {
+            const c = lookupCountry(entry.Name)
+            if (c) entry.Country = c
+        }
     }
 
     return Object.values(aggregated).sort((a, b) => b.Weight - a.Weight)
