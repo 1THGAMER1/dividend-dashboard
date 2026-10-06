@@ -1,13 +1,17 @@
 export function normalizeName(name) {
     if (!name) return ''
     return String(name)
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')        // Akzente: NESTLÉ → NESTLE
         .toUpperCase()
-        .trim()
-        .replace(/['"`]/g, '')
+        .replace(/\([^)]*\)/g, ' ')                               // Klammern samt Inhalt: (ACC), (THE), (USD)
+        .replace(/['"`´’]/g, '')
+        .replace(/\s*&\s*/g, ' AND ')                             // JOHNSON & JOHNSON = JOHNSON AND JOHNSON
+        .replace(/\.(COM|NET|ORG|IO|AI)\b/g, ' ')                 // AMAZON.COM → AMAZON
+        .replace(/[.,;:]/g, '')                                   // INC. → INC, S.A. → SA, N.V. → NV
         .replace(/\bCLASS\s+[A-Z]\b/g, '')
         .replace(/\bCL\s+[A-Z]\b/g, '')
-        .replace(/\([A-Z]\)/g, '')
-        .replace(/\b(SE|AG|B|A\/S|SA|NV|PLC|INC|CORP|LTD|LLC|GMBH|SPA|AB|ASA|OYJ|ADR|REG|REGISTERED|SHS|ORD|NEW|HOLDINGS|HOLDING)\b/g, '')
+        .replace(/\bSERIES\s+[A-Z]\b/g, '')
+        .replace(/\b(THE|SE|AG|KGAA|B|A\/S|SA|SAS|NV|PLC|INC|INCORPORATED|CORP|CORPORATION|CO|COMPANY|LTD|LIMITED|LLC|GMBH|SPA|AB|ASA|OYJ|ADR|REG|REGISTERED|SHS|ORD|NEW|HOLDINGS|HOLDING)\b/g, '')
         .replace(/[-/]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
