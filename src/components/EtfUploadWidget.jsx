@@ -213,9 +213,8 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
                         ✓ {readyCount} von {portfolioEtfs.length} ETF(s) mit Daten versorgt.
                     </p>
                 )}
+                <AdminEtfImport />
             </div>
-
-            <AdminEtfImport />
 
             {Object.keys(etfHoldingsMap).length > 0 ? (
                 <PortfolioXRayView etfHoldingsMap={etfHoldingsMap} userHoldings={holdings} currentValue={currentValue} />
