@@ -34,17 +34,27 @@ function validatePayload(p) {
     }
 
     const rows = []
-    for (const r of p.rows) {
-        if (!r || typeof r !== 'object') return { error: 'Ungültige Zeile.' }
-        const Name = cleanText(r.Name, 120)
-        const Country = cleanText(r.Country, 60) || 'GLOBAL'
-        const Weight = Number(r.Weight)
+    let dropped = 0
+    let firstBad = null
+    for (const [i, r] of p.rows.entries()) {
+        const Name = cleanText(r?.Name, 120)
+        const Country = cleanText(r?.Country, 60) || 'GLOBAL'
+        const Weight = +Number(r?.Weight).toFixed(6)
         if (!Name || !Number.isFinite(Weight) || Weight <= 0 || Weight > 100) {
-            return { error: 'Ungültige Zeile (Name oder Gewicht).' }
+            dropped++
+            if (!firstBad) {
+                firstBad = { index: i, Name: String(r?.Name ?? '').slice(0, 40), Weight: String(r?.Weight ?? '').slice(0, 20) }
+            }
+            continue
         }
-        rows.push({ Name, Country, Weight: +Weight.toFixed(6) })
+        rows.push({ Name, Country, Weight })
     }
-
+    if (dropped > p.rows.length * 0.2) {
+        return {
+            error: `${dropped} von ${p.rows.length} Zeilen sind ungültig (erste: Zeile ${firstBad.index + 1}, Name „${firstBad.Name}“, Gewicht „${firstBad.Weight}“).`
+        }
+    }
+    if (rows.length < 5) return { error: 'Zu wenige gültige Positionen.' }
     const withLetters = rows.filter(r => /[A-Za-zÄÖÜäöü]/.test(r.Name)).length
     if (withLetters / rows.length < 0.8) return { error: 'Die Namen enthalten überwiegend Zahlen.' }
 

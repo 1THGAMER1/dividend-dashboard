@@ -8,9 +8,9 @@ export function sanitizeRows(rows) {
     for (const r of rows.slice(0, MAX_ROWS)) {
         const name = String(r.Name ?? '').replace(UNSAFE_CHARS, '').replace(/\s+/g, ' ').trim().slice(0, 120)
         const country = String(r.Country ?? 'GLOBAL').replace(UNSAFE_CHARS, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'GLOBAL'
-        const weight = Number(r.Weight)
+        const weight = +Number(r.Weight).toFixed(6) // erst runden, dann prüfen
         if (!name || !Number.isFinite(weight) || weight <= 0 || weight > 100) continue
-        clean.push({ Name: name, Country: country, Weight: +weight.toFixed(6) })
+        clean.push({ Name: name, Country: country, Weight: weight })
     }
     return clean
 }
