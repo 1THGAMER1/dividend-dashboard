@@ -29,10 +29,10 @@ const COUNTRY_EN_DE = {
     'CANADA': 'Kanada', 'MEXICO': 'Mexiko', 'HONG KONG': 'Hongkong', 'SINGAPORE': 'Singapur',
     'SOUTH KOREA': 'Südkorea', 'KOREA (SOUTH)': 'Südkorea', 'INDIA': 'Indien', 'AUSTRALIA': 'Australien',
     'NEW ZEALAND': 'Neuseeland', 'SOUTH AFRICA': 'Südafrika', 'SAUDI ARABIA': 'Saudi-Arabien',
-    'LUXEMBOURG': 'Luxemburg', 'TURKEY': 'Türkei', 'GREECE': 'Griechenland', 'POLAND': 'Polen'
-}
+    'LUXEMBOURG': 'Luxemburg', 'TURKEY': 'Türkei', 'GREECE': 'Griechenland', 'POLAND': 'Polen',
+    'GROSSBRITANNIEN' : 'Vereinigtes Königreich', ' VEREINIGTE STAATEN VON AMERIKA' : 'VEREINIGTE STAATEN' }
 
-// Ländercodes (z. B. Vanguard-Spalte "Region") -> deutsche Ländernamen
+// Ländercodes (z. B. Vanguard-Spalte "Region") deutsche Ländernamen
 const ISO_TO_DE = {
     US: 'Vereinigte Staaten', CA: 'Kanada', MX: 'Mexiko', BM: 'Bermuda', PR: 'Puerto Rico',
     GB: 'Vereinigtes Königreich', UK: 'Vereinigtes Königreich', DE: 'Deutschland', FR: 'Frankreich',
