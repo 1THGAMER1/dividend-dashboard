@@ -141,27 +141,29 @@ export const handler = async (event) => {
         if (v.error) return json(400, { error: v.error })
         const { etfKey, etfName, rows, sum } = v
 
-        // 3. Ratenbegrenzung und Kontingent
-        const since = new Date(Date.now() - 3600 * 1000).toISOString()
-        const { count: recent } = await admin.from('etf_submissions')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', user.id).gte('updated_at', since)
-        if ((recent ?? 0) >= MAX_SUBMISSIONS_PER_HOUR) {
-            return json(429, { error: 'Zu viele Uploads in kurzer Zeit. Bitte später erneut versuchen.' })
-        }
+        // 3. Ratenbegrenzung und Kontingent (der Admin ist davon ausgenommen)
+        const isAdmin = !!process.env.ADMIN_USER_ID && user.id === process.env.ADMIN_USER_ID
+        if (!isAdmin) {
+            const since = new Date(Date.now() - 3600 * 1000).toISOString()
+            const { count: recent } = await admin.from('etf_submissions')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', user.id).gte('updated_at', since)
+            if ((recent ?? 0) >= MAX_SUBMISSIONS_PER_HOUR) {
+                return json(429, { error: 'Zu viele Uploads in kurzer Zeit. Bitte später erneut versuchen.' })
+            }
 
-        const { data: ownExisting } = await admin.from('etf_submissions')
-            .select('id').eq('user_id', user.id).eq('etf_key', etfKey).maybeSingle()
-        if (!ownExisting) {
-            const { count: total } = await admin.from('etf_submissions')
-                .select('id', { count: 'exact', head: true }).eq('user_id', user.id)
-            if ((total ?? 0) >= MAX_ETFS_PER_USER) {
-                return json(403, { error: `Maximal ${MAX_ETFS_PER_USER} ETFs pro Nutzer.` })
+            const { data: ownExisting } = await admin.from('etf_submissions')
+                .select('id').eq('user_id', user.id).eq('etf_key', etfKey).maybeSingle()
+            if (!ownExisting) {
+                const { count: total } = await admin.from('etf_submissions')
+                    .select('id', { count: 'exact', head: true }).eq('user_id', user.id)
+                if ((total ?? 0) >= MAX_ETFS_PER_USER) {
+                    return json(403, { error: `Maximal ${MAX_ETFS_PER_USER} ETFs pro Nutzer.` })
+                }
             }
         }
 
         // 4. In Quarantäne speichern (Uploads des Admins gelten sofort als freigegeben)
-        const isAdmin = !!process.env.ADMIN_USER_ID && user.id === process.env.ADMIN_USER_ID
         const contentHash = createHash('sha256')
             .update(JSON.stringify([...rows].sort((x, y) => nameKey(x.Name).localeCompare(nameKey(y.Name)))))
             .digest('hex')

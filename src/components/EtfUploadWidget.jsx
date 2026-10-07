@@ -11,6 +11,7 @@ import { checkFile, validateEtfUpload, sanitizeRows } from '../utils/etfValidati
 import { etfKeyFor, loadCatalog, loadMySubmissions, submitHoldings } from '../utils/etfHoldingsStore'
 import PortfolioXRayView from '../Views/PortfolioXRayView.jsx'
 import { extractHoldingRows, isEtfName, getShares } from '../utils/portfolioXray'
+import AdminEtfImport from "./AdminEtfImport.jsx";
 
 const STALE_DAYS = 120
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '')
@@ -213,6 +214,8 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
                     </p>
                 )}
             </div>
+
+            <AdminEtfImport />
 
             {Object.keys(etfHoldingsMap).length > 0 ? (
                 <PortfolioXRayView etfHoldingsMap={etfHoldingsMap} userHoldings={holdings} currentValue={currentValue} />
