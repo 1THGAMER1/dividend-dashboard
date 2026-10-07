@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { PieChart, Pie, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { computePortfolioXRay, getRegion } from '../utils/portfolioXray'
 
 const PALETTE = [
@@ -7,6 +7,8 @@ const PALETTE = [
     '#8b5cf6', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
     '#14b8a6', '#eab308', '#a855f7', '#3b82f6', '#ec4899'
 ]
+
+const [showAllLegend, setShowAllLegend] = useState(false)
 
 const TABS = [
     ['holdings', 'Top Aktien'],
@@ -110,23 +112,15 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
     // Kreis und Legende: nach Größe sortiert
     const sortedData = [...activeData].sort((a, b) => b.value - a.value)
 
-    const renderLegend = () => (
-        <ul style={{ listStyle: 'none', margin: 0, padding: '20px 0 0', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px 16px', fontSize: 11 }}>
-            {sortedData.map(d => (
-                <li key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#c8d4e0' }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.fill, display: 'inline-block' }} />
-                    {d.name} <span style={{ color: '#64748b' }}>{fmt(d.value)} %</span>
-                </li>
-            ))}
-        </ul>
-    )
+    const LEGEND_PREVIEW = 12
+    const legendItems = showAllLegend ? sortedData : sortedData.slice(0, LEGEND_PREVIEW)
 
     // Was steckt noch in "Global"?
     const globalAll = rawData.filter(i => String(i.Country).toUpperCase() === 'GLOBAL')
     const globalTotal = globalAll.reduce((s, i) => s + i.Weight, 0)
 
     return (
-        <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, color: '#c8d4e0' }}>
+        <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 'clamp(10px, 3vw, 20px)', color: '#c8d4e0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
                 <div>
                     <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: 0 }}>🔬 Portfolio X-Ray (Look-Through)</h2>
@@ -182,17 +176,17 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                 </p>
             )}
 
-            <div style={{ width: '100%', height: 450 }}>
-                <ResponsiveContainer>
+            <div style={{ width: '100%', maxWidth: 420, margin: '0 auto' }}>
+                <ResponsiveContainer width="100%" aspect={1}>
                     <PieChart key={[activeTab, topLimit, hideCrypto, hideCommodities, hideOther].join('-')}>
                         <Pie
                             data={sortedData}
                             dataKey="value"
                             nameKey="name"
                             cx="50%"
-                            cy="45%"
-                            outerRadius={130}
-                            innerRadius={65}
+                            cy="50%"
+                            outerRadius="92%"
+                            innerRadius="58%"
                             label={false}
                             stroke="#161b27"
                             strokeWidth={2}
@@ -202,10 +196,34 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                             contentStyle={{ background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, color: '#fff', fontSize: 12 }}
                             formatter={(val, name) => [`${val.toFixed(2)} %`, name]}
                         />
-                        <Legend verticalAlign="bottom" content={renderLegend} />
                     </PieChart>
                 </ResponsiveContainer>
             </div>
+
+            <ul style={{
+                listStyle: 'none', margin: '16px 0 0', padding: 0,
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: '6px 16px', fontSize: 11
+            }}>
+                {legendItems.map(d => (
+                    <li key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: '#c8d4e0' }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.fill, flexShrink: 0 }} />
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.name}>
+                {d.name}
+            </span>
+                        <span style={{ color: '#64748b', flexShrink: 0 }}>{fmt(d.value)} %</span>
+                    </li>
+                ))}
+            </ul>
+
+            {sortedData.length > LEGEND_PREVIEW && (
+                <button
+                    onClick={() => setShowAllLegend(v => !v)}
+                    style={{ ...toggleStyle(false, false), marginTop: 12 }}
+                >
+                    {showAllLegend ? 'Weniger anzeigen' : `Alle ${sortedData.length} anzeigen`}
+                </button>
+            )}
 
             {globalTotal > 0 && (
                 <details style={{ marginTop: 12, fontSize: 12, color: '#c8d4e0' }}>
