@@ -8,8 +8,6 @@ const PALETTE = [
     '#14b8a6', '#eab308', '#a855f7', '#3b82f6', '#ec4899'
 ]
 
-const [showAllLegend, setShowAllLegend] = useState(false)
-
 const TABS = [
     ['holdings', 'Top Aktien'],
     ['regions', 'Regionen'],
@@ -45,6 +43,7 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
     const [activeTab, setActiveTab] = useState('holdings')
     const [filters, setFilters] = useState(DEFAULT_FILTERS)
     const [hideOther, setHideOther] = useState(false)
+    const [showAllLegend, setShowAllLegend] = useState(false)
 
     const hideCrypto = filters[activeTab].crypto
     const hideCommodities = filters[activeTab].commodities
