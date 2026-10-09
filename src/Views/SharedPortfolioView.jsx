@@ -6,23 +6,31 @@ import AssetHoldingDonut from '../components/AssetHoldingDonut.jsx'
 
 export default function SharedPortfolioView({ sharedToken }) {
     const [sharedData, setSharedData] = useState(null)
+    const [sharedUpdatedAt, setSharedUpdatedAt] = useState(null)
     const [sharedLoading, setSharedLoading] = useState(true)
     const [sharedTab, setSharedTab] = useState('overview')
 
     useEffect(() => {
+        let cancelled = false
+
         async function loadShared() {
-            const { data } = await supabase
-                .from('shared_portfolios')
-                .select('portfolio_data')
-                .eq('share_token', sharedToken)
-                .single()
+            // Die Funktion gibt nur die Zeile zu genau diesem Token heraus
+            const { data, error } = await supabase
+                .rpc('get_shared_portfolio', { p_token: sharedToken })
+                .maybeSingle()
+
+            if (cancelled) return
+            if (error) console.error('Fehler beim Laden des geteilten Portfolios:', error.message)
 
             if (data) {
                 setSharedData(data.portfolio_data)
+                setSharedUpdatedAt(data.updated_at)
             }
             setSharedLoading(false)
         }
+
         loadShared()
+        return () => { cancelled = true }
     }, [sharedToken])
 
     if (sharedLoading) {
@@ -44,7 +52,10 @@ export default function SharedPortfolioView({ sharedToken }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, background: '#161b27', padding: '16px 20px', borderRadius: 16, border: '1px solid #1e2a3a', flexWrap: 'wrap', gap: 12 }}>
                     <div>
                         <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: 0 }}>📊 Anonymes Portfolio</h2>
-                        <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>Read-Only Ansicht</p>
+                        <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>
+                            Read-Only Ansicht
+                            {sharedUpdatedAt ? ` · Stand: ${new Date(sharedUpdatedAt).toLocaleString('de-DE')}` : ''}
+                        </p>
                     </div>
 
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
