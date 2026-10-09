@@ -37,44 +37,52 @@ export default function ProfilePage({ appUser }) {
         loadProfile()
     }, [appUser])
 
-    // Stabiler Share-Link (wird aktualisiert, aber der Link-Token bleibt immer derselbe!)
     const handleSharePortfolio = async () => {
         try {
             setLoading(true)
+            setMessage(null)
 
-            // Falls die Daten noch nicht da sind, kurz warnen
             if (!enrichedHoldings || enrichedHoldings.length === 0) {
                 setMessage({ type: 'error', text: 'Bitte warte einen Moment, bis die Daten komplett geladen sind.' })
-                setLoading(false)
                 return
             }
 
-            const token = existingToken || (Math.random().toString(36).substring(2) + Date.now().toString(36))
-            if (!existingToken) setexistingToken(token)
+            // Neuer Token nur beim ersten Mal; crypto.randomUUID() ist nicht erratbar (Math.random() schon)
+            const token = existingToken || crypto.randomUUID()
 
-            const portfolioPayload = {
-                currentValue,
-                holdings: enrichedHoldings,
-                monthly,
-                kpi,
-                byHolding
-            }
+            const portfolioPayload = { currentValue, holdings: enrichedHoldings, monthly, kpi, byHolding }
 
-            await supabase.from('shared_portfolios').upsert([
-                {
-                    share_token: token,
-                    portfolio_data: portfolioPayload,
-                    updated_at: new Date().toISOString()
-                }
-            ], { onConflict: 'share_token' })
+            const { data: saved, error: shareError } = await supabase
+                .from('shared_portfolios')
+                .upsert(
+                    {
+                        share_token: token,
+                        user_id: appUser.id,
+                        portfolio_data: portfolioPayload,
+                        updated_at: new Date().toISOString()
+                    },
+                    { onConflict: 'share_token' }
+                )
+                .select('updated_at')
+            if (shareError) throw shareError
+            if (!saved?.length) throw new Error('Die Datenbank hat die Änderung nicht übernommen (fehlende Berechtigung).')
 
-            await supabase.from('profiles').upsert([
-                { id: appUser.id, share_token: token, parqet_client_id: parqetId.trim() }
-            ])
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .upsert({ id: appUser.id, share_token: token, parqet_client_id: parqetId.trim() })
+            if (profileError) throw profileError
+
+            setexistingToken(token)
 
             const shareUrl = `${window.location.origin}/#share/${token}`
-            await navigator.clipboard.writeText(shareUrl)
-            setMessage({ type: 'success', text: 'Der Share-Link wurde in deiner Zwischenablage kopiert!' })
+            const stand = new Date(saved[0].updated_at).toLocaleString('de-DE')
+            try {
+                await navigator.clipboard.writeText(shareUrl)
+                setMessage({ type: 'success', text: `Link kopiert. Geteilter Stand: ${stand}` })
+            } catch {
+                // Auf manchen Handys ist die Zwischenablage gesperrt
+                setMessage({ type: 'success', text: `Aktualisiert (Stand: ${stand}). Link: ${shareUrl}` })
+            }
         } catch (err) {
             setMessage({ type: 'error', text: 'Fehler: ' + err.message })
         } finally {
