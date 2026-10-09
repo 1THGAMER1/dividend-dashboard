@@ -52,10 +52,10 @@ export default function ProfilePage({ appUser }) {
             const token = existingToken || crypto.randomUUID()
 
             // X-Ray vorab berechnen und kompakt speichern: [Name, Land, Gewicht in %]
-            // Dieselben Positionen wie in der App verwenden; stimmen die Zahlen nicht, hier holdings und enrichedHoldings tauschen
+            // Die selben Positionen wie in der App verwenden; stimmen die Zahlen nicht, hier holdings und enrichedHoldings tauschen
             let xray = null
             try {
-                const xrayBase = holdings?.length ? holdings : enrichedHoldings
+                const xrayBase = enrichedHoldings?.length ? enrichedHoldings : holdings
                 const etfMap = await loadEtfHoldingsMapFor(xrayBase)
                 if (Object.keys(etfMap).length) {
                     xray = computePortfolioXRay(etfMap, xrayBase, currentValue)
@@ -100,7 +100,7 @@ export default function ProfilePage({ appUser }) {
 
             const shareUrl = `${window.location.origin}/#share/${token}`
             const stand = new Date(saved[0].updated_at).toLocaleString('de-DE')
-            const xrayHint = xray ? ' (inkl. X-Ray)' : ' (ohne X-Ray, dafür fehlen ETF-Daten)'
+            const xrayHint = xray ? ' ' : ' (ohne X-Ray, dafür fehlen ETF-Daten)'
             try {
                 await navigator.clipboard.writeText(shareUrl)
                 setMessage({ type: 'success', text: `Link kopiert${xrayHint}. Geteilter Stand: ${stand}` })
