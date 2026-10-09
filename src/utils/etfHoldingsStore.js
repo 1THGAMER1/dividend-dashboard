@@ -1,5 +1,5 @@
 import { supabase } from '../supabaseClient.js'
-import { normalizeName } from './portfolioXray'
+import { normalizeName, isEtfName, getShares } from './portfolioXray'
 
 // Schlüssel eines ETFs: ISIN (falls in den Parqet-Daten vorhanden), sonst normalisierter Name
 export function etfKeyFor(holding) {
@@ -52,4 +52,23 @@ export async function submitHoldings({ etfKey, etfName, rows }) {
     const body = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(body.error || `Fehler ${res.status}`)
     return body
+}
+// Baut die Map { ETF-Name aus Parqet: Holdings } wie das Upload-Widget, aber ohne Upload
+export async function loadEtfHoldingsMapFor(holdings) {
+    const etfs = (holdings || []).filter(h => {
+        const shares = getShares(h)
+        if (shares !== undefined && shares <= 0) return false
+        return isEtfName(h.name || h.title || '')
+    })
+    const keys = [...new Set(etfs.map(etfKeyFor).filter(Boolean))]
+    if (!keys.length) return {}
+
+    const [catalog, mine] = await Promise.all([loadCatalog(keys), loadMySubmissions(keys)])
+    const map = {}
+    for (const h of etfs) {
+        const key = etfKeyFor(h)
+        const entry = mine[key] || catalog[key]
+        if (entry) map[h.name || h.title] = entry.rows
+    }
+    return map
 }

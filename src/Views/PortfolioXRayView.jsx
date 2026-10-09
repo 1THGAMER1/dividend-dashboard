@@ -38,7 +38,7 @@ const toggleStyle = (active, disabled) => ({
 
 const fmt = (n) => n.toFixed(1).replace('.', ',')
 
-export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, currentValue }) {
+export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, currentValue, data, subtitle = 'Vollständige Aufschlüsselung deines Gesamtdepots' }) {
     const [topLimit, setTopLimit] = useState(15)
     const [activeTab, setActiveTab] = useState('holdings')
     const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -50,7 +50,7 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
     const toggleFilter = (key) =>
         setFilters(f => ({ ...f, [activeTab]: { ...f[activeTab], [key]: !f[activeTab][key] } }))
 
-    const allData = computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
+    const allData = data ?? computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
 
     // Anteile am Gesamtdepot (für die Beschriftung der Knöpfe)
     const cryptoWeight = allData.filter(i => i.Country === 'Krypto').reduce((s, i) => s + i.Weight, 0)
@@ -123,7 +123,7 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
                 <div>
                     <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: 0 }}>🔬 Portfolio X-Ray (Look-Through)</h2>
-                    <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>Vollständige Aufschlüsselung deines Gesamtdepots</p>
+                    <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>{subtitle}</p>
                 </div>
 
                 <div style={{ display: 'flex', background: '#0f1420', padding: 3, borderRadius: 8, border: '1px solid #1e2a3a' }}>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import useDividendData from '../hooks/useDividendData'
+import { computePortfolioXRay } from '../utils/portfolioXray'
+import { loadEtfHoldingsMapFor } from '../utils/etfHoldingsStore'
 
 export default function ProfilePage({ appUser }) {
     const [parqetId, setParqetId] = useState('')
@@ -47,10 +49,32 @@ export default function ProfilePage({ appUser }) {
                 return
             }
 
-            // Neuer Token nur beim ersten Mal; crypto.randomUUID() ist nicht erratbar (Math.random() schon)
             const token = existingToken || crypto.randomUUID()
 
-            const portfolioPayload = { currentValue, holdings: enrichedHoldings, monthly, kpi, byHolding }
+            // X-Ray vorab berechnen und kompakt speichern: [Name, Land, Gewicht in %]
+            // Dieselben Positionen wie in der App verwenden; stimmen die Zahlen nicht, hier holdings und enrichedHoldings tauschen
+            let xray = null
+            try {
+                const xrayBase = holdings?.length ? holdings : enrichedHoldings
+                const etfMap = await loadEtfHoldingsMapFor(xrayBase)
+                if (Object.keys(etfMap).length) {
+                    xray = computePortfolioXRay(etfMap, xrayBase, currentValue)
+                        .map(i => [i.Name, i.Country, +i.Weight.toFixed(4)])
+                        .filter(r => r[2] > 0)
+                        .slice(0, 6000)
+                }
+            } catch (xrayErr) {
+                console.warn('X-Ray konnte nicht berechnet werden, wird nicht mitgeteilt:', xrayErr)
+            }
+
+            const portfolioPayload = {
+                currentValue,
+                holdings: enrichedHoldings,
+                monthly,
+                kpi,
+                byHolding,
+                ...(xray ? { xray } : {})
+            }
 
             const { data: saved, error: shareError } = await supabase
                 .from('shared_portfolios')
@@ -76,12 +100,12 @@ export default function ProfilePage({ appUser }) {
 
             const shareUrl = `${window.location.origin}/#share/${token}`
             const stand = new Date(saved[0].updated_at).toLocaleString('de-DE')
+            const xrayHint = xray ? ' (inkl. X-Ray)' : ' (ohne X-Ray, dafür fehlen ETF-Daten)'
             try {
                 await navigator.clipboard.writeText(shareUrl)
-                setMessage({ type: 'success', text: `Link kopiert. Geteilter Stand: ${stand}` })
+                setMessage({ type: 'success', text: `Link kopiert${xrayHint}. Geteilter Stand: ${stand}` })
             } catch {
-                // Auf manchen Handys ist die Zwischenablage gesperrt
-                setMessage({ type: 'success', text: `Aktualisiert (Stand: ${stand}). Link: ${shareUrl}` })
+                setMessage({ type: 'success', text: `Aktualisiert${xrayHint}, Stand: ${stand}. Link: ${shareUrl}` })
             }
         } catch (err) {
             setMessage({ type: 'error', text: 'Fehler: ' + err.message })
