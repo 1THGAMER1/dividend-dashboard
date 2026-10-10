@@ -119,38 +119,42 @@ export default function PortfolioDashboard({
                                     flexDirection: 'column',
                                     gap: 10
                                 }}>
-                                    {/* Obere Zeile: Name & Aktueller Wert */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        {logoOf(item) && (
-                                            <img
-                                                src={logoOf(item)}
-                                                alt=""
-                                                width={44}
-                                                height={44}
-                                                style={{ borderRadius: 10, background: '#fff', objectFit: 'contain', flexShrink: 0 }}
-                                                onError={(e) => { e.currentTarget.style.display = 'none' }}
-                                            />
-                                        )}
-                                        <div>
-                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
-                                                {getDisplayName(item)}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                                                <span style={{
-                                                    background: '#1e293b',
-                                                    color: '#38bdf8',
-                                                    fontSize: 10,
-                                                    padding: '2px 6px',
-                                                    borderRadius: 6,
-                                                    fontWeight: 500
-                                                    }}>
+                                    {/* Obere Zeile: Logo, Name & Aktueller Wert */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            {logoOf(item) && (
+                                                <img
+                                                    src={logoOf(item)}
+                                                    alt=""
+                                                    width={44}
+                                                    height={44}
+                                                    style={{ borderRadius: 10, background: '#fff', objectFit: 'contain', flexShrink: 0 }}
+                                                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                                />
+                                            )}
+                                            <div>
+                                                <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
+                                                    {getDisplayName(item)}
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                                <span style={{ background: '#1e293b', color: '#38bdf8', fontSize: 10, padding: '2px 6px', borderRadius: 6, fontWeight: 500 }}>
                                                     {item.type || 'Asset'}
                                                 </span>
-                                                {sharesNum > 0 && (
-                                                    <span style={{ fontSize: 12, color: '#64748b' }}>
-                                                        {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
-                                                    </span>
-                                                )}
+                                                    {sharesNum > 0 && (
+                                                        <span style={{ fontSize: 12, color: '#64748b' }}>
+                                                            {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>
+                                                {val > 0 ? fmt(val) : '—'}
+                                            </div>
+                                            <div style={{ fontSize: 12, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444', marginTop: 2 }}>
+                                                {pending ? '…' : base > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
                                             </div>
                                         </div>
                                     </div>
