@@ -111,18 +111,38 @@ export default function PortfolioPerformanceChart({series}) {
         const first = sub[0]
         const gain0 = gainOf(first)
 
-        return sub.map(p => {
+        return sub.map((p, i) => {
             // TTWROR, auf den Beginn des Zeitraums bezogen
             const r = ((1 + p.twr / 100) / (1 + first.twr / 100) - 1) * 100
 
             // Einfache Rendite
+            // Einfache Rendite: Einzahlungen zeitanteilig berücksichtigen
             let s = null
+
             if (range === 'MAX') {
                 s = p.c > 0 ? (gainOf(p) / p.c) * 100 : null
             } else {
-                const netFlow = (p.c ?? 0) - (first.c ?? 0)
-                const base = first.v + netFlow > 0 ? first.v + netFlow : first.v
-                s = base > 0 ? ((gainOf(p) - gain0) / base) * 100 : null
+                const startTime = new Date(first.d).getTime()
+                const endTime = new Date(p.d).getTime()
+                const duration = endTime - startTime
+
+                let weightedFlows = 0
+
+                if (duration > 0) {
+                    for (let j = 1; j <= i; j++) {
+                        const flow = (sub[j].c ?? 0) - (sub[j - 1].c ?? 0)
+                        const flowTime = new Date(sub[j].d).getTime()
+                        const remainingFraction = (endTime - flowTime) / duration
+                        weightedFlows += flow * remainingFraction
+                    }
+                }
+
+                const investedBase = first.v + weightedFlows
+                const periodGain = gainOf(p) - gain0
+
+                s = investedBase > 0
+                    ? (periodGain / investedBase) * 100
+                    : null
             }
 
             return { ...p, r, s }
