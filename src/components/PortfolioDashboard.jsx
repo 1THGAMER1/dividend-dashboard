@@ -39,7 +39,6 @@ export default function PortfolioDashboard({
             })
         return () => { cancelled = true }
     }, [range, perfByRange])
-    console.log('[Dashboard] Zeitraum:', range, '| geladen:', Object.keys(perfByRange), '| erster Bestand:', activeHoldings[0]?.id, activeHoldings[0]?.isin)
 
     const getShares = (item) => parseFloat(item.shares) || 0
 
@@ -52,6 +51,7 @@ export default function PortfolioDashboard({
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
     const getDisplayName = (item) => item.name || item.isin || 'Unbekanntes Asset'
+    console.log('[Dashboard] Zeitraum:', range, '| geladen:', Object.keys(perfByRange), '| erster Bestand:', activeHoldings[0]?.id, activeHoldings[0]?.isin)
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
