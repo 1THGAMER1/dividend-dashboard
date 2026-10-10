@@ -466,6 +466,7 @@
             c: toNum(val?.capitalHistory),
             t: toNum(val?.ttwror),
             g: toNum(val?.perfHistory),
+            gu: toNum(val?.perfHistoryUnrealized),
           }
         })
         .filter(p => p.d && p.v != null)
@@ -523,6 +524,7 @@
       c: p.c != null ? +p.c.toFixed(2) : null,
       t: p.t != null ? +p.t.toFixed(3) : null,
       g: p.g != null ? +p.g.toFixed(2) : null,
+      gu: p.gu != null ? +p.gu.toFixed(2) : null,
     }))
   }
   // Aktuelle Positionen aus der Performance-Antwort (Splits sind von Parqet schon eingerechnet)

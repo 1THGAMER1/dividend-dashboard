@@ -65,32 +65,19 @@ const cardStyle = {
     padding: 'clamp(12px, 3vw, 20px)',
 }
 
-const gainOf = (p) => (p.g != null ? p.g : p.v - (p.c ?? 0))
-
-// Zeitgewichtete Rendite (TTWROR) aus Depotwert (v) und eingesetztem Kapital (c)
-function withTwr(series) {
-    let index = 1
-    return series.map((p, i) => {
-        if (i > 0) {
-            const prev = series[i - 1]
-            const flow = (p.c ?? 0) - (prev.c ?? 0)            // Einzahlung (+) bzw. Verkauf (−)
-            const base = prev.v > 0 ? prev.v + flow / 2 : flow  // Geldfluss zählt zur Hälfte
-            if (base > 0) {
-                const r = (p.v - prev.v - flow) / base
-                if (Number.isFinite(r) && r > -1) index *= 1 + r
-            }
-        }
-        return {...p, twr: (index - 1) * 100}
-    })
-}
+const gainOf = (p) => p.v - (p.c ?? 0)
 
 export default function PortfolioPerformanceChart({series}) {
+    if (Array.isArray(series) && series.length) {
+        const n = series.length
+        console.table([0, 1, 2, 3, 4, 5, 6, 7].map(i => series[Math.round(i * (n - 1) / 7)]))
+    }
     const [range, setRange] = useState('1Y')
     const [mode, setMode] = useState('value')            // 'value' | 'return'
     const [returnType, setReturnType] = useState('simple') // 'simple' | 'twr'
 
     const twrSeries = useMemo(
-        () => (Array.isArray(series) ? withTwr(series) : []),
+        () => (Array.isArray(series) ? series.map(p => ({...p, twr: p.t ?? 0})) : []),
         [series]
     )
 
@@ -137,8 +124,6 @@ export default function PortfolioPerformanceChart({series}) {
             </div>
         )
     }
-    console.log('[PerfChart Debug] Range:', range, 'Punkte in sub:', sub.length, 'von:', sub[0]?.d, 'bis:', sub[sub.length - 1]?.d)
-    console.log('[PerfChart Debug] first:', sub[0], 'last:', sub[sub.length - 1])
     const first = data[0]
     const last = data[data.length - 1]
     const hasCapital = data.some(p => p.c != null)
