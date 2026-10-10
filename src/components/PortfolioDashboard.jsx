@@ -39,6 +39,7 @@ export default function PortfolioDashboard({
             })
         return () => { cancelled = true }
     }, [range, perfByRange])
+    console.log('[Dashboard] Zeitraum:', range, '| geladen:', Object.keys(perfByRange), '| erster Bestand:', activeHoldings[0]?.id, activeHoldings[0]?.isin)
 
     const getShares = (item) => parseFloat(item.shares) || 0
 
@@ -146,7 +147,7 @@ export default function PortfolioDashboard({
                                         </div>
                                     </div>
 
-                                    {/* Untere Zeile: Einstandswert dezent */}
+                                    {/*Untere Zeile: Einstandswert*/}
                                     {cost > 0 && (
                                         <div style={{
                                             borderTop: '1px solid #1a2233',
