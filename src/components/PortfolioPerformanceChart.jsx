@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import React, {useMemo, useState} from 'react'
+import {ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid} from 'recharts'
 
 const RANGES = [
     ['1D', '1T'], ['7D', '7T'], ['30D', '30T'], ['3M', '3M'], ['6M', '6M'],
@@ -17,21 +17,37 @@ const eurShort = (n) =>
     Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(Math.abs(n) >= 10000 ? 0 : 1).replace('.', ',')}k` : `${Math.round(n)}`
 
 const pct = (n) => (n == null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(2).replace('.', ',')} %`)
-const fmtDate = (iso) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
-const fmtDay = (iso) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+const fmtDate = (iso) => new Date(iso).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit', year: '2-digit'})
+const fmtDay = (iso) => new Date(iso).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})
 
 function cutoffFor(range, lastDate) {
     const d = new Date(lastDate)
     switch (range) {
-        case '1D':  d.setDate(d.getDate() - 1); break
-        case '7D':  d.setDate(d.getDate() - 7); break
-        case '30D': d.setDate(d.getDate() - 30); break
-        case '3M':  d.setMonth(d.getMonth() - 3); break
-        case '6M':  d.setMonth(d.getMonth() - 6); break
-        case 'YTD': return `${d.getFullYear() - 1}-12-31` // Startpunkt: Schlusswert des Vorjahres
-        case '1Y':  d.setFullYear(d.getFullYear() - 1); break
-        case '3Y':  d.setFullYear(d.getFullYear() - 3); break
-        default:    return null // Seit Kauf
+        case '1D':
+            d.setDate(d.getDate() - 1);
+            break
+        case '7D':
+            d.setDate(d.getDate() - 7);
+            break
+        case '30D':
+            d.setDate(d.getDate() - 30);
+            break
+        case '3M':
+            d.setMonth(d.getMonth() - 3);
+            break
+        case '6M':
+            d.setMonth(d.getMonth() - 6);
+            break
+        case 'YTD':
+            return `${d.getFullYear() - 1}-12-31` // Startpunkt: Schlusswert des Vorjahres
+        case '1Y':
+            d.setFullYear(d.getFullYear() - 1);
+            break
+        case '3Y':
+            d.setFullYear(d.getFullYear() - 3);
+            break
+        default:
+            return null // Seit Kauf
     }
     return d.toISOString().slice(0, 10)
 }
@@ -42,7 +58,7 @@ const btn = (active) => ({
     border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
 })
 
-const toggleWrap = { display: 'flex', background: '#0f1420', padding: 3, borderRadius: 8, border: '1px solid #1e2a3a' }
+const toggleWrap = {display: 'flex', background: '#0f1420', padding: 3, borderRadius: 8, border: '1px solid #1e2a3a'}
 
 const cardStyle = {
     background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16,
@@ -51,41 +67,59 @@ const cardStyle = {
 
 const gainOf = (p) => (p.g != null ? p.g : p.v - (p.c ?? 0))
 
-export default function PortfolioPerformanceChart({ series }) {
+// Zeitgewichtete Rendite (TTWROR) aus Depotwert (v) und eingesetztem Kapital (c)
+function withTwr(series) {
+    let index = 1
+    return series.map((p, i) => {
+        if (i > 0) {
+            const prev = series[i - 1]
+            const flow = (p.c ?? 0) - (prev.c ?? 0)            // Einzahlung (+) bzw. Verkauf (−)
+            const base = prev.v > 0 ? prev.v + flow / 2 : flow  // Geldfluss zählt zur Hälfte
+            if (base > 0) {
+                const r = (p.v - prev.v - flow) / base
+                if (Number.isFinite(r) && r > -1) index *= 1 + r
+            }
+        }
+        return {...p, twr: (index - 1) * 100}
+    })
+}
+
+export default function PortfolioPerformanceChart({series}) {
     const [range, setRange] = useState('1Y')
     const [mode, setMode] = useState('value')            // 'value' | 'return'
     const [returnType, setReturnType] = useState('simple') // 'simple' | 'twr'
 
+    const twrSeries = useMemo(
+        () => (Array.isArray(series) ? withTwr(series) : []),
+        [series]
+    )
+
     const data = useMemo(() => {
-        if (!Array.isArray(series) || series.length < 2) return []
-        const cut = cutoffFor(range, series[series.length - 1].d)
-        let sub = series
+        if (twrSeries.length < 2) return []
+        const cut = cutoffFor(range, twrSeries[twrSeries.length - 1].d)
+        let sub = twrSeries
         if (cut) {
-            // Startpunkt = letzter Wert am oder vor dem Stichtag (z. B. Freitag, wenn der Stichtag ein Sonntag ist)
+            // Startpunkt = letzter Wert am oder vor dem Stichtag
             let start = -1
-            for (let i = series.length - 1; i >= 0; i--) {
-                if (series[i].d <= cut) { start = i; break }
+            for (let i = twrSeries.length - 1; i >= 0; i--) {
+                if (twrSeries[i].d <= cut) { start = i; break }
             }
-            sub = series.slice(Math.max(start, 0))
+            sub = twrSeries.slice(Math.max(start, 0))
         }
-        if (sub.length < 2) sub = series.slice(-2)
+        if (sub.length < 2) sub = twrSeries.slice(-2)
 
         const first = sub[0]
         const gain0 = gainOf(first)
 
         return sub.map(p => {
             // TTWROR, auf den Beginn des Zeitraums bezogen
-            const r = p.t != null && first.t != null
-                ? ((1 + p.t / 100) / (1 + first.t / 100) - 1) * 100
-                : null
+            const r = ((1 + p.twr / 100) / (1 + first.twr / 100) - 1) * 100
 
             // Einfache Rendite
             let s = null
             if (range === 'MAX') {
-                // Gesamter Zeitraum: Gewinn ÷ investiertes Kapital
                 s = p.c > 0 ? (gainOf(p) / p.c) * 100 : null
             } else {
-                // Teilzeitraum: Gewinn im Zeitraum ÷ (Startwert + Netto-Einzahlungen im Zeitraum)
                 const netFlow = (p.c ?? 0) - (first.c ?? 0)
                 const base = first.v + netFlow > 0 ? first.v + netFlow : first.v
                 s = base > 0 ? ((gainOf(p) - gain0) / base) * 100 : null
@@ -93,13 +127,13 @@ export default function PortfolioPerformanceChart({ series }) {
 
             return { ...p, r, s }
         })
-    }, [series, range])
+    }, [twrSeries, range])
 
     if (series === undefined) return null // z. B. geteilte Ansicht ohne Verlaufsdaten
 
     if (data.length < 2) {
         return (
-            <div style={{ ...cardStyle, color: '#64748b', fontSize: 12 }}>
+            <div style={{...cardStyle, color: '#64748b', fontSize: 12}}>
                 📈 Noch keine Verlaufsdaten. Aktualisiere die Daten, damit der Verlauf geladen wird.
             </div>
         )
@@ -120,65 +154,84 @@ export default function PortfolioPerformanceChart({ series }) {
 
     return (
         <div style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginBottom: 12
+            }}>
                 <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9' }}>📈 Performance</h3>
+                    <h3 style={{fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9'}}>📈 Performance</h3>
 
                     {mode === 'value' ? (
                         <>
-                            <div style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', marginTop: 6 }}>{eur(last.v)}</div>
-                            <div style={{ fontSize: 12, marginTop: 2, color: gainRange >= 0 ? '#22c55e' : '#ef4444' }}>
+                            <div style={{
+                                fontSize: 22,
+                                fontWeight: 700,
+                                color: '#f1f5f9',
+                                marginTop: 6
+                            }}>{eur(last.v)}</div>
+                            <div style={{fontSize: 12, marginTop: 2, color: gainRange >= 0 ? '#22c55e' : '#ef4444'}}>
                                 {range === 'MAX' ? 'Gewinn seit Kauf' : 'Gewinn im Zeitraum'} {gainRange >= 0 ? '+' : ''}{eur(gainRange)} ({pct(last.s)})
-                                {last.c != null && <span style={{ color: '#64748b' }}> · investiert {eur(last.c)}</span>}
+                                {last.c != null && <span style={{color: '#64748b'}}> · investiert {eur(last.c)}</span>}
                             </div>
                         </>
                     ) : (
                         <>
-                            <div style={{ fontSize: 22, fontWeight: 700, color, marginTop: 6 }}>{pct(retValue)}</div>
-                            <div style={{ fontSize: 12, marginTop: 2, color: '#64748b' }}>
-                                Einfach <span style={{ color: (last.s ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{pct(last.s)}</span>
+                            <div style={{fontSize: 22, fontWeight: 700, color, marginTop: 6}}>{pct(retValue)}</div>
+                            <div style={{fontSize: 12, marginTop: 2, color: '#64748b'}}>
+                                Einfach <span
+                                style={{color: (last.s ?? 0) >= 0 ? '#22c55e' : '#ef4444'}}>{pct(last.s)}</span>
                                 {' · '}
-                                TTWROR <span style={{ color: (last.r ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{pct(last.r)}</span>
+                                TTWROR <span
+                                style={{color: (last.r ?? 0) >= 0 ? '#22c55e' : '#ef4444'}}>{pct(last.r)}</span>
                             </div>
                         </>
                     )}
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6}}>
                     <div style={toggleWrap}>
                         <button onClick={() => setMode('value')} style={btn(mode === 'value')}>Wert</button>
                         <button onClick={() => setMode('return')} style={btn(mode === 'return')}>Rendite</button>
                     </div>
                     {mode === 'return' && (
                         <div style={toggleWrap}>
-                            <button onClick={() => setReturnType('simple')} style={btn(returnType === 'simple')}>Einfach</button>
-                            <button onClick={() => setReturnType('twr')} style={btn(returnType === 'twr')}>TTWROR</button>
+                            <button onClick={() => setReturnType('simple')}
+                                    style={btn(returnType === 'simple')}>Einfach
+                            </button>
+                            <button onClick={() => setReturnType('twr')} style={btn(returnType === 'twr')}>TTWROR
+                            </button>
                         </div>
                     )}
                 </div>
             </div>
 
             <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart key={`${mode}-${returnType}`} data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+                <ComposedChart key={`${mode}-${returnType}`} data={data}
+                               margin={{top: 8, right: 4, left: 0, bottom: 0}}>
                     <defs>
                         <linearGradient id="perfFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-                            <stop offset="100%" stopColor={color} stopOpacity={0} />
+                            <stop offset="0%" stopColor={color} stopOpacity={0.35}/>
+                            <stop offset="100%" stopColor={color} stopOpacity={0}/>
                         </linearGradient>
                     </defs>
-                    <CartesianGrid stroke="#1e2a3a" vertical={false} />
+                    <CartesianGrid stroke="#1e2a3a" vertical={false}/>
                     <XAxis
-                        dataKey="d" tickFormatter={['1D', '7D', '30D'].includes(range) ? fmtDay : fmtDate} minTickGap={40}
-                        tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false}
+                        dataKey="d" tickFormatter={['1D', '7D', '30D'].includes(range) ? fmtDay : fmtDate}
+                        minTickGap={40}
+                        tick={{fill: '#64748b', fontSize: 10}} axisLine={false} tickLine={false}
                     />
                     <YAxis
                         width={44} domain={['auto', 'auto']}
                         tickFormatter={mode === 'value' ? eurShort : (v) => `${v.toFixed(0)}%`}
-                        tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false}
+                        tick={{fill: '#64748b', fontSize: 10}} axisLine={false} tickLine={false}
                     />
                     <Tooltip
-                        contentStyle={{ background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, fontSize: 12 }}
-                        labelStyle={{ color: '#94a3b8' }}
+                        contentStyle={{background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, fontSize: 12}}
+                        labelStyle={{color: '#94a3b8'}}
                         labelFormatter={fmtDate}
                         formatter={(val, _name, item) => {
                             if (item.dataKey === 'r') return [pct(val), 'TTWROR']
@@ -188,20 +241,20 @@ export default function PortfolioPerformanceChart({ series }) {
                     />
                     {mode === 'value' && (
                         <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2}
-                              fill="url(#perfFill)" dot={false} isAnimationActive={false} />
+                              fill="url(#perfFill)" dot={false} isAnimationActive={false}/>
                     )}
                     {mode === 'value' && hasCapital && (
                         <Line type="monotone" dataKey="c" stroke="#94a3b8" strokeWidth={1.5}
-                              strokeDasharray="4 4" dot={false} isAnimationActive={false} />
+                              strokeDasharray="4 4" dot={false} isAnimationActive={false}/>
                     )}
                     {mode === 'return' && (
                         <Area type="monotone" dataKey={retKey} stroke={color} strokeWidth={2}
-                              fill="url(#perfFill)" dot={false} isAnimationActive={false} connectNulls />
+                              fill="url(#perfFill)" dot={false} isAnimationActive={false} connectNulls/>
                     )}
                 </ComposedChart>
             </ResponsiveContainer>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10, justifyContent: 'center' }}>
+            <div style={{display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10, justifyContent: 'center'}}>
                 {RANGES.map(([id, label]) => (
                     <button key={id} onClick={() => setRange(id)} style={btn(range === id)}>{label}</button>
                 ))}
