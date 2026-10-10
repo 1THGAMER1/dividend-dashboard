@@ -11,6 +11,7 @@ import {
     fetchPurchaseValuePerHolding,
     fetchCurrentValue,
     fetchYahooDividendsForHoldings,
+    fetchPerformance,
 } from '../api'
 import { readCache, writeCache, readStaleCache } from '../cache'
 
@@ -40,6 +41,7 @@ export default function useDividendData() {
     const [error,         setError]         = useState(null)
     const [currentValue,  setCurrentValue]  = useState(0)
     const [cacheInfo,     setCacheInfo]     = useState(null)
+    const [performanceSeries, setPerformanceSeries] = useState([])
 
     useEffect(() => {
         if (window.location.pathname !== '/callback') return
@@ -55,12 +57,14 @@ export default function useDividendData() {
             purchaseValue, currentVal, buyActsData = [],
             sellActsData = [], names = {}, types = {},
             tickers = {}, purchaseValuePerHolding = [],
-            yahooByIsin = {}
+            yahooByIsin = {},
+            performanceSeries: perfSeries = []
         } = payload;
 
         setMonthly(m);
         setCum(c);
         setCurrentValue(currentVal);
+        setPerformanceSeries(perfSeries ?? []);
         setForecastCum(fc.cum);
         setForecastMonthly(fc.monthly);
         setByHolding(bh);
@@ -170,15 +174,16 @@ export default function useDividendData() {
     }, []);
 
     const fetchFromParqet = useCallback(async () => {
-        const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, currentVal] = await Promise.all([
+        const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, perf] = await Promise.all([
             fetchDividendActivities(),
             fetchBuyActivities(),
             fetchSellActivities(),
             fetchHoldingNames(),
             fetchPurchaseValue(),
             fetchPurchaseValuePerHolding(),
-            fetchCurrentValue(),
+            fetchPerformance(),
         ])
+        const currentVal = perf.currentValue
 
         const { names, types, tickers } = holdingData
         const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
@@ -196,6 +201,7 @@ export default function useDividendData() {
             m, c, fc, bh,
             kpiAll, kpiYtd, kpi12m,
             purchaseValue, currentVal,
+            performanceSeries: perf.series,
             buyActsData,
             sellActsData,
             rawActs: acts,
@@ -323,5 +329,6 @@ export default function useDividendData() {
         lastUpdated, dataSource, error,
         cacheInfo,
         loadData: () => loadData(true),
+        performanceSeries
     }
 }

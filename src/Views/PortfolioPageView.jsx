@@ -9,7 +9,8 @@ export default function PortfolioPageView({
                                               currentValue,
                                               enrichedHoldings,
                                               holdings,
-                                              byHolding
+                                              byHolding,
+                                              performanceSeries
                                           }) {
     const activeHoldings = enrichedHoldings || holdings
 
@@ -26,6 +27,7 @@ export default function PortfolioPageView({
                         currentValue={currentValue}
                         holdings={activeHoldings}
                         byHolding={byHolding}
+                        performanceSeries={performanceSeries}
                     />
                 </>
             )}

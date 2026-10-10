@@ -280,7 +280,7 @@ export default function App() {
           )}
 
           {appMode === 'portfolio' && (
-              <PortfolioPageView page={page} currentValue={currentValue} enrichedHoldings={enrichedHoldings} holdings={holdings} byHolding={byHolding} />
+              <PortfolioPageView page={page} currentValue={currentValue} enrichedHoldings={enrichedHoldings} holdings={holdings} byHolding={byHolding} performanceSeries={performanceSeries} />
           )}
         </div>
         <Footer onNavigate={setPage} />

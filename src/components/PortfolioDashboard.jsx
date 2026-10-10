@@ -1,5 +1,6 @@
 import React from 'react'
 import KpiCard from './KpiCard.jsx'
+import PortfolioPerformanceChart from './PortfolioPerformanceChart.jsx'
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -21,7 +22,8 @@ export default function PortfolioDashboard({
                                                currentValue,
                                                currentVal,
                                                forecast12m,
-                                               holdings = []
+                                               holdings = [],
+                                               performanceSeries
                                            }) {
     const displayValue = currentValue ?? currentVal ?? 0
 
@@ -61,6 +63,8 @@ export default function PortfolioDashboard({
                     sub="Nächste 12 Monate Netto"
                 />
             </div>
+            {/* PERFORMANCE-CHART */}
+            <PortfolioPerformanceChart series={performanceSeries} />
 
             {/* 1. SEKTION: AKTIVE BESTÄNDE (Parqet App Style) */}
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px' }}>
