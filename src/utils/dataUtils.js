@@ -1,28 +1,34 @@
+import { buildIsinMergeMap, makeResolver } from './isinMerge.js'
+
+export const MONTHS = ['Jan','Feb','Mrz','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
+
+export const YEAR_COLORS = {
+  2024: '#60a5fa',
+  2025: '#a78bfa',
+  2026: '#c0397a',
+}
+
 export function groupByYearMonth(activities) {
   const result = {}
-
   for (const a of activities) {
     const d = new Date(a.datetime)
-    const year = d.getFullYear()
-    const month = d.getMonth()
-
-    if (!result[year]) result[year] = Array(12).fill(0)
-    result[year][month] += a.amountNet ?? a.amount ?? 0
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    if (!result[y]) result[y] = Array(12).fill(0)
+    result[y][m] += a.amountNet ?? a.amount ?? 0
   }
-
   return result
 }
 
 export function toCumulative(monthly) {
   const result = {}
-
-  for (const [year, values] of Object.entries(monthly)) {
+  for (const [y, vals] of Object.entries(monthly)) {
     let sum = 0
-    result[year] = values.map(value => +(sum += value).toFixed(4))
+    result[y] = vals.map(v => +(sum += v).toFixed(4))
   }
-
   return result
 }
+
 export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = [], types = {}, parqetPositions = {}) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
@@ -36,36 +42,41 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     const raw = item?.asset?.isin || item?.asset?.symbol || item?.isin || 'unknown'
     return resolve(raw)
   }
-
-  // --- AKTIENSPLITS (von Yahoo): Buchungen vor einem Split in heutige Stückzahl umrechnen ---
   const splitsFor = (item) => {
-    const raw   = item?.asset?.isin || item?.asset?.symbol || item?.isin
+    const raw = item?.asset?.isin || item?.asset?.symbol || item?.isin
     const entry = yahooByIsin[getCleanIsin(item)] || yahooByIsin[raw]
     return entry && !Array.isArray(entry) && Array.isArray(entry.splits) ? entry.splits : []
   }
+
   const adjShares = (item) => {
     const shares = parseFloat(String(item?.shares ?? 0).replace(',', '.')) || 0
-    const day    = String(item?.datetime || '').slice(0, 10)
+    const day = String(item?.datetime || '').slice(0, 10)
     if (!day) return shares
+
     const factor = splitsFor(item).reduce(
-        (f, s) => (s?.date && s.ratio > 0 && day < s.date ? f * s.ratio : f), 1
+        (f, split) => split?.date && split.ratio > 0 && day < split.date ? f * split.ratio : f,
+        1
     )
     return shares * factor
   }
 
-  // --- PARQET-POSITIONEN (Splits, Überträge usw. sind dort schon eingerechnet) ---
   const parqetByIsin = {}
   for (const [rawKey, pos] of Object.entries(parqetPositions || {})) {
     if (!pos) continue
     const isin = resolve(rawKey)
     const prev = parqetByIsin[isin]
+
     parqetByIsin[isin] = prev
         ? {
-          shares:       prev.shares + (pos.shares ?? 0),
-          cost:         prev.cost + (pos.cost ?? 0),
+          shares: prev.shares + (poadjShares(s)),
+          cost: prev.cost + (pos.cost ?? 0),
           realizedGain: prev.realizedGain + (pos.realizedGain ?? 0),
         }
-        : { shares: pos.shares ?? 0, cost: pos.cost ?? 0, realizedGain: pos.realizedGain ?? 0 }
+        : {
+          shares: poadjShares(s),
+          cost: pos.cost ?? 0,
+          realizedGain: pos.realizedGain ?? 0,
+        }
   }
 
   const byIsin = {}
@@ -78,7 +89,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     if (!byIsin[isin][y])    byIsin[isin][y] = Array(12).fill(null)
     if (!byIsin[isin][y][m]) byIsin[isin][y][m] = { amount: 0, shares: 0 }
     byIsin[isin][y][m].amount += a.amountNet ?? a.amount ?? 0
-    byIsin[isin][y][m].shares += adjShares(a) // splitbereinigt → Dividende pro Aktie stimmt
+    byIsin[isin][y][m].shares += adjShares(a)
   }
 
   const sharesFromBuys  = {}
@@ -86,22 +97,15 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
   for (const buy of buyActivities) {
     const isin = getCleanIsin(buy)
-    sharesFromBuys[isin] = (sharesFromBuys[isin] || 0) + adjShares(buy)
+    sharesFromBuys[isin] = (sharesFromBuys[isin] || 0) + (adjShares(buy))
   }
   for (const sell of sellActivities) {
     const isin = getCleanIsin(sell)
-    sharesFromSells[isin] = (sharesFromSells[isin] || 0) + adjShares(sell)
+    sharesFromSells[isin] = (sharesFromSells[isin] || 0) + (adjShares(sell))
   }
 
   const netSharesMap = {}
-  const allKnownIsins = new Set([
-    ...Object.keys(sharesFromBuys),
-    ...Object.keys(sharesFromSells),
-    ...Object.keys(byIsin),
-    ...Object.keys(names),
-    ...Object.keys(yahooByIsin),
-    ...Object.keys(parqetByIsin),
-  ])
+  const allKnownIsins = new Set([...Object.keys(sharesFromBuys), ...Object.keys(sharesFromSells), ...Object.keys(byIsin), ...Object.keys(names), ...Object.keys(yahooByIsin),...Object.keys(parqetByIsin)])
 
   for (const isin of allKnownIsins) {
     const bShares = sharesFromBuys[isin] || 0
@@ -109,7 +113,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     netSharesMap[isin] = Math.max(0, bShares - sShares)
   }
 
-  // --- FIFO-BERECHNUNG: EINSTANDSWERTE, RESTANTEILE, REALISIERTE GEWINNE ---
+  // --- PRÄZISE FIFO-BERECHNUNG DER EINSTANDSWERTE & RESTANTEILE ---
   const valueMap = {}
   const exactSharesMap = {}
   const realizedGainMap = {}
@@ -119,7 +123,7 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
         .filter(b => getCleanIsin(b) === isin)
         .map(b => ({
           date: new Date(b.datetime || 0),
-          shares: adjShares(b),
+          shares: adjShares(b) ?? 0,
           cost: parseFloat(String(b.amount || b.total || 0).replace(',', '.')) || 0
         }))
         .sort((a, b) => a.date - b.date)
@@ -133,47 +137,103 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
         }))
         .sort((a, b) => a.date - b.date)
 
-    const lots = buys.map(b => ({
-      shares: b.shares,
-      costPerShare: b.shares > 0 ? b.cost / b.shares : 0
+    let lots = buys.map(b => ({
+      shares: adjShares(b),
+      costPerShare: adjShares(b) > 0 ? b.cost / adjShares(b) : 0
     }))
 
     let totalRealizedGain = 0
 
     for (const sell of sells) {
-      let toSell = sell.shares
-      let costOfSold = 0
+      let sellSharesToProcess = sell.shares
+      let costOfSoldShares = 0
 
-      while (toSell > 0.000001 && lots.length > 0) {
-        const lot  = lots[0]
-        const take = Math.min(lot.shares, toSell)
-        costOfSold += take * lot.costPerShare
-        toSell     -= take
-        lot.shares -= take
-        if (lot.shares <= 0.000001) lots.shift()
+      while (sellSharesToProcess > 0 && lots.length > 0) {
+        const oldestLot = lots[0]
+        const sharesToTake = Math.min(oldestLot.shares, sellSharesToProcess)
+
+        costOfSoldShares += sharesToTake * oldestLot.costPerShare
+        sellSharesToProcess -= sharesToTake
+        oldestLot.shares -= sharesToTake
+
+        if (oldestLot.shares <= 0.000001) {
+          lots.shift()
+        }
       }
 
-      if (sell.totalEarning > 0) {
-        totalRealizedGain += sell.totalEarning - costOfSold
+      // Gewinn/Verlust für diesen spezifischen Verkauf = Erlös - Einstandswert der verkauften Anteile
+      const estimatedEarning = sell.totalEarning || 0
+      if (estimatedEarning > 0) {
+        totalRealizedGain += (estimatedEarning - costOfSoldShares)
+      }
+    }
+
+    realizedGainMap[isin] = totalRealizedGain
+  }
+
+  for (const isin of allKnownIsins) {
+    const buys = buyActivities
+        .filter(b => getCleanIsin(b) === isin)
+        .map(b => ({
+          date: new Date(b.datetime || 0),
+          shares: adjShares(b) ?? 0,
+          cost: parseFloat(String(b.amount || b.total || 0).replace(',', '.')) || 0
+        }))
+        .sort((a, b) => a.date - b.date)
+
+    const sells = sellActivities
+        .filter(s => getCleanIsin(s) === isin)
+        .map(s => ({
+          date: new Date(s.datetime || 0),
+          shares: adjShares(s)
+        }))
+        .sort((a, b) => a.date - b.date)
+
+    let lots = buys.map(b => ({
+      shares: adjShares(b),
+      costPerShare: adjShares(b) > 0 ? b.cost / adjShares(b) : 0
+    }))
+
+    for (const sell of sells) {
+      let sellSharesToProcess = sell.shares
+      while (sellSharesToProcess > 0 && lots.length > 0) {
+        const oldestLot = lots[0]
+        if (oldestLot.shares <= sellSharesToProcess) {
+          sellSharesToProcess -= oldestLot.shares
+          lots.shift()
+        } else {
+          oldestLot.shares -= sellSharesToProcess
+          sellSharesToProcess = 0
+        }
       }
     }
 
     const remainingShares = lots.reduce((sum, lot) => sum + lot.shares, 0)
-    const remainingCost   = lots.reduce((sum, lot) => sum + lot.shares * lot.costPerShare, 0)
+    const remainingCost = lots.reduce((sum, lot) => sum + (lot.shares * lot.costPerShare), 0)
 
-    exactSharesMap[isin]  = remainingShares > 0.000001 ? remainingShares : 0
-    valueMap[isin]        = remainingShares > 0.000001 ? remainingCost : 0
-    realizedGainMap[isin] = totalRealizedGain
-  }
+    exactSharesMap[isin] = remainingShares > 0.000001 ? remainingShares : 0
+    valueMap[isin] = remainingShares > 0.000001 ? remainingCost : 0
 
-  // Parqet-Werte haben Vorrang, FIFO bleibt Rückfall für fehlende Positionen
-  for (const [isin, pos] of Object.entries(parqetByIsin)) {
-    netSharesMap[isin]    = pos.shares
-    exactSharesMap[isin]  = pos.shares
-    valueMap[isin]        = pos.cost
-    realizedGainMap[isin] = pos.realizedGain
+    // --- NETFLIX & ALLGEMEINER DEBUG-CHECK IN DER KONSOLE ---
+    const currentName = names[isin] || ''
+    if (isin.includes('US64110L1061') || currentName.toLowerCase().includes('netflix')) {
+      console.log('--- DEBUG ASSET (z.B. Netflix) ---', {
+        isin,
+        name: currentName,
+        gefundeneKaeufe: buys,
+        gefundeneVerkaeufe: sells,
+        verbleibendeShares: remainingShares,
+        berechneterEinstandswert: remainingCost
+      })
+    }
   }
   // ---------------------------------------------------------------------
+  for (const [isin, pos] of Object.entries(parqetByIsin)) {
+    netSharesMap[isin] = pos.shares
+    exactSharesMap[isin] = pos.shares
+    valueMap[isin] = pos.cost
+    realizedGainMap[isin] = pos.realizedGain
+  }
 
   function currentShares(isin) {
     if (isin in exactSharesMap) return exactSharesMap[isin]
@@ -379,58 +439,181 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     enrichedHoldings,
   }
 }
+
+export function heatColor(value, max) {
+  if (!value || value === 0) return '#1a2233'
+  const intensity = Math.min(value / max, 1)
+  const from = [20, 83, 45]
+  const to   = [21, 180, 90]
+  const rgb  = from.map((f, i) => Math.round(f + (to[i] - f) * Math.pow(intensity, 0.45)))
+  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
+}
+
 export function groupByHolding(activities, names = {}, types = {}, purchaseValues = {}, tickers = {}) {
   const mergeMap = buildIsinMergeMap(activities, names)
-  const resolve = makeResolver(mergeMap)
-  const palette = ['#60a5fa', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#facc15', '#38bdf8', '#f87171', '#4ade80', '#c084fc', '#e879f9', '#2dd4bf', '#fbbf24', '#818cf8', '#fb7185']
-  const map = {}
+  const resolve  = makeResolver(mergeMap)
 
+  const palette = [
+    '#60a5fa','#a78bfa','#f472b6','#34d399','#fb923c',
+    '#facc15','#38bdf8','#f87171','#4ade80','#c084fc',
+    '#e879f9','#2dd4bf','#fbbf24','#818cf8','#fb7185',
+  ]
+  const map = {}
   for (const a of activities) {
     const rawIsin = a.asset?.isin || a.asset?.symbol || 'unknown'
-    const isin = resolve(rawIsin)
-    const date = new Date(a.datetime)
-    const year = date.getFullYear()
-    const month = date.getMonth()
+    const isin    = resolve(rawIsin)
+    const name   = names[isin] || names[rawIsin] || a.asset?.name || a.asset?.symbol || isin
+    const type   = types[isin] || types[rawIsin] || a.holdingAssetType || 'security'
+    const ticker = tickers[isin] || tickers[rawIsin] || null
+    const d      = new Date(a.datetime)
+    const year   = d.getFullYear()
+    const month  = d.getMonth()
 
-    if (!map[isin]) {
-      map[isin] = {
-        name: names[isin] || names[rawIsin] || a.asset?.name || a.asset?.symbol || isin,
-        type: types[isin] || types[rawIsin] || a.holdingAssetType || 'security',
-        ticker: tickers[isin] || tickers[rawIsin] || null,
-        monthly: {}, gross: {}, tax: {},
-      }
-    }
+    if (!map[isin]) map[isin] = { name, type, ticker, monthly: {}, gross: {}, tax: {} }
 
-    for (const key of ['monthly', 'gross', 'tax']) {
-      if (!map[isin][key][year]) map[isin][key][year] = Array(12).fill(0)
-    }
+    if (!map[isin].monthly[year]) map[isin].monthly[year] = Array(12).fill(0)
+    if (!map[isin].gross[year])   map[isin].gross[year]   = Array(12).fill(0)
+    if (!map[isin].tax[year])     map[isin].tax[year]     = Array(12).fill(0)
 
-    const net = a.amountNet ?? a.amount ?? 0
-    const gross = a.amount ?? net
+    const net   = a.amountNet ?? a.amount ?? 0
+    const gross = a.amount    ?? net
     map[isin].monthly[year][month] += net
-    map[isin].gross[year][month] += gross
-    map[isin].tax[year][month] += gross - net
+    map[isin].gross[year][month]   += gross
+    map[isin].tax[year][month]     += gross - net
   }
 
   const now = new Date()
-
-  Object.keys(map).forEach((isin, index) => {
-    map[isin].color = palette[index % palette.length]
-    const purchaseValue = purchaseValues[isin] ?? 0
-    const totalNet = Object.values(map[isin].monthly).flat().reduce((sum, value) => sum + value, 0)
-
-    map[isin].yield = purchaseValue > 0 ? +((totalNet / purchaseValue) * 100).toFixed(2) : null
-
+  Object.keys(map).forEach((isin, idx) => {
+    map[isin].color = palette[idx % palette.length]
+    const pv       = purchaseValues[isin] ?? 0
+    const totalNet = Object.values(map[isin].monthly).flatMap(m => m).reduce((s, v) => s + v, 0)
+    map[isin].yield = pv > 0 ? +((totalNet / pv) * 100).toFixed(2) : null
     let last12m = 0
     for (const [year, months] of Object.entries(map[isin].monthly)) {
-      for (let month = 0; month < 12; month++) {
-        const date = new Date(Number(year), month, 1)
-        if ((now - date) / 864e5 <= 365) last12m += months[month] || 0
+      for (let m = 0; m < 12; m++) {
+        const date = new Date(+year, m, 1)
+        if ((now - date) / 864e5 <= 365) last12m += months[m] || 0
       }
     }
-
-    map[isin].assetYield = purchaseValue > 0 ? +((last12m / purchaseValue) * 100).toFixed(2) : null
+    map[isin].assetYield = pv > 0 ? +((last12m / pv) * 100).toFixed(2) : null
   })
 
   return map
+}
+
+export function buildCalendarEvents({ activities, forecast, names = {}, selectedYear }) {
+  const mergeMap = buildIsinMergeMap(activities, names)
+  const resolve  = makeResolver(mergeMap)
+
+  const actualMap = new Map()
+
+  for (const a of activities) {
+    const d = new Date(a.datetime)
+    if (d.getFullYear() !== selectedYear) continue
+
+    const isin  = resolve(a.asset?.isin || a.asset?.symbol || 'unknown')
+    const month = d.getMonth()
+    const key   = `${isin}-${month}`
+    const amount = a.amountNet ?? a.amount ?? 0
+
+    actualMap.set(key, (actualMap.get(key) || 0) + amount)
+  }
+
+  const events = []
+
+  for (const [key, amount] of actualMap.entries()) {
+    const [isin, monthStr] = key.split(/-(?=[0-9]+$)/)
+    const month = Number(monthStr)
+    if (amount === 0) continue
+
+    events.push({
+      year: selectedYear,
+      month,
+      isin,
+      name: names[isin] || isin,
+      amount: +amount.toFixed(4),
+      type: 'actual',
+    })
+  }
+
+  const forecastByHolding = forecast?.forecastByHolding || {}
+
+  for (const [isin, byMonth] of Object.entries(forecastByHolding)) {
+    for (let month = 0; month < 12; month++) {
+      const amount = byMonth[month] || 0
+      if (amount <= 0) continue
+
+      const key = `${isin}-${month}`
+      if (actualMap.has(key)) continue
+
+      events.push({
+        year: selectedYear,
+        month,
+        isin,
+        name: names[isin] || isin,
+        amount: +amount.toFixed(4),
+        type: 'forecast',
+      })
+    }
+  }
+
+  return events
+}
+
+export function groupCalendarEventsByMonth(events) {
+  const byMonth = Array.from({ length: 12 }, () => [])
+  for (const ev of events) {
+    byMonth[ev.month].push(ev)
+  }
+  return byMonth
+}
+
+export function sumCalendarEventsByMonth(events) {
+  const sums = Array(12).fill(0)
+  for (const ev of events) {
+    sums[ev.month] += ev.amount
+  }
+  return sums.map(v => +v.toFixed(2))
+}
+
+export function formatAssetType(rawType) {
+  if (!rawType) return 'Aktie';
+
+  const t = rawType.toLowerCase();
+
+  if (t.includes('crypto') || t.includes('coin') || t.includes('token')) {
+    return 'Krypto';
+  }
+  if (t.includes('etf') || t.includes('fund') || t.includes('fonds') || t.includes('mutualfund')) {
+    return 'ETF';
+  }
+  if (t.includes('stock') || t.includes('equity') || t.includes('aktie')) {
+    return 'Aktie';
+  }
+  if (t.includes('commodity') || t.includes('precious') || t.includes('gold')) {
+    return 'Rohstoff';
+  }
+
+  return 'Wertpapier';
+}
+
+export function getAssetAllocation(enrichedHoldings, totalPortfolioValue = 0) {
+  const allocation = {}
+  let holdingsSum = 0
+
+  for (const item of enrichedHoldings) {
+    if (item.shares <= 0) continue
+    const type = item.type || 'Aktie oder ETF'
+    const val = item.value || 0
+    allocation[type] = (allocation[type] || 0) + val
+    holdingsSum += val
+  }
+  const result = Object.entries(allocation).map(([name, value]) => ({ name, value }))
+
+  if (totalPortfolioValue > holdingsSum) {
+    const diff = totalPortfolioValue - holdingsSum
+    result.push({ name: 'Cash / Sonstiges', value: diff })
+  }
+
+  return result
 }
