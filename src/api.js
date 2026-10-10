@@ -610,11 +610,10 @@
         startValue: prev.startValue + (perf.valuation?.atIntervalStart ?? 0),
       }
     }
-    console.log('[Positionen]', range, '→', PARQET_INTERVAL[range],
-        '| Start:', data?.performance?.valuation?.atIntervalStart,
-        '| Ende:', data?.performance?.valuation?.atIntervalEnd,
-        '| Schlüssel:', Object.keys(map).slice(0, 3),
-        '| Beispiel:', JSON.stringify(Object.values(map)[0]))
+    console.log('[Dashboard]', range,
+        '| Einträge:', Object.keys(perfByRange[range] || {}).length,
+        '| Zeitraum-Wert:', JSON.stringify(perfByRange[range]?.[activeHoldings[0]?.isin]),
+        '| Gesamtgewinn:', (activeHoldings[0]?.value ?? 0) - (activeHoldings[0]?.costValue ?? 0))
     return map
   }
 
