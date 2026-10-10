@@ -278,7 +278,6 @@ export default function App() {
                 <DividendsPageView page={page} portfolioData={portfolioData} forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} loadData={loadData} loading={loading} error={error} />
               </>
           )}
-
           {appMode === 'portfolio' && (
               <PortfolioPageView page={page} currentValue={currentValue} enrichedHoldings={enrichedHoldings} holdings={holdings} byHolding={byHolding} performanceSeries={performanceSeries} />
           )}
