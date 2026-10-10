@@ -463,6 +463,7 @@
             v: toNum(val?.history),
             c: toNum(val?.capitalHistory),
             t: toNum(val?.ttwror),
+            g: toNum(val?.perfHistory),
           }
         })
         .filter(p => p.d && p.v != null)
@@ -479,15 +480,32 @@
       return []
     }
 
-    // ttwror: Bruchteil (0,05) oder Prozent (5)? Anhand des Gewinns auf das eingesetzte Kapital abschätzen
-    const lastT = [...pts].reverse().find(p => p.t != null)?.t
-    if (lastT != null) {
+    // Zeitgewichtete Rendite selbst berechnen, falls Parqet keine brauchbare ttwror liefert
+    const hasParqetTwr = pts.some(p => p.t != null && Math.abs(p.t) > 1e-9)
+
+    if (hasParqetTwr) {
+      // ttwror: Bruchteil (0,05) oder Prozent (5)?
       const end = pts[pts.length - 1]
+      const lastT = [...pts].reverse().find(p => p.t != null)?.t
       const gainPct = end.c > 0 ? ((end.v - end.c) / end.c) * 100 : null
       const factor = gainPct != null
           ? (Math.abs(lastT * 100 - gainPct) < Math.abs(lastT - gainPct) ? 100 : 1)
-          : (Math.max(...pts.map(p => Math.abs(p.t ?? 0))) <= 2 ? 100 : 1)
+          : 1
       if (factor !== 1) pts.forEach(p => { if (p.t != null) p.t = p.t * factor })
+    } else {
+      let index = 1
+      pts.forEach((p, i) => {
+        if (i > 0) {
+          const prev = pts[i - 1]
+          const flow = (p.c ?? 0) - (prev.c ?? 0)          // Einzahlung (+) bzw. Verkauf (−) an diesem Tag
+          const base = prev.v > 0 ? prev.v + flow / 2 : flow // Geldfluss zählt zur Hälfte (Modified Dietz)
+          if (base > 0) {
+            const r = (p.v - prev.v - flow) / base
+            if (Number.isFinite(r) && r > -1) index *= 1 + r
+          }
+        }
+        p.t = (index - 1) * 100
+      })
     }
 
     // Höchstens ~600 Punkte speichern (Cache und Ladezeit)
@@ -502,6 +520,7 @@
       v: +p.v.toFixed(2),
       c: p.c != null ? +p.c.toFixed(2) : null,
       t: p.t != null ? +p.t.toFixed(3) : null,
+      g: p.g != null ? +p.g.toFixed(2) : null,
     }))
   }
 
