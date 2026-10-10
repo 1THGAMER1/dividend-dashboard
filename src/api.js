@@ -592,8 +592,7 @@
       method: 'POST',
       body: JSON.stringify({
         portfolioIds: [PID],
-        intervalType: 'relative',
-        intervalValue: PARQET_INTERVAL[range] ?? 'max',
+        interval: { type: 'relative', value: PARQET_INTERVAL[range] ?? 'max' },
       }),
     })
 
