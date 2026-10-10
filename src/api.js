@@ -610,6 +610,11 @@
         startValue: prev.startValue + (perf.valuation?.atIntervalStart ?? 0),
       }
     }
+    console.log('[Positionen]', range, '→', PARQET_INTERVAL[range],
+        '| Start:', data?.performance?.valuation?.atIntervalStart,
+        '| Ende:', data?.performance?.valuation?.atIntervalEnd,
+        '| Schlüssel:', Object.keys(map).slice(0, 3),
+        '| Beispiel:', JSON.stringify(Object.values(map)[0]))
     return map
   }
 
