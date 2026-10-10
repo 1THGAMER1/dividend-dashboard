@@ -99,7 +99,6 @@ export default function PortfolioPerformanceChart({series}) {
         const cut = cutoffFor(range, twrSeries[twrSeries.length - 1].d)
         let sub = twrSeries
         if (cut) {
-            // Startpunkt = letzter Wert am oder vor dem Stichtag
             let start = -1
             for (let i = twrSeries.length - 1; i >= 0; i--) {
                 if (twrSeries[i].d <= cut) { start = i; break }
@@ -138,7 +137,8 @@ export default function PortfolioPerformanceChart({series}) {
             </div>
         )
     }
-
+    console.log('[PerfChart Debug] Range:', range, 'Punkte in sub:', sub.length, 'von:', sub[0]?.d, 'bis:', sub[sub.length - 1]?.d)
+    console.log('[PerfChart Debug] first:', sub[0], 'last:', sub[sub.length - 1])
     const first = data[0]
     const last = data[data.length - 1]
     const hasCapital = data.some(p => p.c != null)
