@@ -56,6 +56,9 @@ export default function PortfolioDashboard({
         '| Zeitraum-Wert:', JSON.stringify(perfByRange[range]?.[activeHoldings[0]?.isin]),
         '| Gesamtgewinn:', (activeHoldings[0]?.value ?? 0) - (activeHoldings[0]?.costValue ?? 0))
 
+    const logoOf = (item) =>
+        item.logo || (/^[A-Z]{2}[A-Z0-9]{10}$/.test(item.isin || '') ? `https://image.parqet.com/security/${item.isin}` : null)
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
@@ -72,12 +75,6 @@ export default function PortfolioDashboard({
                     value={activeHoldings.length.toString()}
                     color="#a78bfa"
                     sub="Alle Assets im Depot"
-                />
-                <KpiCard
-                    label="Progn. Jahresausschüttung"
-                    value={fmt(forecast12m?.net ?? 0)}
-                    color="#22c55e"
-                    sub="Nächste 12 Monate Netto"
                 />
             </div>
             {/* PERFORMANCE-CHART */}
@@ -119,7 +116,17 @@ export default function PortfolioDashboard({
                                     {/* Obere Zeile: Name & Aktueller Wert */}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                                         <div>
-                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                {logoOf(item) && (
+                                                    <img
+                                                        src={logoOf(item)}
+                                                        alt=""
+                                                        width={24}
+                                                        height={24}
+                                                        style={{ borderRadius: 6, background: '#fff', objectFit: 'contain' }}
+                                                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                                    />
+                                                )}
                                                 {getDisplayName(item)}
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>

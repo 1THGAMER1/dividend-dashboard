@@ -24,6 +24,7 @@ function applyParqetPositions(list, positions) {
         if (!pos) return item // Rückfall: eigene Berechnung aus Käufen/Verkäufen
         return {
             ...item,
+            logo:         pos.logo,
             shares:       pos.shares,
             value:        pos.value,
             costValue:    pos.cost,

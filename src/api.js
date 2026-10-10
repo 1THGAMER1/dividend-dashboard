@@ -538,6 +538,7 @@
 
       const entry = {
         holdingId:    h.id,
+        logo:         h.logo ?? null,
         shares:       p.isSold ? 0 : (p.shares ?? 0),
         value:        p.isSold ? 0 : (p.currentValue ?? 0),
         cost:         p.isSold ? 0 : (p.purchaseValue ?? 0),
