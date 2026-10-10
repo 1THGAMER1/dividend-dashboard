@@ -126,8 +126,22 @@ export default function PortfolioPerformanceChart({series}) {
     }
     const first = data[0]
     const last = data[data.length - 1]
-    const hasCapital = data.some(p => p.c != null)
 
+    const hasCapital = data.some(p => p.c != null)
+    // TEMPORÄR: Vergleichswerte für den gewählten Zeitraum
+    const dbg = (() => {
+        const c0 = first.c ?? 0
+        const gainRangeDbg = (last.v - (last.c ?? 0)) - (first.v - c0) // Gewinn im Zeitraum ohne Einzahlungen
+        const flow = (last.c ?? 0) - c0                                // Einzahlungen im Zeitraum
+        const avgV = data.reduce((s, p) => s + p.v, 0) / data.length
+        const f = (x) => (x == null || !Number.isFinite(x) ? '—' : `${x.toFixed(2).replace('.', ',')} %`)
+        return `Gewinn ${gainRangeDbg.toFixed(2)} € · Einzahlung ${flow.toFixed(2)} € · Start ${first.v.toFixed(2)} € · Ende ${last.v.toFixed(2)} €\n`
+            + `A: Gewinn/(Start+Einzahlung) ${f(gainRangeDbg / (first.v + flow) * 100)}\n`
+            + `B: Gewinn/Start ${f(gainRangeDbg / first.v * 100)}\n`
+            + `C: Gewinn/Kapital am Ende ${f(gainRangeDbg / last.c * 100)}\n`
+            + `D: Gewinn/Ø Depotwert ${f(gainRangeDbg / avgV * 100)}\n`
+            + `TTWROR ${f(last.r)}`
+    })()
     // Gewinn im gewählten Zeitraum (bei Max = Gesamtgewinn)
     const gainTotal = gainOf(last)
     const gainRange = range === 'MAX' ? gainTotal : gainTotal - gainOf(first)
@@ -193,6 +207,7 @@ export default function PortfolioPerformanceChart({series}) {
                     )}
                 </div>
             </div>
+            <pre style={{fontSize: 10, color: '#94a3b8', whiteSpace: 'pre-wrap', margin: '0 0 8px'}}>{dbg}</pre>
 
             <ResponsiveContainer width="100%" height={220}>
                 <ComposedChart key={`${mode}-${returnType}`} data={data}

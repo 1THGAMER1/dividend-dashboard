@@ -511,8 +511,8 @@
       })
     }
 
-    // Höchstens ~600 Punkte speichern (Cache und Ladezeit)
-    const MAX_POINTS = 600
+    // Höchstens ~1600 Punkte speichern (Cache und Ladezeit)
+    const MAX_POINTS = 1600
     if (pts.length > MAX_POINTS) {
       const step = Math.ceil(pts.length / MAX_POINTS)
       pts = pts.filter((_, i) => i % step === 0 || i === pts.length - 1)
