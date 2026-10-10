@@ -535,8 +535,11 @@
           intervalValue: 'max',
         }),
       })
-      // Zum Prüfen der Rohdaten kurz einkommentieren:
-      // console.log('PERF RAW', data)
+      const perfHoldings = data?.holdings ?? data?.performance?.holdings
+      console.log('[Performance] Felder:', Object.keys(data || {}), Object.keys(data?.performance || {}))
+      console.log('[Performance] Beispiel-Position:', JSON.stringify(
+          perfHoldings?.find(h => JSON.stringify(h).includes('US64110L1061')) ?? perfHoldings?.[0]
+          , null, 2)?.slice(0, 2500))
       return {
         currentValue: data?.performance?.valuation?.atIntervalEnd ?? 0,
         series: extractPerformanceSeries(data),
