@@ -68,12 +68,12 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
     parqetByIsin[isin] = prev
         ? {
-          shares: prev.shares + (poadjShares(s)),
+          shares: prev.shares + (pos.shares ?? 0),
           cost: prev.cost + (pos.cost ?? 0),
           realizedGain: prev.realizedGain + (pos.realizedGain ?? 0),
         }
         : {
-          shares: poadjShares(s),
+          shares:  pos.shares ?? 0,
           cost: pos.cost ?? 0,
           realizedGain: pos.realizedGain ?? 0,
         }
