@@ -30,8 +30,8 @@
     if (KNOWN_CRYPTO_SYMBOLS.includes(ticker.toUpperCase())) return false
     if (ISIN_REGEX.test(ticker)) return true
     if (isGbxTicker(ticker)) return true
-    if (!isEurTicker(ticker)) return true
-    return false
+    return !isEurTicker(ticker);
+
   }
   
   let _portfolioId = import.meta.env.VITE_PORTFOLIO_ID || null
@@ -455,9 +455,22 @@
     }
 
     let pts = rows
-        .map(r => ({ d: toIsoDate(r?.date), v: toNum(r?.history), c: toNum(r?.capitalHistory), t: toNum(r?.ttwror) }))
+        .filter(r => r?.mark !== 'bod') // nur Tagesendwerte
+        .map(r => {
+          const val = r?.values ?? r // Parqet liefert die Zahlen unter "values"
+          return {
+            d: toIsoDate(r?.date),
+            v: toNum(val?.history),
+            c: toNum(val?.capitalHistory),
+            t: toNum(val?.ttwror),
+          }
+        })
         .filter(p => p.d && p.v != null)
         .sort((a, b) => a.d.localeCompare(b.d))
+
+    // Tage vor dem ersten Kauf (Depotwert 0) am Anfang entfernen
+    const firstReal = pts.findIndex(p => p.v > 0)
+    if (firstReal > 0) pts = pts.slice(firstReal)
 
     pts = [...new Map(pts.map(p => [p.d, p])).values()] // pro Tag ein Punkt
 
