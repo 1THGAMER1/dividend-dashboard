@@ -11,6 +11,31 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     const raw = item?.asset?.isin || item?.asset?.symbol || item?.isin || 'unknown'
     return resolve(raw)
   }
+  export function groupByYearMonth(activities) {
+    const result = {}
+
+    for (const a of activities) {
+      const d = new Date(a.datetime)
+      const year = d.getFullYear()
+      const month = d.getMonth()
+
+      if (!result[year]) result[year] = Array(12).fill(0)
+      result[year][month] += a.amountNet ?? a.amount ?? 0
+    }
+
+    return result
+  }
+
+  export function toCumulative(monthly) {
+    const result = {}
+
+    for (const [year, values] of Object.entries(monthly)) {
+      let sum = 0
+      result[year] = values.map(value => +(sum += value).toFixed(4))
+    }
+
+    return result
+  }
 
   // --- AKTIENSPLITS (von Yahoo): Buchungen vor einem Split in heutige Stückzahl umrechnen ---
   const splitsFor = (item) => {
