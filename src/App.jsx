@@ -114,7 +114,7 @@ export default function App() {
   const {
     loggedIn, monthly, cum, forecastCum, forecastMonthly,
     byHolding, forecastByHolding, holdings, enrichedHoldings,
-    kpi, dividendYield, loading, authLoading, error, loadData, currentValue
+    kpi, dividendYield, loading, authLoading, error, loadData, currentValue, performanceSeries
   } = useDividendData()
 
   const [kpiRange, setKpiRange] = useState('all')
