@@ -16,6 +16,14 @@ const fmt = (n) => {
 
     return new Intl.NumberFormat('de-DE', options).format(val)
 }
+function Stat({ label, value, color = '#cbd5e1' }) {
+    return (
+        <div style={{ background: '#0c1019', border: '1px solid #1a2233', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color, marginTop: 2 }}>{value}</div>
+        </div>
+    )
+}
 
 export default function PortfolioDashboard({
                                                currentValue,
@@ -64,12 +72,6 @@ export default function PortfolioDashboard({
 
             {/* KPI KARTEN */}
             <div className="kpi-grid">
-                <KpiCard
-                    label="Portfolio Marktwert"
-                    value={displayValue > 0 ? fmt(displayValue) : '--- €'}
-                    color="#60a5fa"
-                    sub="Aktueller Gesamtwert"
-                />
                 <KpiCard
                     label="Aktive Positionen"
                     value={activeHoldings.length.toString()}
@@ -154,30 +156,21 @@ export default function PortfolioDashboard({
                                     </div>
 
                                     {/*Untere Zeile: Einstandswert*/}
-                                    {cost > 0 && (
+                                    {(cost > 0 || realized !== 0) && (
                                         <div style={{
                                             borderTop: '1px solid #1a2233',
-                                            paddingTop: 8,
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            fontSize: 11,
-                                            color: '#64748b'
+                                            paddingTop: 10,
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                                            gap: 8,
                                         }}>
-                                            <span>Einstandswert</span>
-                                            <span style={{ color: '#94a3b8' }}>{fmt(cost)}</span>
+                                            {cost > 0 && <Stat label="Einstandswert" value={fmt(cost)} />}
                                             {realized !== 0 && (
-                                                <div style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    fontSize: 11,
-                                                    color: '#64748b',
-                                                    marginTop: -4,
-                                                }}>
-                                                    <span>Realisiert (Teilverkauf)</span>
-                                                    <span style={{ color: realized >= 0 ? '#22c55e' : '#ef4444' }}>
-                                                {realized >= 0 ? '+' : ''}{fmt(realized)}
-                                            </span>
-                                                </div>
+                                                <Stat
+                                                    label="Realisiert"
+                                                    value={`${realized >= 0 ? '+' : ''}${fmt(realized)}`}
+                                                    color={realized >= 0 ? '#22c55e' : '#ef4444'}
+                                                />
                                             )}
                                         </div>
                                     )}

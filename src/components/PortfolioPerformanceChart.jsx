@@ -118,7 +118,7 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
 
             return { ...p, r, s }
         })
-    }, [twrSeries, range])
+    }, [twrSeries, range, showRealized])
 
     if (series === undefined) return null // z. B. geteilte Ansicht ohne Verlaufsdaten
 
