@@ -1,3 +1,28 @@
+export function groupByYearMonth(activities) {
+  const result = {}
+
+  for (const a of activities) {
+    const d = new Date(a.datetime)
+    const year = d.getFullYear()
+    const month = d.getMonth()
+
+    if (!result[year]) result[year] = Array(12).fill(0)
+    result[year][month] += a.amountNet ?? a.amount ?? 0
+  }
+
+  return result
+}
+
+export function toCumulative(monthly) {
+  const result = {}
+
+  for (const [year, values] of Object.entries(monthly)) {
+    let sum = 0
+    result[year] = values.map(value => +(sum += value).toFixed(4))
+  }
+
+  return result
+}
 export function buildForecast(cum, activities, buyActivities = [], names = {}, yahooByIsin = {}, sellActivities = [], types = {}, parqetPositions = {}) {
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
@@ -10,31 +35,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
   const getCleanIsin = (item) => {
     const raw = item?.asset?.isin || item?.asset?.symbol || item?.isin || 'unknown'
     return resolve(raw)
-  }
-  export function groupByYearMonth(activities) {
-    const result = {}
-
-    for (const a of activities) {
-      const d = new Date(a.datetime)
-      const year = d.getFullYear()
-      const month = d.getMonth()
-
-      if (!result[year]) result[year] = Array(12).fill(0)
-      result[year][month] += a.amountNet ?? a.amount ?? 0
-    }
-
-    return result
-  }
-
-  export function toCumulative(monthly) {
-    const result = {}
-
-    for (const [year, values] of Object.entries(monthly)) {
-      let sum = 0
-      result[year] = values.map(value => +(sum += value).toFixed(4))
-    }
-
-    return result
   }
 
   // --- AKTIENSPLITS (von Yahoo): Buchungen vor einem Split in heutige Stückzahl umrechnen ---
@@ -378,4 +378,59 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
     forecastByHolding,
     enrichedHoldings,
   }
+}
+export function groupByHolding(activities, names = {}, types = {}, purchaseValues = {}, tickers = {}) {
+  const mergeMap = buildIsinMergeMap(activities, names)
+  const resolve = makeResolver(mergeMap)
+  const palette = ['#60a5fa', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#facc15', '#38bdf8', '#f87171', '#4ade80', '#c084fc', '#e879f9', '#2dd4bf', '#fbbf24', '#818cf8', '#fb7185']
+  const map = {}
+
+  for (const a of activities) {
+    const rawIsin = a.asset?.isin || a.asset?.symbol || 'unknown'
+    const isin = resolve(rawIsin)
+    const date = new Date(a.datetime)
+    const year = date.getFullYear()
+    const month = date.getMonth()
+
+    if (!map[isin]) {
+      map[isin] = {
+        name: names[isin] || names[rawIsin] || a.asset?.name || a.asset?.symbol || isin,
+        type: types[isin] || types[rawIsin] || a.holdingAssetType || 'security',
+        ticker: tickers[isin] || tickers[rawIsin] || null,
+        monthly: {}, gross: {}, tax: {},
+      }
+    }
+
+    for (const key of ['monthly', 'gross', 'tax']) {
+      if (!map[isin][key][year]) map[isin][key][year] = Array(12).fill(0)
+    }
+
+    const net = a.amountNet ?? a.amount ?? 0
+    const gross = a.amount ?? net
+    map[isin].monthly[year][month] += net
+    map[isin].gross[year][month] += gross
+    map[isin].tax[year][month] += gross - net
+  }
+
+  const now = new Date()
+
+  Object.keys(map).forEach((isin, index) => {
+    map[isin].color = palette[index % palette.length]
+    const purchaseValue = purchaseValues[isin] ?? 0
+    const totalNet = Object.values(map[isin].monthly).flat().reduce((sum, value) => sum + value, 0)
+
+    map[isin].yield = purchaseValue > 0 ? +((totalNet / purchaseValue) * 100).toFixed(2) : null
+
+    let last12m = 0
+    for (const [year, months] of Object.entries(map[isin].monthly)) {
+      for (let month = 0; month < 12; month++) {
+        const date = new Date(Number(year), month, 1)
+        if ((now - date) / 864e5 <= 365) last12m += months[month] || 0
+      }
+    }
+
+    map[isin].assetYield = purchaseValue > 0 ? +((last12m / purchaseValue) * 100).toFixed(2) : null
+  })
+
+  return map
 }
