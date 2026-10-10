@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import KpiCard from './KpiCard.jsx'
 import PortfolioPerformanceChart from './PortfolioPerformanceChart.jsx'
+import { fetchPositionPerformance } from '../api.js'
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -8,8 +9,6 @@ const fmt = (n) => {
         style: 'currency',
         currency: 'EUR',
     }
-
-    // Ab 10.000 € werden keine Cent-Beträge mehr angezeigt.
     if (Math.abs(val) >= 10000) {
         options.minimumFractionDigits = 0
         options.maximumFractionDigits = 0
@@ -26,6 +25,20 @@ export default function PortfolioDashboard({
                                                performanceSeries
                                            }) {
     const displayValue = currentValue ?? currentVal ?? 0
+    const [range, setRange] = useState('1Y')
+    const [perfByRange, setPerfByRange] = useState({})
+
+    useEffect(() => {
+        if (range === 'MAX' || perfByRange[range]) return
+        let cancelled = false
+        fetchPositionPerformance(range)
+            .then(map => { if (!cancelled) setPerfByRange(prev => ({ ...prev, [range]: map })) })
+            .catch(e => {
+                console.warn('[Positionen] Zeitraum-Abruf fehlgeschlagen:', e.message)
+                if (!cancelled) setPerfByRange(prev => ({ ...prev, [range]: {} }))
+            })
+        return () => { cancelled = true }
+    }, [range, perfByRange])
 
     const getShares = (item) => parseFloat(item.shares) || 0
 
@@ -64,7 +77,7 @@ export default function PortfolioDashboard({
                 />
             </div>
             {/* PERFORMANCE-CHART */}
-            <PortfolioPerformanceChart series={performanceSeries} />
+            <PortfolioPerformanceChart series={performanceSeries} range={range} onRangeChange={setRange} />
 
             {/* 1. SEKTION: AKTIVE BESTÄNDE (Parqet App Style) */}
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px' }}>
@@ -82,8 +95,11 @@ export default function PortfolioDashboard({
                             const sharesNum = getShares(item)
                             const cost = item.costValue || 0
                             const val = item.value || 0
-                            const profit = val - cost
-                            const profitPercent = cost > 0 ? (profit / cost) * 100 : 0
+                            const pending = range !== 'MAX' && !perfByRange[range]
+                            const rp = range === 'MAX' ? null : (perfByRange[range]?.[item.id] ?? perfByRange[range]?.[item.isin])
+                            const profit = rp ? rp.gain : val - cost
+                            const base = rp ? (rp.startValue > 0 ? rp.startValue : cost) : cost
+                            const profitPercent = base > 0 ? (profit / base) * 100 : 0
                             const isPositive = profit >= 0
 
                             return (
@@ -125,7 +141,7 @@ export default function PortfolioDashboard({
                                                 {val > 0 ? fmt(val) : '—'}
                                             </div>
                                             <div style={{ fontSize: 12, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444', marginTop: 2 }}>
-                                                {cost > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
+                                                {pending ? '…' : base > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
                                             </div>
                                         </div>
                                     </div>

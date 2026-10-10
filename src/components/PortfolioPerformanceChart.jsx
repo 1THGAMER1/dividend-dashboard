@@ -1,6 +1,7 @@
 import React, {useMemo, useState} from 'react'
 import {ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid} from 'recharts'
 
+
 const RANGES = [
     ['1D', '1T'], ['7D', '7T'], ['30D', '30T'], ['3M', '3M'], ['6M', '6M'],
     ['YTD', 'YTD'], ['1Y', '1J'], ['3Y', '3J'], ['MAX', 'Seit Kauf'],
@@ -67,12 +68,14 @@ const cardStyle = {
 
 const gainOf = (p) => p.v - (p.c ?? 0)
 
-export default function PortfolioPerformanceChart({series}) {
+export default function PortfolioPerformanceChart({series, range: rangeProp, onRangeChange}) {
     if (Array.isArray(series) && series.length) {
         const n = series.length
         console.table([0, 1, 2, 3, 4, 5, 6, 7].map(i => series[Math.round(i * (n - 1) / 7)]))
     }
-    const [range, setRange] = useState('1Y')
+    const [ownRange, setOwnRange] = useState('1Y')
+    const range = rangeProp ?? ownRange
+    const setRange = onRangeChange ?? setOwnRange
     const [mode, setMode] = useState('value')            // 'value' | 'return'
     const [returnType, setReturnType] = useState('simple') // 'simple' | 'twr'
 

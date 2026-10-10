@@ -580,6 +580,38 @@
       return { currentValue: 0, series: [], positions: {} }
     }
   }
+  // Gewinn je Position im gewählten Zeitraum
+  const PARQET_INTERVAL = {
+    '1D': '1d', '7D': '1w', '30D': '1m', '3M': '3m', '6M': '6m',
+    'YTD': 'ytd', '1Y': '1y', '3Y': '3y', 'MAX': 'max',
+  }
+
+  export async function fetchPositionPerformance(range) {
+    const PID = await getPortfolioId()
+    const data = await request('/performance', {
+      method: 'POST',
+      body: JSON.stringify({
+        portfolioIds: [PID],
+        intervalType: 'relative',
+        intervalValue: PARQET_INTERVAL[range] ?? 'max',
+      }),
+    })
+
+    const map = {}
+    for (const h of data?.holdings ?? data?.performance?.holdings ?? []) {
+      const key = h.asset?.isin || h.asset?.symbol || h.id
+      const perf = h.performance
+      if (!key || !perf) continue
+      const prev = map[key] ?? { gain: 0, startValue: 0 }
+      map[key] = {
+        gain: prev.gain
+            + (perf.unrealizedGains?.inInterval?.gainNet ?? 0)
+            + (perf.realizedGains?.inInterval?.gainNet ?? 0),
+        startValue: prev.startValue + (perf.valuation?.atIntervalStart ?? 0),
+      }
+    }
+    return map
+  }
 
   // Bleibt für bestehende Aufrufe erhalten
   export async function fetchCurrentValue() {
