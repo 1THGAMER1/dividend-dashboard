@@ -9,13 +9,28 @@ import {
     fetchHoldingNames,
     fetchPurchaseValue,
     fetchPurchaseValuePerHolding,
-    fetchCurrentValue,
     fetchYahooDividendsForHoldings,
     fetchPerformance,
 } from '../api'
 import { readCache, writeCache, readStaleCache } from '../cache'
 
 const NO_DIVIDEND_TYPES = new Set(['crypto', 'cryptocurrency'])
+
+// Stückzahl, Wert und Einstand von Parqet übernehmen (inkl. Splits)
+function applyParqetPositions(list, positions) {
+    if (!Array.isArray(list) || !positions || Object.keys(positions).length === 0) return list
+    return list.map(item => {
+        const pos = positions[item.id] || positions[item.isin]
+        if (!pos) return item // Rückfall: eigene Berechnung aus Käufen/Verkäufen
+        return {
+            ...item,
+            shares:       pos.shares,
+            value:        pos.value,
+            costValue:    pos.cost,
+            realizedGain: pos.realizedGain,
+        }
+    })
+}
 
 export default function useDividendData() {
     const [loggedIn,          setLoggedIn]          = useState(isLoggedIn())
@@ -34,13 +49,13 @@ export default function useDividendData() {
         ytd:   { net:0, gross:0, tax:0, avgMonthly:0 },
         '12m': { net:0, gross:0, tax:0, avgMonthly:0 },
     })
-    const [loading,       setLoading]       = useState(false)
-    const [authLoading,   setAuthLoading]   = useState(false)
-    const [lastUpdated,   setLastUpdated]   = useState(null)
-    const [dataSource,    setDataSource]    = useState(null)
-    const [error,         setError]         = useState(null)
-    const [currentValue,  setCurrentValue]  = useState(0)
-    const [cacheInfo,     setCacheInfo]     = useState(null)
+    const [loading,           setLoading]           = useState(false)
+    const [authLoading,       setAuthLoading]       = useState(false)
+    const [lastUpdated,       setLastUpdated]       = useState(null)
+    const [dataSource,        setDataSource]        = useState(null)
+    const [error,             setError]             = useState(null)
+    const [currentValue,      setCurrentValue]      = useState(0)
+    const [cacheInfo,         setCacheInfo]         = useState(null)
     const [performanceSeries, setPerformanceSeries] = useState([])
 
     useEffect(() => {
@@ -58,7 +73,8 @@ export default function useDividendData() {
             sellActsData = [], names = {}, types = {},
             tickers = {}, purchaseValuePerHolding = [],
             yahooByIsin = {},
-            performanceSeries: perfSeries = []
+            performanceSeries: perfSeries = [],
+            parqetPositions = {}
         } = payload;
 
         setMonthly(m);
@@ -72,7 +88,7 @@ export default function useDividendData() {
         setBuyActs(buyActsData ?? []);
 
         if (fc.enrichedHoldings) {
-            setEnrichedHoldings(fc.enrichedHoldings);
+            setEnrichedHoldings(applyParqetPositions(fc.enrichedHoldings, parqetPositions));
         }
 
         setKpi({ all: kpiAll, ytd: kpiYtd, '12m': kpi12m });
@@ -170,7 +186,7 @@ export default function useDividendData() {
         });
 
         const uniqueList = Array.from(new Map(list.map(item => [item.isin, item])).values());
-        setHoldings(uniqueList);
+        setHoldings(applyParqetPositions(uniqueList, parqetPositions));
     }, []);
 
     const fetchFromParqet = useCallback(async () => {
@@ -190,7 +206,7 @@ export default function useDividendData() {
 
         const m  = groupByYearMonth(acts)
         const c  = toCumulative(m)
-        const fc = buildForecast(c, acts, buyActsData, names, yahooByIsin, sellActsData, types)
+        const fc = buildForecast(c, acts, buyActsData, names, yahooByIsin, sellActsData, types, perf.positions)
         const bh = groupByHolding(acts, names, types, purchaseValuePerHolding, tickers)
 
         const kpiAll = calcKpiFromActivities(acts, 'all')
@@ -202,6 +218,7 @@ export default function useDividendData() {
             kpiAll, kpiYtd, kpi12m,
             purchaseValue, currentVal,
             performanceSeries: perf.series,
+            parqetPositions: perf.positions,
             buyActsData,
             sellActsData,
             rawActs: acts,
@@ -229,14 +246,14 @@ export default function useDividendData() {
 
         try {
             const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
-            const fc = buildForecast(payload.c || {}, rawActs, buyActs, names, yahooByIsin, sellActs, types)
+            const fc = buildForecast(payload.c || {}, rawActs, buyActs, names, yahooByIsin, sellActs, types, payload.parqetPositions)
 
             if (fc) {
                 setForecastCum(fc.cum || {})
                 setForecastMonthly(fc.monthly || {})
                 setForecastByHolding(fc.forecastByHolding || {})
                 if (Array.isArray(fc.enrichedHoldings)) {
-                    setEnrichedHoldings(fc.enrichedHoldings)
+                    setEnrichedHoldings(applyParqetPositions(fc.enrichedHoldings, payload.parqetPositions))
                 }
             }
 
@@ -322,6 +339,7 @@ export default function useDividendData() {
         byHolding, forecastByHolding,
         kpi, dividendYield,
         currentValue,
+        performanceSeries,
         buyActs,
         holdings,
         enrichedHoldings,
@@ -329,6 +347,5 @@ export default function useDividendData() {
         lastUpdated, dataSource, error,
         cacheInfo,
         loadData: () => loadData(true),
-        performanceSeries
     }
 }

@@ -264,21 +264,23 @@
   }
   
   // --- Kurs- & Dividendendaten (Smart Routing) ---
-  
+
   export async function fetchYahooDividends(ticker) {
-    if (!ticker) return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
+    const empty = { dividends: [], currency: 'EUR', price: null, splits: [], _resolvedTicker: null }
+    if (!ticker) return empty
     try {
       const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(ticker)}`)
-      if (!res.ok) return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
+      if (!res.ok) return empty
       const data = await res.json()
       return {
         dividends:       data.dividends          || [],
         currency:        data.currency           || 'EUR',
         price:           data.regularMarketPrice || data.price || null,
+        splits:          Array.isArray(data.splits) ? data.splits : [],
         _resolvedTicker: data.resolvedTicker     || null,
       }
     } catch {
-      return { dividends: [], currency: 'EUR', price: null, _resolvedTicker: null }
+      return empty
     }
   }
   
@@ -360,16 +362,16 @@
       const results = await Promise.allSettled(
           withTicker.map(async isin => {
             const symbol = resolvedTickers[isin]
-            const { dividends, price } = await fetchYahooDividends(symbol)
-            return { isin, dividends, price, symbol }
+            const { dividends, price, splits } = await fetchYahooDividends(symbol)
+            return { isin, dividends, price, splits, symbol }
           })
       )
   
       for (const r of results) {
         if (r.status === 'fulfilled') {
-          const { isin, dividends, price } = r.value
+          const { isin, dividends, price, splits } = r.value
           if (price != null && !isNaN(price) && price > 0) {
-            map[isin] = { dividends, price }
+            map[isin] = { dividends, price, splits }
           }
         }
       }
@@ -523,6 +525,37 @@
       g: p.g != null ? +p.g.toFixed(2) : null,
     }))
   }
+  // Aktuelle Positionen aus der Performance-Antwort (Splits sind von Parqet schon eingerechnet)
+  function extractPositions(data) {
+    const list = data?.holdings ?? data?.performance?.holdings ?? []
+    const map = {}
+    for (const h of list) {
+      const key = h.asset?.isin || h.asset?.symbol || h.id
+      const p = h.position
+      if (!key || !p) continue
+
+      const entry = {
+        holdingId:    h.id,
+        shares:       p.isSold ? 0 : (p.shares ?? 0),
+        value:        p.isSold ? 0 : (p.currentValue ?? 0),
+        cost:         p.isSold ? 0 : (p.purchaseValue ?? 0),
+        realizedGain: h.performance?.realizedGains?.inInterval?.gainNet ?? 0,
+      }
+
+      // Gleiche Aktie in mehreren Unterdepots zusammenfassen
+      const prev = map[key]
+      map[key] = prev
+          ? {
+            ...entry,
+            shares:       prev.shares + entry.shares,
+            value:        prev.value + entry.value,
+            cost:         prev.cost + entry.cost,
+            realizedGain: prev.realizedGain + entry.realizedGain,
+          }
+          : entry
+    }
+    return map
+  }
 
   export async function fetchPerformance() {
     const PID = await getPortfolioId()
@@ -535,18 +568,14 @@
           intervalValue: 'max',
         }),
       })
-      const perfHoldings = data?.holdings ?? data?.performance?.holdings
-      console.log('[Performance] Felder:', Object.keys(data || {}), Object.keys(data?.performance || {}))
-      console.log('[Performance] Beispiel-Position:', JSON.stringify(
-          perfHoldings?.find(h => JSON.stringify(h).includes('US64110L1061')) ?? perfHoldings?.[0]
-          , null, 2)?.slice(0, 2500))
       return {
         currentValue: data?.performance?.valuation?.atIntervalEnd ?? 0,
         series: extractPerformanceSeries(data),
+        positions: extractPositions(data),
       }
     } catch (e) {
       console.error('fetchPerformance Fehler:', e.message)
-      return { currentValue: 0, series: [] }
+      return { currentValue: 0, series: [], positions: {} }
     }
   }
 
