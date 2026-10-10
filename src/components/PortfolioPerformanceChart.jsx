@@ -66,7 +66,8 @@ const cardStyle = {
     padding: 'clamp(12px, 3vw, 20px)',
 }
 
-const gainOf = (p) => p.v - (p.c ?? 0)
+const gainOf = (p, withRealized) =>
+    withRealized && p.g != null && p.c > 0 ? (p.g / 100) * p.c : p.v - (p.c ?? 0)
 
 export default function PortfolioPerformanceChart({series, range: rangeProp, onRangeChange}) {
     if (Array.isArray(series) && series.length) {
@@ -78,6 +79,7 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
     const setRange = onRangeChange ?? setOwnRange
     const [mode, setMode] = useState('value')            // 'value' | 'return'
     const [returnType, setReturnType] = useState('simple') // 'simple' | 'twr'
+    const [showRealized, setShowRealized] = useState(false)
 
     const twrSeries = useMemo(
         () => (Array.isArray(series) ? series.map(p => ({...p, twr: p.t ?? 0})) : []),
@@ -98,7 +100,7 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
         if (sub.length < 2) sub = twrSeries.slice(-2)
 
         const first = sub[0]
-        const gain0 = gainOf(first)
+        const gain0 = gainOf(first, showRealized)
 
         return sub.map(p => {
             // TTWROR, auf den Beginn des Zeitraums bezogen
@@ -107,11 +109,11 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
             // Einfache Rendite
             let s = null
             if (range === 'MAX') {
-                s = p.c > 0 ? (gainOf(p) / p.c) * 100 : null
+                s = p.c > 0 ? (gainOf(p, showRealized) / p.c) * 100 : null
             } else {
                 const netFlow = (p.c ?? 0) - (first.c ?? 0)
                 const base = first.v + netFlow > 0 ? first.v + netFlow : first.v
-                s = base > 0 ? ((gainOf(p) - gain0) / base) * 100 : null
+                s = base > 0 ? ((gainOf(p, showRealized) - gain0) / base) * 100 : null
             }
 
             return { ...p, r, s }
@@ -146,8 +148,8 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
             + `TTWROR ${f(last.r)}`
     })()
     // Gewinn im gewählten Zeitraum (bei Max = Gesamtgewinn)
-    const gainTotal = gainOf(last)
-    const gainRange = range === 'MAX' ? gainTotal : gainTotal - gainOf(first)
+    const gainTotal = gainOf(last, showRealized)
+    const gainRange = range === 'MAX' ? gainTotal : gainTotal - gainOf(first, showRealized)
 
     const retKey = returnType === 'twr' ? 'r' : 's'
     const retValue = last[retKey]
@@ -198,6 +200,11 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
                     <div style={toggleWrap}>
                         <button onClick={() => setMode('value')} style={btn(mode === 'value')}>Wert</button>
                         <button onClick={() => setMode('return')} style={btn(mode === 'return')}>Rendite</button>
+                    </div>
+                    <div style={toggleWrap}>
+                        <button onClick={() => setShowRealized(v => !v)} style={btn(showRealized)}>
+                            Realisiert {showRealized ? 'an' : 'aus'}
+                        </button>
                     </div>
                     {mode === 'return' && (
                         <div style={toggleWrap}>

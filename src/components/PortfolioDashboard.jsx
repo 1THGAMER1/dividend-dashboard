@@ -27,7 +27,6 @@ export default function PortfolioDashboard({
     const displayValue = currentValue ?? currentVal ?? 0
     const [range, setRange] = useState('1Y')
     const [perfByRange, setPerfByRange] = useState({})
-    const [showRealized, setShowRealized] = useState(true)
 
     useEffect(() => {
         if (range === 'MAX' || perfByRange[range]) return
@@ -84,20 +83,9 @@ export default function PortfolioDashboard({
             {/* 1. SEKTION: AKTIVE BESTÄNDE (Parqet App Style) */}
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9' }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#f1f5f9' }}>
                         💼 Aktive Bestände
                     </h3>
-                    <button
-                        onClick={() => setShowRealized(v => !v)}
-                        style={{
-                            background: showRealized ? '#009991' : 'transparent',
-                            color: showRealized ? '#fff' : '#64748b',
-                            border: '1px solid #1e2a3a', borderRadius: 8,
-                            padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        }}
-                    >
-                        Realisierte Gewinne {showRealized ? 'an' : 'aus'}
-                    </button>
                 </div>
 
                 {activeHoldings.length === 0 ? (
@@ -114,7 +102,7 @@ export default function PortfolioDashboard({
                             const rp = range === 'MAX' ? null : (perfByRange[range]?.[item.id] ?? perfByRange[range]?.[item.isin])
                             const unrealized = rp ? rp.unrealized : val - cost
                             const realized = rp ? rp.realized : (item.realizedGain || 0)
-                            const profit = showRealized ? unrealized + realized : unrealized
+                            const profit = unrealized
                             const base = rp ? (rp.startValue > 0 ? rp.startValue : cost) : cost
                             const profitPercent = base > 0 ? (profit / base) * 100 : 0
                             const isPositive = profit >= 0
@@ -130,19 +118,19 @@ export default function PortfolioDashboard({
                                     gap: 10
                                 }}>
                                     {/* Obere Zeile: Name & Aktueller Wert */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        {logoOf(item) && (
+                                            <img
+                                                src={logoOf(item)}
+                                                alt=""
+                                                width={44}
+                                                height={44}
+                                                style={{ borderRadius: 10, background: '#fff', objectFit: 'contain', flexShrink: 0 }}
+                                                onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                            />
+                                        )}
                                         <div>
-                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                {logoOf(item) && (
-                                                    <img
-                                                        src={logoOf(item)}
-                                                        alt=""
-                                                        width={24}
-                                                        height={24}
-                                                        style={{ borderRadius: 6, background: '#fff', objectFit: 'contain' }}
-                                                        onError={(e) => { e.currentTarget.style.display = 'none' }}
-                                                    />
-                                                )}
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
                                                 {getDisplayName(item)}
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
@@ -153,7 +141,7 @@ export default function PortfolioDashboard({
                                                     padding: '2px 6px',
                                                     borderRadius: 6,
                                                     fontWeight: 500
-                                                }}>
+                                                    }}>
                                                     {item.type || 'Asset'}
                                                 </span>
                                                 {sharesNum > 0 && (
@@ -161,14 +149,6 @@ export default function PortfolioDashboard({
                                                         {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
                                                     </span>
                                                 )}
-                                            </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>
-                                                {val > 0 ? fmt(val) : '—'}
-                                            </div>
-                                            <div style={{ fontSize: 12, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444', marginTop: 2 }}>
-                                                {pending ? '…' : base > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
                                             </div>
                                         </div>
                                     </div>
