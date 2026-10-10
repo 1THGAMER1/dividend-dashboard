@@ -17,6 +17,7 @@ const eurShort = (n) =>
     Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(Math.abs(n) >= 10000 ? 0 : 1).replace('.', ',')}k` : `${Math.round(n)}`
 
 const pct = (n) => (n == null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(2).replace('.', ',')} %`)
+const fmtDate = (iso) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
 const fmtDay = (iso) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
 
 function cutoffFor(range, lastDate) {
