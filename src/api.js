@@ -602,11 +602,10 @@
       const key = h.asset?.isin || h.asset?.symbol || h.id
       const perf = h.performance
       if (!key || !perf) continue
-      const prev = map[key] ?? { gain: 0, startValue: 0 }
+      const prev = map[key] ?? { unrealized: 0, realized: 0, startValue: 0 }
       map[key] = {
-        gain: prev.gain
-            + (perf.unrealizedGains?.inInterval?.gainNet ?? 0)
-            + (perf.realizedGains?.inInterval?.gainNet ?? 0),
+        unrealized: prev.unrealized + (perf.unrealizedGains?.inInterval?.gainNet ?? 0),
+        realized:   prev.realized   + (perf.realizedGains?.inInterval?.gainNet ?? 0),
         startValue: prev.startValue + (perf.valuation?.atIntervalStart ?? 0),
       }
     }

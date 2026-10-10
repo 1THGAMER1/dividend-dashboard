@@ -27,6 +27,7 @@ export default function PortfolioDashboard({
     const displayValue = currentValue ?? currentVal ?? 0
     const [range, setRange] = useState('1Y')
     const [perfByRange, setPerfByRange] = useState({})
+    const [showRealized, setShowRealized] = useState(true)
 
     useEffect(() => {
         if (range === 'MAX' || perfByRange[range]) return
@@ -82,9 +83,22 @@ export default function PortfolioDashboard({
 
             {/* 1. SEKTION: AKTIVE BESTÄNDE (Parqet App Style) */}
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px' }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#f1f5f9' }}>
-                    💼 Aktive Bestände
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9' }}>
+                        💼 Aktive Bestände
+                    </h3>
+                    <button
+                        onClick={() => setShowRealized(v => !v)}
+                        style={{
+                            background: showRealized ? '#009991' : 'transparent',
+                            color: showRealized ? '#fff' : '#64748b',
+                            border: '1px solid #1e2a3a', borderRadius: 8,
+                            padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        }}
+                    >
+                        Realisierte Gewinne {showRealized ? 'an' : 'aus'}
+                    </button>
+                </div>
 
                 {activeHoldings.length === 0 ? (
                     <div style={{ padding: '20px 0', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
@@ -98,7 +112,9 @@ export default function PortfolioDashboard({
                             const val = item.value || 0
                             const pending = range !== 'MAX' && !perfByRange[range]
                             const rp = range === 'MAX' ? null : (perfByRange[range]?.[item.id] ?? perfByRange[range]?.[item.isin])
-                            const profit = rp ? rp.gain : val - cost
+                            const unrealized = rp ? rp.unrealized : val - cost
+                            const realized = rp ? rp.realized : (item.realizedGain || 0)
+                            const profit = showRealized ? unrealized + realized : unrealized
                             const base = rp ? (rp.startValue > 0 ? rp.startValue : cost) : cost
                             const profitPercent = base > 0 ? (profit / base) * 100 : 0
                             const isPositive = profit >= 0
@@ -169,6 +185,20 @@ export default function PortfolioDashboard({
                                         }}>
                                             <span>Einstandswert</span>
                                             <span style={{ color: '#94a3b8' }}>{fmt(cost)}</span>
+                                            {realized !== 0 && (
+                                                <div style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    fontSize: 11,
+                                                    color: '#64748b',
+                                                    marginTop: -4,
+                                                }}>
+                                                    <span>Realisiert (Teilverkauf)</span>
+                                                    <span style={{ color: realized >= 0 ? '#22c55e' : '#ef4444' }}>
+                                                {realized >= 0 ? '+' : ''}{fmt(realized)}
+                                            </span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
