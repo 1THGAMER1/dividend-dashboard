@@ -145,7 +145,9 @@ export default function PortfolioPerformanceChart({
     }, [twrSeries, range, showRealized, portfolioPerformance])
     const off = useMemo(() => {
         if (!data.length) return 0
-        const values = data.map(d => (mode === 'return' ? d[retKey] : d.v)).filter(v => v != null)
+        const key = returnType === 'twr' ? 'r' : 's'
+        const values = data.map(d => (mode === 'return' ? d[key] : d.v)).filter(v => v != null)
+        if (!values.length) return 0
         const max = Math.max(...values)
         const min = Math.min(...values)
         const zero = mode === 'return' ? 0 : (data[0]?.v ?? 0)
@@ -153,7 +155,7 @@ export default function PortfolioPerformanceChart({
         if (max <= zero) return 0
         if (min >= zero) return 1
         return (max - zero) / (max - min)
-    }, [data, mode, retKey])
+    }, [data, mode, returnType])
 
     if (series === undefined) return null
 
