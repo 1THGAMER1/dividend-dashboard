@@ -543,6 +543,7 @@
         value:        p.isSold ? 0 : (p.currentValue ?? 0),
         cost:         p.isSold ? 0 : (p.purchaseValue ?? 0),
         realizedGain: h.performance?.realizedGains?.inInterval?.gainNet ?? 0,
+        dividends:    h.performance?.dividends?.inInterval?.gainNet ?? 0, // <--- NEU
       }
 
       // Gleiche Aktie in mehreren Unterdepots zusammenfassen
@@ -554,6 +555,7 @@
             value:        prev.value + entry.value,
             cost:         prev.cost + entry.cost,
             realizedGain: prev.realizedGain + entry.realizedGain,
+            dividends:    prev.dividends + entry.dividends,
           }
           : entry
     }
@@ -616,10 +618,11 @@
       const key = h.asset?.isin || h.asset?.symbol || h.id
       const perf = h.performance
       if (!key || !perf) continue
-      const prev = map[key] ?? { unrealized: 0, realized: 0, startValue: 0 }
+      const prev = map[key] ?? { unrealized: 0, realized: 0, dividends: 0, startValue: 0 }
       map[key] = {
         unrealized: prev.unrealized + (perf.unrealizedGains?.inInterval?.gainNet ?? 0),
         realized:   prev.realized   + (perf.realizedGains?.inInterval?.gainNet ?? 0),
+        dividends:  prev.dividends  + (perf.dividends?.inInterval?.gainNet ?? 0), // <--- NEU
         startValue: prev.startValue + (perf.valuation?.atIntervalStart ?? 0),
       }
     }

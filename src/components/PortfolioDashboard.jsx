@@ -114,6 +114,7 @@ export default function PortfolioDashboard({
                             const rp = range === 'MAX' ? null : (perfByRange[range]?.[item.id] ?? perfByRange[range]?.[item.isin])
                             const unrealized = rp ? rp.unrealized : val - cost
                             const realized = rp ? rp.realized : (item.realizedGain || 0)
+                            const dividends = rp ? rp.dividends : (item.dividends || 0)
                             const profit = unrealized
                             const base = rp ? (rp.startValue > 0 ? rp.startValue : cost) : cost
                             const profitPercent = base > 0 ? (profit / base) * 100 : 0
@@ -170,12 +171,12 @@ export default function PortfolioDashboard({
                                     </div>
 
                                     {/*Untere Zeile: Einstandswert*/}
-                                    {(cost > 0 || realized !== 0) && (
+                                    {(cost > 0 || realized !== 0 || dividends > 0) && (
                                         <div style={{
                                             borderTop: '1px solid #1a2233',
                                             paddingTop: 10,
                                             display: 'grid',
-                                            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                                            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
                                             gap: 8,
                                         }}>
                                             {cost > 0 && <Stat label="Einstandswert" value={fmt(cost)} />}
@@ -184,6 +185,13 @@ export default function PortfolioDashboard({
                                                     label="Realisiert"
                                                     value={`${realized >= 0 ? '+' : ''}${fmt(realized)}`}
                                                     color={realized >= 0 ? '#22c55e' : '#ef4444'}
+                                                />
+                                            )}
+                                            {dividends > 0 && (
+                                                <Stat
+                                                    label="Dividenden"
+                                                    value={`+${fmt(dividends)}`}
+                                                    color="#22c55e"
                                                 />
                                             )}
                                         </div>
