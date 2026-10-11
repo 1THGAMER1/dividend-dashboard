@@ -63,10 +63,31 @@ export default function HoldingDetailModal({
 
     const myBuys = (buyActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'BUY' }))
     const mySells = (sellActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'SELL' }))
-    const allActivities = [...myBuys, ...mySells].sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0))
 
-    // Erhaltene Dividenden nach Jahren
+    // Dividenden aus byHolding oder übergebenen Aktivitäten filtern
     const divEntry = byHolding[isin] || byHolding[holding.id] || {}
+    const myDivs = []
+    if (divEntry.monthly) {
+        Object.entries(divEntry.monthly).forEach(([year, months]) => {
+            months.forEach((amt, mIdx) => {
+                if (amt > 0) {
+                    // Erzeuge einen Eintrag pro Auszahlungsmonat
+                    myDivs.push({
+                        _type: 'DIVIDEND',
+                        datetime: `${year}-${String(mIdx + 1).padStart(2, '0')}-15`, // Monatsmitte als Referenz
+                        amount: amt,
+                        shares: sharesNum
+                    })
+                }
+            })
+        })
+    }
+
+    // Alle drei Transaktionsarten chronologisch nach Datum sortieren (neueste zuerst)
+    const allActivities = [...myBuys, ...mySells, ...myDivs].sort(
+        (a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0)
+    )
+    // Erhaltene Dividenden nach Jahren
     const divYears = Object.keys(divEntry.monthly || {}).sort((a, b) => b - a)
 
     // Gesamte historische Dividenden
@@ -289,9 +310,16 @@ export default function HoldingDetailModal({
                             ) : (
                                 allActivities.map((act, i) => {
                                     const isBuy = act._type === 'BUY'
+                                    const isSell = act._type === 'SELL'
+                                    const isDiv = act._type === 'DIVIDEND'
+
                                     const shares = parseFloat(act.shares || act.quantity || 0)
                                     const amount = parseFloat(act.amount || act.total || act.amountNet || 0)
                                     const price = parseFloat(act.price || (shares > 0 ? amount / shares : 0))
+
+                                    const badgeColor = isBuy ? '#22c55e' : isSell ? '#ef4444' : '#fbbf24'
+                                    const badgeBg = isBuy ? 'rgba(34, 197, 94, 0.15)' : isSell ? 'rgba(239, 68, 68, 0.15)' : 'rgba(251, 191, 36, 0.15)'
+                                    const badgeLabel = isBuy ? 'KAUF' : isSell ? 'VERKAUF' : 'DIVIDENDE'
 
                                     return (
                                         <div
@@ -308,19 +336,24 @@ export default function HoldingDetailModal({
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                 <span style={{
-                                                    background: isBuy ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                                    color: isBuy ? '#22c55e' : '#ef4444',
-                                                    border: `1px solid ${isBuy ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                                                    background: badgeBg,
+                                                    color: badgeColor,
+                                                    border: `1px solid ${badgeColor}40`,
                                                     borderRadius: 6,
                                                     padding: '2px 8px',
                                                     fontSize: 10,
-                                                    fontWeight: 700
+                                                    fontWeight: 700,
+                                                    minWidth: 65,
+                                                    textAlign: 'center'
                                                 }}>
-                                                    {isBuy ? 'KAUF' : 'VERKAUF'}
+                                                    {badgeLabel}
                                                 </span>
                                                 <div>
                                                     <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>
-                                                        {shares.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile zu {fmt(price)}
+                                                        {isDiv
+                                                            ? 'Ausschüttung erhalten'
+                                                            : `${shares.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile zu ${fmt(price)}`
+                                                        }
                                                     </div>
                                                     <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
                                                         {fmtDate(act.datetime)}
@@ -329,8 +362,12 @@ export default function HoldingDetailModal({
                                             </div>
 
                                             <div style={{ textAlign: 'right' }}>
-                                                <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>
-                                                    {fmt(amount)}
+                                                <div style={{
+                                                    fontSize: 13,
+                                                    fontWeight: 600,
+                                                    color: isDiv ? '#22c55e' : '#f1f5f9'
+                                                }}>
+                                                    {isDiv ? `+${fmt(amount)}` : fmt(amount)}
                                                 </div>
                                             </div>
                                         </div>
