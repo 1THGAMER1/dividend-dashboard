@@ -587,7 +587,7 @@
     'YTD': 'ytd', '1Y': '1y', '3Y': '3y', 'MAX': 'max',
   }
 
-  export async function fetchPositionPerformance(range) {
+  export async function fetchPositionPerformance(range, onPortfolioPerformance) {
     const PID = await getPortfolioId()
     const data = await request('/performance', {
       method: 'POST',
@@ -601,6 +601,15 @@
         range,
         JSON.stringify(data?.performance, null, 2)
     )
+    const perf = data?.performance
+    const unrealized = perf?.unrealizedGains?.inInterval
+    const realized = perf?.realizedGains?.inInterval
+
+    onPortfolioPerformance?.({
+      unrealizedGain: unrealized?.gainGross ?? null,
+      unrealizedReturn: unrealized?.returnGross ?? null,
+      realizedGain: realized?.gainGross ?? null,
+    })
 
     const map = {}
     for (const h of data?.holdings ?? data?.performance?.holdings ?? []) {

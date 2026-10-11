@@ -35,18 +35,23 @@ export default function PortfolioDashboard({
     const displayValue = currentValue ?? currentVal ?? 0
     const [range, setRange] = useState('1Y')
     const [perfByRange, setPerfByRange] = useState({})
+    const [portfolioPerfByRange, setPortfolioPerfByRange] = useState({})
 
     useEffect(() => {
-        if (range === 'MAX' || perfByRange[range]) return
+        if (perfByRange[range] && portfolioPerfByRange[range]) return
         let cancelled = false
-        fetchPositionPerformance(range)
+        fetchPositionPerformance(range, summary => {
+            if (!cancelled) {
+                setPortfolioPerfByRange(prev => ({ ...prev, [range]: summary }))
+            }
+        })
             .then(map => { if (!cancelled) setPerfByRange(prev => ({ ...prev, [range]: map })) })
             .catch(e => {
                 console.warn('[Positionen] Zeitraum-Abruf fehlgeschlagen:', e.message)
                 if (!cancelled) setPerfByRange(prev => ({ ...prev, [range]: {} }))
             })
         return () => { cancelled = true }
-    }, [range, perfByRange])
+    }, [range, perfByRange, portfolioPerfByRange])
 
     const getShares = (item) => parseFloat(item.shares) || 0
 
@@ -80,7 +85,12 @@ export default function PortfolioDashboard({
                 />
             </div>
             {/* PERFORMANCE-CHART */}
-            <PortfolioPerformanceChart series={performanceSeries} range={range} onRangeChange={setRange} />
+            <PortfolioPerformanceChart
+                series={performanceSeries}
+                range={range}
+                onRangeChange={setRange}
+                portfolioPerformance={portfolioPerfByRange[range]}
+            />
 
             {/* 1. SEKTION: AKTIVE BESTÄNDE (Parqet App Style) */}
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px' }}>

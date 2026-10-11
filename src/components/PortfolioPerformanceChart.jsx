@@ -69,7 +69,12 @@ const cardStyle = {
 const gainOf = (p, withRealized) =>
     withRealized && p.g != null && p.c > 0 ? (p.g / 100) * p.c : p.v - (p.c ?? 0)
 
-export default function PortfolioPerformanceChart({series, range: rangeProp, onRangeChange}) {
+export default function PortfolioPerformanceChart({
+                                                      series,
+                                                      range: rangeProp,
+                                                      onRangeChange,
+                                                      portfolioPerformance,
+                                                  }) {
     if (Array.isArray(series) && series.length) {
         const n = series.length
         console.table([0, 1, 2, 3, 4, 5, 6, 7].map(i => series[Math.round(i * (n - 1) / 7)]))
@@ -160,11 +165,21 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
             + `TTWROR ${f(last.r)}`
     })()
     // Gewinn im gewählten Zeitraum (bei Max = Gesamtgewinn)
-    const gainTotal = gainOf(last, showRealized)
-    const gainRange = range === 'MAX' ? gainTotal : gainTotal - gainOf(first, showRealized)
+    const unrealizedGain = portfolioPerformance?.unrealizedGain
+    const realizedGain = portfolioPerformance?.realizedGain
+
+    const gainRange = unrealizedGain == null
+        ? null
+        : showRealized
+            ? realizedGain == null ? null : unrealizedGain + realizedGain
+            : unrealizedGain
+
+    const simpleReturn = showRealized
+        ? null
+        : portfolioPerformance?.unrealizedReturn ?? null
 
     const retKey = returnType === 'twr' ? 'r' : 's'
-    const retValue = last[retKey]
+    const retValue = returnType === 'twr' ? last.r : simpleReturn
     const positive = (mode === 'value' ? gainRange : retValue ?? 0) >= 0
     const color = mode === 'return' ? (positive ? '#22c55e' : '#ef4444') : '#009991'
 
@@ -190,7 +205,11 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
                                 marginTop: 6
                             }}>{eur(last.v)}</div>
                             <div style={{fontSize: 12, marginTop: 2, color: gainRange >= 0 ? '#22c55e' : '#ef4444'}}>
-                                {range === 'MAX' ? 'Gewinn seit Kauf' : 'Gewinn im Zeitraum'} {gainRange >= 0 ? '+' : ''}{eur(gainRange)} ({pct(last.s)})
+                                {range === 'MAX' ? 'Gewinn seit Kauf' : 'Gewinn im Zeitraum'}{' '}
+                                {gainRange == null
+                                    ? '—'
+                                    : `${gainRange >= 0 ? '+' : ''}${eur(gainRange)}`}
+                                {' '}({pct(simpleReturn)})
                                 {last.c != null && <span style={{color: '#64748b'}}> · investiert {eur(last.c)}</span>}
                             </div>
                         </>
@@ -198,8 +217,9 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
                         <>
                             <div style={{fontSize: 22, fontWeight: 700, color, marginTop: 6}}>{pct(retValue)}</div>
                             <div style={{fontSize: 12, marginTop: 2, color: '#64748b'}}>
-                                Einfach <span
-                                style={{color: (last.s ?? 0) >= 0 ? '#22c55e' : '#ef4444'}}>{pct(last.s)}</span>
+                                Einfach <span style={{color: (simpleReturn ?? 0) >= 0 ? '#22c55e' : '#ef4444'}}>
+    {pct(simpleReturn)}
+</span>
                                 {' · '}
                                 TTWROR <span
                                 style={{color: (last.r ?? 0) >= 0 ? '#22c55e' : '#ef4444'}}>{pct(last.r)}</span>
@@ -229,8 +249,6 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
                     )}
                 </div>
             </div>
-            <pre style={{fontSize: 10, color: '#94a3b8', whiteSpace: 'pre-wrap', margin: '0 0 8px'}}>{dbg}</pre>
-
             <ResponsiveContainer width="100%" height={220}>
                 <ComposedChart key={`${mode}-${returnType}`} data={data}
                                margin={{top: 8, right: 4, left: 0, bottom: 0}}>
@@ -269,7 +287,7 @@ export default function PortfolioPerformanceChart({series, range: rangeProp, onR
                         <Line type="monotone" dataKey="c" stroke="#94a3b8" strokeWidth={1.5}
                               strokeDasharray="4 4" dot={false} isAnimationActive={false}/>
                     )}
-                    {mode === 'return' && (
+                    {mode === 'return' && returnType === 'twr' && (
                         <Area type="monotone" dataKey={retKey} stroke={color} strokeWidth={2}
                               fill="url(#perfFill)" dot={false} isAnimationActive={false} connectNulls/>
                     )}
