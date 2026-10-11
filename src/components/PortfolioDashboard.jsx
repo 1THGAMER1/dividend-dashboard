@@ -107,6 +107,9 @@ export default function PortfolioDashboard({
     const periodDividends = range === 'MAX'
         ? activeHoldings.reduce((sum, h) => sum + (h.dividends || 0), 0)
         : (currentPerf?.dividends ?? Object.values(perfByRange[range] || {}).reduce((sum, p) => sum + (p.dividends || 0), 0))
+    const periodUnrealized = range === 'MAX'
+        ? activeHoldings.reduce((sum, h) => sum + ((h.value || 0) - (h.costValue || 0)), 0)
+        : (currentPerf?.unrealizedGain ?? 0)
 
     const soldHoldings = holdings
         .filter(item => getShares(item) <= 0.000001)
@@ -145,12 +148,12 @@ export default function PortfolioDashboard({
                 }}>
                     <AssetHoldingDonut holdings={activeHoldings} compact={true} />
                 </div>
-                {/* Die 3 KPI-Karten: Synchron mit dem gewählten Zeitraum */}
+                {/* Die 4 KPI-Karten: Synchron mit dem gewählten Zeitraum */}
                 <div style={{
-                    flex: '2 1 320px',
+                    flex: '2 1 340px',
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
-                    gap: 12,
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
+                    gap: 10,
                     minWidth: 0,
                     width: '100%'
                 }}>
@@ -161,16 +164,22 @@ export default function PortfolioDashboard({
                         sub="Assets im Depot"
                     />
                     <KpiCard
-                        label={range === 'MAX' ? "Realisierter Gewinn" : "Realisiert im Zeitraum"}
-                        value={`${periodRealized >= 0 ? '+' : ''}${fmt(periodRealized)}`}
-                        color={periodRealized >= 0 ? "#22c55e" : "#ef4444"}
-                        sub={range === 'MAX' ? "Seit Kauf" : `Zeitraum: ${range}`}
+                        label={range === 'MAX' ? "Kursgewinn" : "Kursgewinn Zeitraum"}
+                        value={`${periodUnrealized >= 0 ? '+' : ''}${fmt(periodUnrealized)}`}
+                        color={periodUnrealized >= 0 ? "#22c55e" : "#ef4444"}
+                        sub={range === 'MAX' ? "Unrealisiert" : `Zeitraum: ${range}`}
                     />
                     <KpiCard
-                        label={range === 'MAX' ? "Erhaltene Dividenden" : "Dividenden im Zeitraum"}
+                        label={range === 'MAX' ? "Realisierter Gewinn" : "Realisiert Zeitraum"}
+                        value={`${periodRealized >= 0 ? '+' : ''}${fmt(periodRealized)}`}
+                        color={periodRealized >= 0 ? "#22c55e" : "#ef4444"}
+                        sub={range === 'MAX' ? "Teilverkäufe" : `Zeitraum: ${range}`}
+                    />
+                    <KpiCard
+                        label={range === 'MAX' ? "Dividenden" : "Dividenden Zeitraum"}
                         value={periodDividends > 0 ? `+${fmt(periodDividends)}` : '0,00 €'}
                         color="#22c55e"
-                        sub={range === 'MAX' ? "Seit Kauf" : `Zeitraum: ${range}`}
+                        sub={range === 'MAX' ? "Erhalten" : `Zeitraum: ${range}`}
                     />
                 </div>
             </div>

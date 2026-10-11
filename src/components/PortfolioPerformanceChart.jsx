@@ -338,14 +338,33 @@ export default function PortfolioPerformanceChart({
                         tick={{fill: '#64748b', fontSize: 10}} axisLine={false} tickLine={false}
                     />
                     <Tooltip
-                        contentStyle={{background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, fontSize: 12}}
-                        labelStyle={{color: '#94a3b8'}}
+                        contentStyle={{
+                            background: '#161b27',
+                            borderColor: '#2a3a50',
+                            borderRadius: 8,
+                            fontSize: 12,
+                        }}
+                        labelStyle={{ color: '#94a3b8' }}
                         labelFormatter={fmtDate}
                         formatter={(val, _name, item) => {
                             if (item.dataKey === 'dd') return [pct(val), 'Drawdown']
                             if (item.dataKey === 'r') return [pct(val), 'TTWROR']
                             if (item.dataKey === 's') return [pct(val), 'Rendite (einfach)']
-                            return [eur(val), item.dataKey === 'c' ? 'Investiert' : 'Depotwert']
+                            if (item.dataKey === 'v') {
+                                const pt = item.payload
+                                if (pt && pt.c != null) {
+                                    const diff = pt.v - pt.c
+                                    const diffPct = pt.c > 0 ? (diff / pt.c) * 100 : 0
+                                    const sign = diff >= 0 ? '+' : ''
+                                    return [
+                                        `${eur(val)} (${sign}${eur(diff)} / ${sign}${diffPct.toFixed(2).replace('.', ',')} %)`,
+                                        'Depotwert'
+                                    ]
+                                }
+                                return [eur(val), 'Depotwert']
+                            }
+
+                            return [eur(val), 'Investiert']
                         }}
                     />
                     {mode === 'value' && valueSubMode === 'value' && (
