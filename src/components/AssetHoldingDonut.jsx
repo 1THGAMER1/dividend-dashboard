@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { PieChart, Pie, ResponsiveContainer, Tooltip } from 'recharts'
 
 const COLORS = [
@@ -9,31 +9,39 @@ const COLORS = [
 const fmtVal = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
 export default function AssetHoldingDonut({ holdings = [], compact = false }) {
-    const activeHoldings = holdings
-        .filter(item => (item.shares || 0) > 0.000001 && (item.value || 0) > 0)
-        .map(item => ({
-            name: item.name || item.isin,
-            value: item.value || 0
+    const activeHoldings = useMemo(() => {
+        return (holdings || [])
+            .filter(item => (item.shares || 0) > 0.000001 && (item.value || 0) > 0)
+            .map(item => ({
+                name: item.name || item.isin,
+                value: item.value || 0
+            }))
+            .sort((a, b) => b.value - a.value)
+    }, [holdings])
+
+    const totalValue = useMemo(() => {
+        return activeHoldings.reduce((sum, item) => sum + item.value, 0)
+    }, [activeHoldings])
+
+    const coloredData = useMemo(() => {
+        return activeHoldings.map((item, index) => ({
+            ...item,
+            fill: COLORS[index % COLORS.length]
         }))
-        .sort((a, b) => b.value - a.value)
+    }, [activeHoldings])
 
     if (!activeHoldings || activeHoldings.length === 0) {
         return (
-            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 40, textAlign: 'center', color: '#64748b' }}>
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b', height: '100%', boxSizing: 'border-box' }}>
                 Keine aktiven Positionen verfügbar
             </div>
         )
     }
 
-    const totalValue = activeHoldings.reduce((sum, item) => sum + item.value, 0)
-    const coloredData = activeHoldings.map((item, index) => ({
-        ...item,
-        fill: COLORS[index % COLORS.length]
-    }))
+    const eurTotal = Math.round(totalValue).toLocaleString('de-DE') + ' €'
 
+    // 1. KOMPAKTE ANSICHT (fürs Dashboard)
     if (compact) {
-        const eurTotal = Math.round(totalValue).toLocaleString('de-DE') + ' €'
-
         return (
             <div style={{
                 background: '#161b27',
@@ -96,7 +104,7 @@ export default function AssetHoldingDonut({ holdings = [], compact = false }) {
         )
     }
 
-    // Standard-Ansicht für deine andere Seite (vollständig mit Liste)
+    // 2. VOLLSTÄNDIGE ANSICHT (für deine andere Seite)
     return (
         <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 28, marginBottom: 24 }}>
             <div style={{ marginBottom: 20 }}>
