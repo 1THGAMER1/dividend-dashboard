@@ -121,8 +121,19 @@ export default function PortfolioPerformanceChart({
             return { ...p, r, s }
         })
 
-        // Skalierung: Endpunkt der einfachen Rendite exakt an den Parqet-KPI anpassen
-        const targetEnd = range === 'MAX' ? null : simpleReturn
+        let targetEnd = null
+        if (range !== 'MAX' && portfolioPerformance?.unrealizedReturn != null) {
+            if (showRealized && portfolioPerformance.realizedGain != null) {
+                const uG = portfolioPerformance.unrealizedGain ?? 0
+                const rG = portfolioPerformance.realizedGain ?? 0
+                const base = portfolioPerformance.unrealizedReturn !== 0
+                    ? uG / (portfolioPerformance.unrealizedReturn / 100)
+                    : null
+                targetEnd = base ? ((uG + rG) / base) * 100 : portfolioPerformance.unrealizedReturn
+            } else {
+                targetEnd = portfolioPerformance.unrealizedReturn
+            }
+        }
         const lastRawS = rawPoints[rawPoints.length - 1]?.s
 
         if (targetEnd != null && lastRawS && Math.abs(lastRawS) > 0.0001) {
@@ -165,7 +176,7 @@ export default function PortfolioPerformanceChart({
     const gainRange = unrealizedGain == null
         ? null
         : showRealized
-            ? realizedGain == null ? null : unrealizedGain + realizedGain
+            ? (realizedGain == null ? unrealizedGain : unrealizedGain + realizedGain)
             : unrealizedGain
 
     const baseCapital = (unrealizedGain != null && portfolioPerformance?.unrealizedReturn)
