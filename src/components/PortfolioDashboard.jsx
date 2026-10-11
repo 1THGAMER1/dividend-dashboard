@@ -198,75 +198,112 @@ export default function PortfolioDashboard({
                                         background: '#161b27',
                                         border: '1px solid #1e2a3a',
                                         borderRadius: 12,
-                                        padding: '10px 16px',
+                                        padding: '12px 14px',
                                         display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: 16,
-                                        flexWrap: 'wrap',
+                                        flexDirection: 'column',
+                                        gap: 8,
                                         transition: 'background 0.15s ease',
                                     }}
                                 >
-                                    {/* 1. LINKS: Logo, Name & Badge */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 220, flex: '1 1 240px' }}>
-                                        {logoOf(item) && (
-                                            <img
-                                                src={logoOf(item)}
-                                                alt=""
-                                                width={32}
-                                                height={32}
-                                                style={{ borderRadius: 8, background: '#fff', objectFit: 'contain', flexShrink: 0 }}
-                                                onError={(e) => { e.currentTarget.style.display = 'none' }}
-                                            />
-                                        )}
-                                        <div style={{ overflow: 'hidden' }}>
-                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {getDisplayName(item)}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                        <span style={{ background: '#1e293b', color: '#38bdf8', fontSize: 9, padding: '1px 5px', borderRadius: 4, fontWeight: 500 }}>
-                                            {item.type || 'Asset'}
-                                        </span>
-                                                {sharesNum > 0 && (
-                                                    <span style={{ fontSize: 11, color: '#64748b' }}>
-                                                {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
+                                    {/* HAUPTZEILE: LINKS NAME, RECHTS MARKTWERT (Auf Handy & PC immer oben!) */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 12,
+                                        width: '100%',
+                                    }}>
+                                        {/* Links: Logo, Name & Badge */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                                            {logoOf(item) && (
+                                                <img
+                                                    src={logoOf(item)}
+                                                    alt=""
+                                                    width={32}
+                                                    height={32}
+                                                    style={{ borderRadius: 8, background: '#fff', objectFit: 'contain', flexShrink: 0 }}
+                                                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                                />
+                                            )}
+                                            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                                                <div style={{
+                                                    fontSize: 13,
+                                                    fontWeight: 600,
+                                                    color: '#f1f5f9',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                }}>
+                                                    {getDisplayName(item)}
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                            <span style={{ background: '#1e293b', color: '#38bdf8', fontSize: 9, padding: '1px 5px', borderRadius: 4, fontWeight: 500 }}>
+                                                {item.type || 'Asset'}
                                             </span>
-                                                )}
+                                                    {sharesNum > 0 && (
+                                                        <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
+                                                    {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
+                                                </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Rechts: Marktwert & Gewinn/Rendite (Immer fest rechts oben!) */}
+                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>
+                                                {val > 0 ? fmt(val) : '—'}
+                                            </div>
+                                            <div style={{ fontSize: 11, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444', marginTop: 1 }}>
+                                                {pending ? '…' : base > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* 2. MITTE: Einstand, Realisiert, Dividenden (kompakt als dezente Mini-Spalten) */}
-                                    <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-                                        <div style={{ textAlign: 'right', minWidth: 75 }}>
+                                    {/* UNTERZEILE: Einstand, Realisiert, Dividenden (Kompakt und dezent darunter) */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(3, 1fr)',
+                                        gap: 6,
+                                        paddingTop: 8,
+                                        borderTop: '1px solid #1a2233',
+                                        width: '100%',
+                                    }}>
+                                        <div>
                                             <div style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3 }}>Einstand</div>
-                                            <div style={{ fontSize: 12, fontWeight: 500, color: '#94a3b8', marginTop: 1 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {cost > 0 ? fmt(cost) : '—'}
                                             </div>
                                         </div>
 
-                                        <div style={{ textAlign: 'right', minWidth: 70 }}>
+                                        <div style={{ textAlign: 'center' }}>
                                             <div style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3 }}>Realisiert</div>
-                                            <div style={{ fontSize: 12, fontWeight: 500, color: realized !== 0 ? (realized >= 0 ? '#22c55e' : '#ef4444') : '#64748b', marginTop: 1 }}>
+                                            <div style={{
+                                                fontSize: 11,
+                                                fontWeight: 500,
+                                                color: realized !== 0 ? (realized >= 0 ? '#22c55e' : '#ef4444') : '#64748b',
+                                                marginTop: 1,
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis'
+                                            }}>
                                                 {realized !== 0 ? `${realized >= 0 ? '+' : ''}${fmt(realized)}` : '—'}
                                             </div>
                                         </div>
 
-                                        <div style={{ textAlign: 'right', minWidth: 70 }}>
+                                        <div style={{ textAlign: 'right' }}>
                                             <div style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3 }}>Dividenden</div>
-                                            <div style={{ fontSize: 12, fontWeight: 500, color: dividends > 0 ? '#22c55e' : '#64748b', marginTop: 1 }}>
+                                            <div style={{
+                                                fontSize: 11,
+                                                fontWeight: 500,
+                                                color: dividends > 0 ? '#22c55e' : '#64748b',
+                                                marginTop: 1,
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis'
+                                            }}>
                                                 {dividends > 0 ? `+${fmt(dividends)}` : '—'}
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    {/* 3. RECHTS: Marktwert & Rendite */}
-                                    <div style={{ textAlign: 'right', minWidth: 110 }}>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>
-                                            {val > 0 ? fmt(val) : '—'}
-                                        </div>
-                                        <div style={{ fontSize: 11, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444', marginTop: 1 }}>
-                                            {pending ? '…' : base > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
                                         </div>
                                     </div>
                                 </div>

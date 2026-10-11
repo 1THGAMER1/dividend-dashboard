@@ -44,7 +44,7 @@ const ROADMAP = [
   },
   {
     phase: '03',
-    status: 'active',
+    status: 'done',
     title: 'Portfolio Erweiterung',
     period: 'Q3 2026',
     items: [
@@ -52,12 +52,12 @@ const ROADMAP = [
       { text: 'Dividenden-Donut (Schnell sehen wer die meisten Dividenden zahlt.)',     done: true  },
       { text: 'Stabile Erkennung von vorher unbekannten Assets und richtige Zuordnung', done: true },
       { text: 'Portfolio-Pie',                                                          done: true },
-      { text: 'Portfolio-Pie inkl. X-Ray Funktion',                                     done: false},
+      { text: 'Portfolio-Pie inkl. X-Ray Funktion',                                     done: true},
     ],
   },
   {
     phase: '04',
-    status: 'planned',
+    status: 'active',
     title: 'Portfolio Intelligence',
     period: 'Q3-Q4 2026',
     items: [
