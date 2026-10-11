@@ -10,7 +10,8 @@ export default function PortfolioPageView({
                                               enrichedHoldings,
                                               holdings,
                                               byHolding,
-                                              performanceSeries
+                                              performanceSeries,
+                                              onNavigate,
                                           }) {
     const activeHoldings = enrichedHoldings || holdings
 
@@ -39,7 +40,7 @@ export default function PortfolioPageView({
                         <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Aufteilung deiner echten Depotwerte nach Klassen</p>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <AssetHoldingDonut holdings={activeHoldings} />
+                        <AssetHoldingDonut holdings={holdings} onNavigate={onNavigate} />
                         <AssetAllocationDonut holdings={activeHoldings} />
                     </div>
                 </>

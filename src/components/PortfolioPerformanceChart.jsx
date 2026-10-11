@@ -77,10 +77,6 @@ export default function PortfolioPerformanceChart({
                                                       forcedMode,
                                                       hideRanges = false,
                                                   }) {
-    if (Array.isArray(series) && series.length) {
-        const n = series.length
-        console.table([0, 1, 2, 3, 4, 5, 6, 7].map(i => series[Math.round(i * (n - 1) / 7)]))
-    }
     const [ownRange, setOwnRange] = useState('1Y')
     const range = rangeProp ?? ownRange
     const setRange = onRangeChange ?? setOwnRange

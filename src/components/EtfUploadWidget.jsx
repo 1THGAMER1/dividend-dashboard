@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
     importVanguardHoldings,
     importVanEckHoldings,
@@ -30,6 +30,7 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
     const [loadingStored, setLoadingStored] = useState(true)
     const [storeError, setStoreError] = useState(null)
     const [notice, setNotice] = useState(null)
+    const [isOpen, setIsOpen] = useState(false)  // <--- AKKORDEON STATUS (Standard: zugeklappt)
 
     const portfolioEtfs = (holdings || []).filter(h => {
         const shares = getShares(h)
@@ -70,11 +71,21 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
 
     const readyCount = portfolioEtfs.filter(h => entryFor(etfKeyFor(h))).length
 
+    // Ältestes Datum aus den versorgten ETFs ermitteln
+    const oldestDate = useMemo(() => {
+        const dates = portfolioEtfs
+            .map(h => entryFor(etfKeyFor(h))?.updatedAt)
+            .filter(Boolean)
+            .sort()
+        if (!dates.length) return null
+        return fmtDate(dates[0])
+    }, [portfolioEtfs, catalog, mine])
+
     const getParserForEtf = (etfName) => {
         const lower = etfName.toLowerCase()
         if (lower.includes('vanguard')) return importVanguardHoldings
         if (lower.includes('vaneck')) return importVanEckHoldings
-        if (lower.includes('xtrackers')) return importXtrackersHoldings // vor 'stoxx'!
+        if (lower.includes('xtrackers')) return importXtrackersHoldings
         if (lower.includes('stoxx')) return importStoxx600Holdings
         return importGenericEtfHoldings
     }
@@ -87,7 +98,6 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
         const etfName = etf.name || etf.title
         const etfKey = etfKeyFor(etf)
 
-        // 1. Dateicheck, bevor irgendetwas eingelesen wird
         const fileErrors = checkFile(file)
         if (fileErrors.length) {
             alert(`„${file.name}“ wurde nicht übernommen:\n\n- ${fileErrors.join('\n- ')}`)
@@ -105,7 +115,6 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
             let metaText = ''
             try { metaText = await readFileMeta(file) } catch { /* optional */ }
 
-            // 2. Inhaltscheck, bevor etwas übernommen oder gesendet wird
             const { errors, warnings } = validateEtfUpload({
                 etfName, rows, sum, metaText, previousCount: entryFor(etfKey)?.count
             })
@@ -119,7 +128,6 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
                 return
             }
 
-            // 3. An den Server senden (prüft erneut, Quarantäne bzw. Freigabe)
             const entry = { rows, count: rows.length, sum, updatedAt: new Date().toISOString() }
             try {
                 const result = await submitHoldings({ etfKey, etfName, rows })
@@ -130,7 +138,6 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
                 setNotice(result.message || null)
                 if (result.status === 'approved') await reload()
             } catch (submitErr) {
-                // Datei ist gültig, aber nicht gespeichert: für diese Sitzung trotzdem nutzbar
                 setMine(prev => ({ ...prev, [etfKey]: { ...entry, status: 'local' } }))
                 setStoreError(`Datei übernommen, aber nicht gespeichert: ${submitErr.message}`)
             }
@@ -149,79 +156,142 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
         )
     }
 
+    const allReady = readyCount === portfolioEtfs.length && portfolioEtfs.length > 0
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 20, color: '#c8d4e0' }}>
-                <h2 style={{ fontSize: 18, color: '#f1f5f9', margin: '0 0 8px 0' }}>📁 ETF-Holdings</h2>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 16px 0' }}>
-                    Geprüfte Holdings aus dem gemeinsamen Katalog werden automatisch geladen. Für ETFs ohne Daten kannst du eine Datei hochladen:
-                    Du nutzt sie sofort selbst, für alle anderen wird sie nach einer Prüfung freigegeben. Es werden nur die öffentlichen
-                    Fondspositionen geteilt, nichts über dein Depot.
-                </p>
-                {loadingStored && <p style={{ fontSize: 11, color: '#f59e0b', margin: '0 0 12px' }}>Holdings werden geladen...</p>}
-                {storeError && <p style={{ fontSize: 11, color: '#f59e0b', margin: '0 0 12px' }}>⚠ {storeError}</p>}
-                {notice && <p style={{ fontSize: 11, color: '#93c5fd', margin: '0 0 12px' }}>{notice}</p>}
+            {/* AKKORDEON KASTEN */}
+            <div style={{
+                background: '#161b27',
+                border: '1px solid #1e2a3a',
+                borderRadius: 14,
+                overflow: 'hidden',
+                transition: 'border-color 0.2s ease'
+            }}>
+                {/* KLICKBARER HEADER (Immer sichtbar, flach und clean) */}
+                <div
+                    onClick={() => setIsOpen(v => !v)}
+                    style={{
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        gap: 12,
+                        background: isOpen ? '#131824' : 'transparent',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 16 }}>📁</span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap' }}>
+                            ETF-Holdings
+                        </span>
+                        <span style={{
+                            fontSize: 11,
+                            color: allReady ? '#22c55e' : '#f59e0b',
+                            background: allReady ? 'rgba(34, 197, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                            border: `1px solid ${allReady ? 'rgba(34, 197, 94, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+                            padding: '1px 7px',
+                            borderRadius: 6,
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap'
+                        }}>
+                            {allReady ? '✓ ' : ''}{readyCount} von {portfolioEtfs.length} versorgt
+                        </span>
+                    </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                    {portfolioEtfs.map((etf, index) => {
-                        const etfName = etf.name || etf.title || `ETF ${index + 1}`
-                        const etfKey = etfKeyFor(etf)
-                        const entry = entryFor(etfKey)
-                        const kind = mine[etfKey]?.status === 'local' ? 'local'
-                            : mine[etfKey]?.status === 'pending' ? 'pending'
-                                : entry ? 'catalog' : null
-                        const sumOk = entry && entry.sum >= 90 && entry.sum <= 101
-                        const stale = entry && isStale(entry.updatedAt)
-                        const borderColor = entry ? (sumOk && !stale && kind === 'catalog' ? '#22c55e' : BADGES[kind].color) : '#2a3a50'
-                        const isLoading = loadingFile === etfKey
-
-                        return (
-                            <div key={index} style={{ background: '#0f1420', padding: 14, borderRadius: 10, border: `1px solid ${borderColor}` }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                                    <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={etfName}>
-                                        {etfName}
-                                    </p>
-                                    {entry && (
-                                        <span style={{ fontSize: 11, color: sumOk ? '#22c55e' : '#f59e0b', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                            {sumOk ? '✓' : '⚠'} {entry.count} Pos. · Σ {entry.sum.toFixed(1)} %
-                                        </span>
-                                    )}
-                                </div>
-
-                                {entry && (
-                                    <p style={{ fontSize: 11, color: stale ? '#f59e0b' : '#64748b', margin: '0 0 8px' }}>
-                                        {BADGES[kind].text} · Stand: {fmtDate(entry.updatedAt)}
-                                        {stale ? ` · älter als ${STALE_DAYS / 30} Monate, bitte aktualisieren` : ''}
-                                    </p>
-                                )}
-
-                                <input
-                                    type="file"
-                                    accept=".xlsx,.csv"
-                                    onChange={(e) => handleFileUpload(e, etf)}
-                                    style={{ fontSize: 11, color: '#888', width: '100%' }}
-                                    title={entry ? 'Neue Datei hochladen, um die Holdings zu aktualisieren' : 'Holdings-Datei hochladen'}
-                                />
-                                {isLoading && <p style={{ fontSize: 11, color: '#f59e0b', margin: '4px 0 0' }}>Datei wird geprüft...</p>}
-                            </div>
-                        )
-                    })}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        {oldestDate && (
+                            <span style={{ fontSize: 11, color: '#64748b' }}>
+                                Älteste Daten: <strong style={{ color: '#94a3b8' }}>{oldestDate}</strong>
+                            </span>
+                        )}
+                        <span style={{
+                            fontSize: 12,
+                            color: '#64748b',
+                            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease',
+                            display: 'inline-block'
+                        }}>
+                            ▼
+                        </span>
+                    </div>
                 </div>
 
-                {readyCount > 0 && (
-                    <p style={{ fontSize: 12, color: '#22c55e', marginTop: 16 }}>
-                        ✓ {readyCount} von {portfolioEtfs.length} ETF(s) mit Daten versorgt.
-                    </p>
+                {/* AUFKLAPPBARER BEREICH */}
+                {isOpen && (
+                    <div style={{ padding: '16px 20px 20px', borderTop: '1px solid #1e2a3a', background: '#0c1019' }}>
+                        <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 16px 0', lineHeight: 1.5 }}>
+                            Geprüfte Holdings aus dem gemeinsamen Katalog werden automatisch geladen. Für ETFs ohne Daten kannst du eine Datei hochladen:
+                            Du nutzt sie sofort selbst, für alle anderen wird sie nach einer Prüfung freigegeben. Es werden nur die öffentlichen
+                            Fondspositionen geteilt, nichts über dein Depot.
+                        </p>
+
+                        {loadingStored && <p style={{ fontSize: 11, color: '#f59e0b', margin: '0 0 12px' }}>Holdings werden geladen...</p>}
+                        {storeError && <p style={{ fontSize: 11, color: '#f59e0b', margin: '0 0 12px' }}>⚠ {storeError}</p>}
+                        {notice && <p style={{ fontSize: 11, color: '#93c5fd', margin: '0 0 12px' }}>{notice}</p>}
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                            {portfolioEtfs.map((etf, index) => {
+                                const etfName = etf.name || etf.title || `ETF ${index + 1}`
+                                const etfKey = etfKeyFor(etf)
+                                const entry = entryFor(etfKey)
+                                const kind = mine[etfKey]?.status === 'local' ? 'local'
+                                    : mine[etfKey]?.status === 'pending' ? 'pending'
+                                        : entry ? 'catalog' : null
+                                const sumOk = entry && entry.sum >= 90 && entry.sum <= 101
+                                const stale = entry && isStale(entry.updatedAt)
+                                const borderColor = entry ? (sumOk && !stale && kind === 'catalog' ? '#22c55e' : BADGES[kind].color) : '#2a3a50'
+                                const isLoading = loadingFile === etfKey
+
+                                return (
+                                    <div key={index} style={{ background: '#0f1420', padding: 14, borderRadius: 10, border: `1px solid ${borderColor}` }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                                            <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={etfName}>
+                                                {etfName}
+                                            </p>
+                                            {entry && (
+                                                <span style={{ fontSize: 11, color: sumOk ? '#22c55e' : '#f59e0b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                                    {sumOk ? '✓' : '⚠'} {entry.count} Pos. · Σ {entry.sum.toFixed(1)} %
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {entry && (
+                                            <p style={{ fontSize: 11, color: stale ? '#f59e0b' : '#64748b', margin: '0 0 8px' }}>
+                                                {BADGES[kind].text} · Stand: {fmtDate(entry.updatedAt)}
+                                                {stale ? ` · älter als ${STALE_DAYS / 30} Monate, bitte aktualisieren` : ''}
+                                            </p>
+                                        )}
+
+                                        <input
+                                            type="file"
+                                            accept=".xlsx,.csv"
+                                            onChange={(e) => handleFileUpload(e, etf)}
+                                            style={{ fontSize: 11, color: '#888', width: '100%' }}
+                                            title={entry ? 'Neue Datei hochladen, um die Holdings zu aktualisieren' : 'Holdings-Datei hochladen'}
+                                        />
+                                        {isLoading && <p style={{ fontSize: 11, color: '#f59e0b', margin: '4px 0 0' }}>Datei wird geprüft...</p>}
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        <div style={{ marginTop: 16 }}>
+                            <AdminEtfImport />
+                        </div>
+                    </div>
                 )}
-                <AdminEtfImport />
             </div>
 
+            {/* X-RAY VIEW BLEIBT DARUNTER VOLLSTÄNDIG ERHALTEN */}
             {Object.keys(etfHoldingsMap).length > 0 ? (
                 <PortfolioXRayView etfHoldingsMap={etfHoldingsMap} userHoldings={holdings} currentValue={currentValue} />
             ) : (
                 !loadingStored && (
                     <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }}>
-                        Für deine ETFs liegen noch keine Daten vor. Bitte lade für mindestens einen ETF eine Datei hoch.
+                        Für deine ETFs liegen noch keine Daten vor. Bitte klappe das Menü oben auf und lade für mindestens einen ETF eine Datei hoch.
                     </div>
                 )
             )}

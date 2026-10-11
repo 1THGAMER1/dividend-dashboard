@@ -8,7 +8,7 @@ const COLORS = [
 ]
 const fmtVal = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
-export default function AssetHoldingDonut({ holdings = [], compact = false }) {
+export default function AssetHoldingDonut({ holdings = [], compact = false, onNavigate }) {
     const activeHoldings = useMemo(() => {
         return (holdings || [])
             .filter(item => (item.shares || 0) > 0.000001 && (item.value || 0) > 0)
@@ -98,15 +98,67 @@ export default function AssetHoldingDonut({ holdings = [], compact = false }) {
             </div>
         )
     }
+    // 2. VOLLSTÄNDIGE ANSICHT (für die Allokation-Seite)
+    const handleGoToXray = () => {
+        if (typeof onNavigate === 'function') {
+            onNavigate('portfolio-xray')
+            return
+        }
 
-    // 2. VOLLSTÄNDIGE ANSICHT (für deine andere Seite)
+        // 1. Wenn deine App Hash-Routing nutzt (z. B. /#xray)
+        window.location.hash = '#xray'
+
+        // 2. Event feuern, damit React-Router / State-Listener anspringen
+        window.dispatchEvent(new Event('hashchange'))
+        window.dispatchEvent(new PopStateEvent('popstate'))
+    }
+
     return (
-        <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 28, marginBottom: 24 }}>
-            <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>
-                    📊 Verteilung nach einzelnen Werten
-                </h3>
-                <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aktuelle Allokation deiner aktiven Bestände</p>
+        <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 'clamp(16px, 3vw, 28px)', marginBottom: 24 }}>
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 12,
+                marginBottom: 20
+            }}>
+                <div>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>
+                        📊 Verteilung nach einzelnen Werten
+                    </h3>
+                    <p style={{ color: '#7a8ba0', fontSize: 13, marginTop: 4 }}>Aktuelle Allokation deiner aktiven Bestände</p>
+                </div>
+
+                {/* Direkter Sprung zur X-Ray Analyse */}
+                <button
+                    onClick={handleGoToXray}
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        background: '#0f1420',
+                        color: '#38bdf8',
+                        border: '1px solid #1e2a3a',
+                        borderRadius: 8,
+                        padding: '7px 12px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#1a2233'
+                        e.currentTarget.style.borderColor = '#38bdf8'
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#0f1420'
+                        e.currentTarget.style.borderColor = '#1e2a3a'
+                    }}
+                >
+                    <span>X-Ray Analyse</span>
+                    <span style={{ fontSize: 14 }}>→</span>
+                </button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center' }}>
