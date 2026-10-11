@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import KpiCard from './KpiCard.jsx'
 import PortfolioPerformanceChart from './PortfolioPerformanceChart.jsx'
 import { fetchPositionPerformance } from '../api.js'
-import AssetAllocationDonut from "./AssetAllocationDonut.jsx";
+import AssetHoldingDonut from "./AssetHoldingDonut.jsx";
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -85,10 +85,7 @@ export default function PortfolioDashboard({
             }}>
                 {/* Linke Seite: Asset Allocation Donut*/}
                 <div>
-                    <AssetAllocationDonut
-                        holdings={activeHoldings}
-                        currentValue={displayValue}
-                    />
+                    <AssetHoldingDonut holdings={activeHoldings} compact={true} />
                 </div>
 
                 {/* Rechte Seite: 3 KPI Karten */}

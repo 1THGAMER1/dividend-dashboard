@@ -8,7 +8,7 @@ const COLORS = [
 ]
 const fmtVal = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
-export default function AssetHoldingDonut({ holdings = [] }) {
+export default function AssetHoldingDonut({ holdings = [], compact = false }) {
     const activeHoldings = holdings
         .filter(item => (item.shares || 0) > 0.000001 && (item.value || 0) > 0)
         .map(item => ({
@@ -31,6 +31,61 @@ export default function AssetHoldingDonut({ holdings = [] }) {
         fill: COLORS[index % COLORS.length]
     }))
 
+    // Wenn compact aktiviert ist: Nur der Donut ohne Überschrift und ohne Liste
+    if (compact) {
+        return (
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ width: '100%', height: 200, position: 'relative' }}>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                            <Tooltip
+                                content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                        const data = payload[0].payload
+                                        const pct = totalValue > 0 ? ((data.value / totalValue) * 100).toFixed(1).replace('.', ',') : '0'
+                                        return (
+                                            <div style={{ background: '#1e2a3a', border: '1px solid #2a3a50', padding: '6px 10px', borderRadius: 8, color: '#e0e6f0', fontSize: 12 }}>
+                                                <div style={{ fontWeight: 600 }}>{data.name}</div>
+                                                <div style={{ color: '#38bdf8', marginTop: 2 }}>{fmtVal(data.value)} ({pct} %)</div>
+                                            </div>
+                                        )
+                                    }
+                                    return null
+                                }}
+                            />
+                            <Pie
+                                data={coloredData}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={80}
+                                paddingAngle={2}
+                                stroke="#161b27"
+                                strokeWidth={2}
+                                isAnimationActive={false}
+                            />
+                        </PieChart>
+                    </ResponsiveContainer>
+
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        textAlign: 'center',
+                        pointerEvents: 'none'
+                    }}>
+                        <div style={{ fontSize: 10, color: '#7a8ba0', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Bestände</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#e0e6f0', marginTop: 1 }}>{activeHoldings.length}</div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    // Standard-Ansicht für deine andere Seite (vollständig mit Liste)
     return (
         <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 28, marginBottom: 24 }}>
             <div style={{ marginBottom: 20 }}>
@@ -41,7 +96,6 @@ export default function AssetHoldingDonut({ holdings = [] }) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center' }}>
-
                 <div style={{ width: '100%', height: 320, position: 'relative' }}>
                     <ResponsiveContainer width="100%" height={320}>
                         <PieChart>
@@ -115,7 +169,6 @@ export default function AssetHoldingDonut({ holdings = [] }) {
                         )
                     })}
                 </div>
-
             </div>
         </div>
     )
