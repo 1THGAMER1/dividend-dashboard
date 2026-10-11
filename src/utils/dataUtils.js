@@ -213,19 +213,6 @@ export function buildForecast(cum, activities, buyActivities = [], names = {}, y
 
     exactSharesMap[isin] = remainingShares > 0.000001 ? remainingShares : 0
     valueMap[isin] = remainingShares > 0.000001 ? remainingCost : 0
-
-    // --- NETFLIX & ALLGEMEINER DEBUG-CHECK IN DER KONSOLE ---
-    const currentName = names[isin] || ''
-    if (isin.includes('US64110L1061') || currentName.toLowerCase().includes('netflix')) {
-      console.log('--- DEBUG ASSET (z.B. Netflix) ---', {
-        isin,
-        name: currentName,
-        gefundeneKaeufe: buys,
-        gefundeneVerkaeufe: sells,
-        verbleibendeShares: remainingShares,
-        berechneterEinstandswert: remainingCost
-      })
-    }
   }
   // ---------------------------------------------------------------------
   for (const [isin, pos] of Object.entries(parqetByIsin)) {

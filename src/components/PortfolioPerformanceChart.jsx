@@ -184,18 +184,6 @@ export default function PortfolioPerformanceChart({
     }
     const first = data[0]
     const last = data[data.length - 1]
-    console.log(
-        '[Chart Zeitraum]',
-        range,
-        'Stichtag:',
-        cutoffFor(range, last.d),
-        'Punkte:',
-        data.length
-    )
-    console.table([
-        { punkt: 'Start', ...first },
-        { punkt: 'Ende', ...last },
-    ])
 
     const hasCapital = data.some(p => p.c != null)
     // Gewinn im gewählten Zeitraum (bei Max = Gesamtgewinn)

@@ -71,65 +71,68 @@ export default function PortfolioDashboard({
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* GROSSE HERO KPI-CARD (FULL-WIDTH) */}
+            {/* GROSSE HERO KPI-CARD (RESPONSIV: PC NEBENEINANDER, HANDY UNTEREINANDER) */}
             <div style={{
-                width: '100vw',
-                position: 'relative',
-                left: '50%',
-                right: '50%',
-                marginLeft: '-50vw',
-                marginRight: '-50vw',
-                padding: '0 clamp(16px, 3vw, 40px)',
-                boxSizing: 'border-box'
+                background: '#161b27',
+                border: '1px solid #1e2a3a',
+                borderRadius: 16,
+                padding: 'clamp(14px, 2.5vw, 24px)',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 20,
+                alignItems: 'center',
+                width: '100%',
+                boxSizing: 'border-box',
+                marginBottom: 20,
+                overflow: 'hidden'
             }}>
+                {/* Donut mit Gesamtwert */}
                 <div style={{
-                    background: '#161b27',
-                    border: '1px solid #1e2a3a',
-                    borderRadius: 16,
-                    padding: 'clamp(16px, 2.5vw, 24px)',
-                    display: 'grid',
-                    gridTemplateColumns: 'minmax(280px, 360px) 1fr',
-                    gap: 24,
+                    flex: '1 1 260px',
+                    display: 'flex',
+                    justifyContent: 'center',
                     alignItems: 'center',
-                    boxSizing: 'border-box'
+                    minWidth: 0,
+                    width: '100%'
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                        <AssetHoldingDonut holdings={activeHoldings} compact={true} />
-                    </div>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                        gap: 16,
-                        height: '100%',
-                        alignContent: 'center'
-                    }}>
-                        <KpiCard
-                            label="Aktive Positionen"
-                            value={activeHoldings.length.toString()}
-                            color="#a78bfa"
-                            sub="Alle Assets im Depot"
-                        />
-                        <KpiCard
-                            label="Progn. Jahresausschüttung"
-                            value={fmt(forecast12m?.net ?? 0)}
-                            color="#22c55e"
-                            sub="Nächste 12 Monate Netto"
-                        />
-                    </div>
+                    <AssetHoldingDonut holdings={activeHoldings} compact={true} />
+                </div>
+
+                {/* Die 2 KPI-Karten: Auf PC rechts, auf Handy sauber darunter */}
+                <div style={{
+                    flex: '2 1 280px',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+                    gap: 12,
+                    minWidth: 0,
+                    width: '100%'
+                }}>
+                    <KpiCard
+                        label="Aktive Positionen"
+                        value={activeHoldings.length.toString()}
+                        color="#a78bfa"
+                        sub="Alle Assets im Depot"
+                    />
+                    <KpiCard
+                        label="Progn. Jahresausschüttung"
+                        value={fmt(forecast12m?.net ?? 0)}
+                        color="#22c55e"
+                        sub="Nächste 12 Monate Netto"
+                    />
                 </div>
             </div>
-            {/* PERFORMANCE CHART (FULL-WIDTH) */}
-            {/* 2 CHARTS NEBENEINANDER: LINKS WERT, RECHTS RENDITE */}
+
+            {/* 2 CHARTS: PC NEBENEINANDER, HANDY UNTEREINANDER */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 380px), 1fr))',
                 gap: 16,
                 width: '100%',
                 boxSizing: 'border-box',
                 marginBottom: 24,
                 alignItems: 'stretch'
             }}>
-                {/* Linker Chart: Portfolio-Wert in Euro */}
+                {/* Linker Chart: Portfolio-Wert in Euro / Drawdown */}
                 <PortfolioPerformanceChart
                     series={performanceSeries}
                     range={range}
