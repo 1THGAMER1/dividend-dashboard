@@ -81,27 +81,18 @@ export default function PortfolioDashboard({
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
                 gap: 16,
-                alignItems: 'stretch'
+                alignItems: 'start'
             }}>
-                {/* Linke Seite: Asset Allocation Donut */}
-                <div style={{
-                    background: '#161b27',
-                    border: '1px solid #1e2a3a',
-                    borderRadius: 16,
-                    padding: '16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    minHeight: 220
-                }}>
+                {/* Linke Seite: Asset Allocation Donut*/}
+                <div>
                     <AssetAllocationDonut
-                        enrichedHoldings={activeHoldings}
-                        totalPortfolioValue={displayValue}
+                        holdings={activeHoldings}
+                        currentValue={displayValue}
                     />
                 </div>
 
-                {/* Rechte Seite: KPI Karten */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'space-between' }}>
+                {/* Rechte Seite: 3 KPI Karten */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <KpiCard
                         label="Portfolio Marktwert"
                         value={displayValue > 0 ? fmt(displayValue) : '--- €'}
