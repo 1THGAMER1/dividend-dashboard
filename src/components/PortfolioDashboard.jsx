@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import KpiCard from './KpiCard.jsx'
 import PortfolioPerformanceChart from './PortfolioPerformanceChart.jsx'
 import { fetchPositionPerformance } from '../api.js'
-import AssetHoldingDonut from "./AssetHoldingDonut.jsx";
+import AssetHoldingDonut from "./AssetHoldingDonut.jsx"
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -17,6 +17,7 @@ const fmt = (n) => {
 
     return new Intl.NumberFormat('de-DE', options).format(val)
 }
+
 function Stat({ label, value, color = '#cbd5e1' }) {
     return (
         <div style={{ background: '#0c1019', border: '1px solid #1a2233', borderRadius: 8, padding: '8px 10px' }}>
@@ -35,15 +36,20 @@ export default function PortfolioDashboard({
                                            }) {
     const displayValue = currentValue ?? currentVal ?? 0
     const [range, setRange] = useState('1Y')
+    const [sortBy, setSortBy] = useState('value') // 'value' | 'profit' | 'profitPercent' | 'dividends' | 'realized'
+    const [sortDir, setSortDir] = useState('desc') // 'desc' | 'asc'
+
+    const handleSort = (field) => {
+        if (sortBy === field) {
+            setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+        } else {
+            setSortBy(field)
+            setSortDir('desc')
+        }
+    }
+
     const [perfByRange, setPerfByRange] = useState({})
     const [portfolioPerfByRange, setPortfolioPerfByRange] = useState({})
-    const currentPerf = portfolioPerfByRange[range]
-    const periodRealized = range === 'MAX'
-        ? activeHoldings.reduce((sum, h) => sum + (h.realizedGain || 0), 0)
-        : (currentPerf?.realizedGain ?? 0)
-    const periodDividends = range === 'MAX'
-        ? activeHoldings.reduce((sum, h) => sum + (h.dividends || 0), 0)
-        : (currentPerf?.dividends ?? Object.values(perfByRange[range] || {}).reduce((sum, p) => sum + (p.dividends || 0), 0))
 
     useEffect(() => {
         if (perfByRange[range] && portfolioPerfByRange[range]) return
@@ -63,9 +69,44 @@ export default function PortfolioDashboard({
 
     const getShares = (item) => parseFloat(item.shares) || 0
 
-    const activeHoldings = holdings
-        .filter(item => getShares(item) > 0.000001)
-        .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+    const rawActiveHoldings = (holdings || []).filter(h => (h.shares || 0) > 0.0001 && (h.value || 0) > 0)
+
+    // activeHoldings MUSS VOR periodRealized / periodDividends stehen:
+    const activeHoldings = useMemo(() => {
+        return [...rawActiveHoldings].sort((a, b) => {
+            const getVal = (item, field) => {
+                const rp = range === 'MAX' ? null : (perfByRange[range]?.[item.id] ?? perfByRange[range]?.[item.isin])
+                const val = item.value || 0
+                const cost = item.costValue || 0
+                const realized = rp ? rp.realized : (item.realizedGain || 0)
+                const dividends = rp ? rp.dividends : (item.dividends || 0)
+                const profit = rp ? rp.unrealized : val - cost
+                const base = rp ? (rp.startValue > 0 ? rp.startValue : cost) : cost
+                const profitPercent = base > 0 ? (profit / base) * 100 : 0
+
+                switch (field) {
+                    case 'value': return val
+                    case 'profit': return profit
+                    case 'profitPercent': return profitPercent
+                    case 'dividends': return dividends
+                    case 'realized': return realized
+                    default: return val
+                }
+            }
+
+            const valA = getVal(a, sortBy)
+            const valB = getVal(b, sortBy)
+            return sortDir === 'desc' ? valB - valA : valA - valB
+        })
+    }, [rawActiveHoldings, sortBy, sortDir, range, perfByRange])
+
+    const currentPerf = portfolioPerfByRange[range]
+    const periodRealized = range === 'MAX'
+        ? activeHoldings.reduce((sum, h) => sum + (h.realizedGain || 0), 0)
+        : (currentPerf?.realizedGain ?? 0)
+    const periodDividends = range === 'MAX'
+        ? activeHoldings.reduce((sum, h) => sum + (h.dividends || 0), 0)
+        : (currentPerf?.dividends ?? Object.values(perfByRange[range] || {}).reduce((sum, p) => sum + (p.dividends || 0), 0))
 
     const soldHoldings = holdings
         .filter(item => getShares(item) <= 0.000001)
@@ -163,12 +204,61 @@ export default function PortfolioDashboard({
                 />
             </div>
 
-            {/* 1. SEKTION: AKTIVE BESTÄNDE (Parqet App Style) */}
-            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#f1f5f9' }}>
-                        💼 Aktive Bestände
+            {/* AKTIVE BESTÄNDE MIT SORTIERLEISTE (Clean ohne doppelte Umrahmung) */}
+            <div style={{ marginBottom: 32 }}>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                    marginBottom: 16
+                }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9' }}>
+                        💼 Aktive Bestände ({activeHoldings.length})
                     </h3>
+
+                    {/* Sortier-Buttons */}
+                    <div style={{
+                        display: 'flex',
+                        gap: 4,
+                        background: '#0f1420',
+                        padding: 3,
+                        borderRadius: 8,
+                        border: '1px solid #1e2a3a',
+                        overflowX: 'auto',
+                        maxWidth: '100%'
+                    }}>
+                        {[
+                            ['value', 'Allokation'],
+                            ['profit', 'Gewinn (€)'],
+                            ['profitPercent', 'Rendite (%)'],
+                            ['dividends', 'Dividenden'],
+                            ['realized', 'Realisiert'],
+                        ].map(([field, label]) => {
+                            const active = sortBy === field
+                            const arrow = active ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
+                            return (
+                                <button
+                                    key={field}
+                                    onClick={() => handleSort(field)}
+                                    style={{
+                                        background: active ? '#009991' : 'transparent',
+                                        color: active ? '#fff' : '#64748b',
+                                        border: 'none',
+                                        borderRadius: 6,
+                                        padding: '4px 8px',
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {label}{arrow}
+                                </button>
+                            )
+                        })}
+                    </div>
                 </div>
 
                 {activeHoldings.length === 0 ? (
@@ -176,8 +266,8 @@ export default function PortfolioDashboard({
                         Keine aktiven Bestände gefunden.
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {activeHoldings.map((item, idx) => {
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {activeHoldings.map((item) => {
                             const sharesNum = getShares(item)
                             const cost = item.costValue || 0
                             const val = item.value || 0
@@ -205,7 +295,7 @@ export default function PortfolioDashboard({
                                         transition: 'background 0.15s ease',
                                     }}
                                 >
-                                    {/* HAUPTZEILE: LINKS NAME, RECHTS MARKTWERT (Auf Handy & PC immer oben!) */}
+                                    {/* HAUPTZEILE: LINKS NAME, RECHTS MARKTWERT */}
                                     <div style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -236,20 +326,31 @@ export default function PortfolioDashboard({
                                                 }}>
                                                     {getDisplayName(item)}
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                            <span style={{ background: '#1e293b', color: '#38bdf8', fontSize: 9, padding: '1px 5px', borderRadius: 4, fontWeight: 500 }}>
-                                                {item.type || 'Asset'}
-                                            </span>
-                                                    {sharesNum > 0 && (
-                                                        <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
-                                                    {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
-                                                </span>
-                                                    )}
-                                                </div>
+                                                {(() => {
+                                                    const weightPct = displayValue > 0 && val > 0 ? ((val / displayValue) * 100).toFixed(1).replace('.', ',') : null
+
+                                                    return (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                                                            <span style={{ background: '#1e293b', color: '#38bdf8', fontSize: 9, padding: '1px 5px', borderRadius: 4, fontWeight: 500 }}>
+                                                                {item.type || 'Asset'}
+                                                            </span>
+                                                            {sharesNum > 0 && (
+                                                                <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
+                                                                    {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
+                                                                </span>
+                                                            )}
+                                                            {weightPct && (
+                                                                <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                                                    · {weightPct} %
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
                                             </div>
                                         </div>
 
-                                        {/* Rechts: Marktwert & Gewinn/Rendite (Immer fest rechts oben!) */}
+                                        {/* Rechts: Marktwert & Gewinn/Rendite */}
                                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                             <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>
                                                 {val > 0 ? fmt(val) : '—'}
@@ -260,7 +361,7 @@ export default function PortfolioDashboard({
                                         </div>
                                     </div>
 
-                                    {/* UNTERZEILE: Einstand, Realisiert, Dividenden (Kompakt und dezent darunter) */}
+                                    {/* UNTERZEILE: Einstand, Realisiert, Dividenden */}
                                     <div style={{
                                         display: 'grid',
                                         gridTemplateColumns: 'repeat(3, 1fr)',
@@ -354,7 +455,6 @@ export default function PortfolioDashboard({
                     </div>
                 </div>
             )}
-
         </div>
     )
 }
