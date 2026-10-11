@@ -143,8 +143,19 @@ export default function PortfolioPerformanceChart({
 
         return rawPoints
     }, [twrSeries, range, showRealized, portfolioPerformance])
+    const off = useMemo(() => {
+        if (!data.length) return 0
+        const values = data.map(d => (mode === 'return' ? d[retKey] : d.v)).filter(v => v != null)
+        const max = Math.max(...values)
+        const min = Math.min(...values)
+        const zero = mode === 'return' ? 0 : (data[0]?.v ?? 0)
 
-    if (series === undefined) return null // z. B. geteilte Ansicht ohne Verlaufsdaten
+        if (max <= zero) return 0
+        if (min >= zero) return 1
+        return (max - zero) / (max - min)
+    }, [data, mode, retKey])
+
+    if (series === undefined) return null
 
     if (data.length < 2) {
         return (
@@ -196,17 +207,7 @@ export default function PortfolioPerformanceChart({
     const retValue = returnType === 'twr' ? exactTwr : simpleReturn
     const positive = (mode === 'value' ? gainRange : retValue ?? 0) >= 0
     const color = mode === 'return' ? (positive ? '#22c55e' : '#ef4444') : '#009991'
-    const off = useMemo(() => {
-        if (!data.length) return 0
-        const values = data.map(d => (mode === 'return' ? d[retKey] : d.v)).filter(v => v != null)
-        const max = Math.max(...values)
-        const min = Math.min(...values)
-        const zero = mode === 'return' ? 0 : (data[0]?.v ?? 0)
 
-        if (max <= zero) return 0
-        if (min >= zero) return 1
-        return (max - zero) / (max - min)
-    }, [data, mode, retKey])
 
     return (
         <div style={cardStyle}>
