@@ -254,7 +254,7 @@ export default function App() {
           </div>
         </nav>
 
-        <div style={{ flex: 1, padding: '16px 10px', maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+        <div style={{ flex: 1, padding: '16px 20px', width: '100%', boxSizing: 'border-box' }}>
           {page === 'profile' && <ProfilePage appUser={appUser} />}
           {page === 'roadmap' && <RoadmapPage />}
 

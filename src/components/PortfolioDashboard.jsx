@@ -71,55 +71,71 @@ export default function PortfolioDashboard({
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* ALLOCATION DONUT (LINKS) & KPI KARTEN (RECHTS) */}
-            {/* GROSSE HERO KPI-CARD (VOLLBREITE) */}
+            {/* GROSSE HERO KPI-CARD (FULL-WIDTH) */}
             <div style={{
-                background: '#161b27',
-                border: '1px solid #1e2a3a',
-                borderRadius: 16,
-                padding: 'clamp(16px, 2.5vw, 24px)',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: 24,
-                alignItems: 'center',
-                width: '100%',
+                width: '100vw',
+                position: 'relative',
+                left: '50%',
+                right: '50%',
+                marginLeft: '-50vw',
+                marginRight: '-50vw',
+                padding: '0 clamp(16px, 3vw, 40px)',
                 boxSizing: 'border-box'
             }}>
-                {/* Donut mit Gesamtwert */}
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <AssetHoldingDonut holdings={activeHoldings} compact={true} />
-                </div>
-
-                {/* Die 2 KPI-Karten – füllen auf dem PC die gesamte rechte Fläche */}
                 <div style={{
+                    background: '#161b27',
+                    border: '1px solid #1e2a3a',
+                    borderRadius: 16,
+                    padding: 'clamp(16px, 2.5vw, 24px)',
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: 16,
-                    height: '100%',
-                    alignContent: 'center'
+                    gridTemplateColumns: 'minmax(280px, 360px) 1fr',
+                    gap: 24,
+                    alignItems: 'center',
+                    boxSizing: 'border-box'
                 }}>
-                    <KpiCard
-                        label="Aktive Positionen"
-                        value={activeHoldings.length.toString()}
-                        color="#a78bfa"
-                        sub="Alle Assets im Depot"
-                    />
-                    <KpiCard
-                        label="Progn. Jahresausschüttung"
-                        value={fmt(forecast12m?.net ?? 0)}
-                        color="#22c55e"
-                        sub="Nächste 12 Monate Netto"
-                    />
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        <AssetHoldingDonut holdings={activeHoldings} compact={true} />
+                    </div>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                        gap: 16,
+                        height: '100%',
+                        alignContent: 'center'
+                    }}>
+                        <KpiCard
+                            label="Aktive Positionen"
+                            value={activeHoldings.length.toString()}
+                            color="#a78bfa"
+                            sub="Alle Assets im Depot"
+                        />
+                        <KpiCard
+                            label="Progn. Jahresausschüttung"
+                            value={fmt(forecast12m?.net ?? 0)}
+                            color="#22c55e"
+                            sub="Nächste 12 Monate Netto"
+                        />
+                    </div>
                 </div>
             </div>
-            {/* PERFORMANCE-CHART */}
-            <PortfolioPerformanceChart
-                series={performanceSeries}
-                range={range}
-                onRangeChange={setRange}
-                portfolioPerformance={portfolioPerfByRange[range]}
-            />
+            {/* PERFORMANCE CHART (FULL-WIDTH) */}
+            <div style={{
+                width: '100vw',
+                position: 'relative',
+                left: '50%',
+                right: '50%',
+                marginLeft: '-50vw',
+                marginRight: '-50vw',
+                padding: '0 clamp(16px, 3vw, 40px)',
+                boxSizing: 'border-box'
+            }}>
+                <PortfolioPerformanceChart
+                    series={performanceSeries}
+                    range={range}
+                    onRangeChange={setRange}
+                    portfolioPerformance={portfolioPerfByRange[range]}
+                />
+            </div>
 
             {/* 1. SEKTION: AKTIVE BESTÄNDE (Parqet App Style) */}
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px' }}>
