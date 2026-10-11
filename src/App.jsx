@@ -112,9 +112,15 @@ export default function App() {
   }
 
   const {
-    loggedIn, monthly, cum, forecastCum, forecastMonthly,
-    byHolding, forecastByHolding, holdings, enrichedHoldings,
-    kpi, dividendYield, loading, authLoading, error, loadData, currentValue, performanceSeries
+    loggedIn, setLoggedIn,
+    monthly, cum, forecastCum, forecastMonthly,
+    byHolding, forecastByHolding,
+    kpi, dividendYield, currentValue,
+    performanceSeries,
+    buyActs,
+    sellActs,
+    holdings, enrichedHoldings,
+    loading, authLoading, lastUpdated, dataSource, error, cacheInfo, loadData
   } = useDividendData()
 
   const [kpiRange, setKpiRange] = useState('all')
