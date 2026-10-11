@@ -119,21 +119,32 @@ export default function PortfolioDashboard({
                 </div>
             </div>
             {/* PERFORMANCE CHART (FULL-WIDTH) */}
+            {/* 2 CHARTS NEBENEINANDER: LINKS WERT, RECHTS RENDITE */}
             <div style={{
-                width: '100vw',
-                position: 'relative',
-                left: '50%',
-                right: '50%',
-                marginLeft: '-50vw',
-                marginRight: '-50vw',
-                padding: '0 clamp(16px, 3vw, 40px)',
-                boxSizing: 'border-box'
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+                gap: 16,
+                width: '100%',
+                boxSizing: 'border-box',
+                marginBottom: 24,
+                alignItems: 'stretch'
             }}>
+                {/* Linker Chart: Portfolio-Wert in Euro */}
                 <PortfolioPerformanceChart
                     series={performanceSeries}
                     range={range}
                     onRangeChange={setRange}
                     portfolioPerformance={portfolioPerfByRange[range]}
+                    forcedMode="value"
+                />
+
+                {/* Rechter Chart: Rendite in % */}
+                <PortfolioPerformanceChart
+                    series={performanceSeries}
+                    range={range}
+                    onRangeChange={setRange}
+                    portfolioPerformance={portfolioPerfByRange[range]}
+                    forcedMode="return"
                 />
             </div>
 

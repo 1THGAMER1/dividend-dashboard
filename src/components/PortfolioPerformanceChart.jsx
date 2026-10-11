@@ -74,6 +74,8 @@ export default function PortfolioPerformanceChart({
                                                       range: rangeProp,
                                                       onRangeChange,
                                                       portfolioPerformance,
+                                                      forcedMode,
+                                                      hideRanges = false,
                                                   }) {
     if (Array.isArray(series) && series.length) {
         const n = series.length
@@ -82,7 +84,9 @@ export default function PortfolioPerformanceChart({
     const [ownRange, setOwnRange] = useState('1Y')
     const range = rangeProp ?? ownRange
     const setRange = onRangeChange ?? setOwnRange
-    const [mode, setMode] = useState('value')            // 'value' | 'return'
+    const [internalMode, setInternalMode] = useState('value')
+    const mode = forcedMode ?? internalMode
+    const setMode = setInternalMode
     const [returnType, setReturnType] = useState('simple') // 'simple' | 'twr'
     const [showRealized, setShowRealized] = useState(false)
 
@@ -255,23 +259,32 @@ export default function PortfolioPerformanceChart({
                     )}
                 </div>
 
-                <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6}}>
-                    <div style={toggleWrap}>
-                        <button onClick={() => setMode('value')} style={btn(mode === 'value')}>Wert</button>
-                        <button onClick={() => setMode('return')} style={btn(mode === 'return')}>Rendite</button>
-                    </div>
-                    <div style={toggleWrap}>
-                        <button onClick={() => setShowRealized(v => !v)} style={btn(showRealized)}>
-                            Realisiert {showRealized ? 'an' : 'aus'}
-                        </button>
-                    </div>
-                    {mode === 'return' && (
+                <div
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                        gap: 6,
+                    }}
+                >
+                    {!forcedMode && (
                         <div style={toggleWrap}>
-                            <button onClick={() => setReturnType('simple')}
-                                    style={btn(returnType === 'simple')}>Einfach
-                            </button>
-                            <button onClick={() => setReturnType('twr')} style={btn(returnType === 'twr')}>TTWROR
-                            </button>
+                            <button onClick={() => setMode('value')} style={btn(mode === 'value')}>Wert</button>
+                            <button onClick={() => setMode('return')} style={btn(mode === 'return')}>Rendite</button>
+                        </div>
+                    )}
+
+                    {mode === 'return' && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            <div style={toggleWrap}>
+                                <button onClick={() => setShowRealized(v => !v)} style={btn(showRealized)}>
+                                    Realisiert {showRealized ? 'an' : 'aus'}
+                                </button>
+                            </div>
+                            <div style={toggleWrap}>
+                                <button onClick={() => setReturnType('simple')} style={btn(returnType === 'simple')}>Einfach</button>
+                                <button onClick={() => setReturnType('twr')} style={btn(returnType === 'twr')}>TTWROR</button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -327,11 +340,27 @@ export default function PortfolioPerformanceChart({
                 </ComposedChart>
             </ResponsiveContainer>
 
-            <div style={{display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10, justifyContent: 'center'}}>
-                {RANGES.map(([id, label]) => (
-                    <button key={id} onClick={() => setRange(id)} style={btn(range === id)}>{label}</button>
-                ))}
-            </div>
+            {!hideRanges && (
+                <div
+                    style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 4,
+                        marginTop: 10,
+                        justifyContent: 'center',
+                    }}
+                >
+                    {RANGES.map(([id, label]) => (
+                        <button
+                            key={id}
+                            onClick={() => setRange(id)}
+                            style={btn(range === id)}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }
