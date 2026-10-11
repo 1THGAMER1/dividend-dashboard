@@ -596,6 +596,11 @@
         interval: { type: 'relative', value: PARQET_INTERVAL[range] ?? 'max' },
       }),
     })
+    console.log(
+        '[Parqet Zeitraum]',
+        range,
+        JSON.stringify(data?.performance, null, 2)
+    )
 
     const map = {}
     for (const h of data?.holdings ?? data?.performance?.holdings ?? []) {
