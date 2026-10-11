@@ -608,6 +608,7 @@
       unrealizedReturn: unrealized?.returnGross ?? null,
       realizedGain: realized?.gainGross ?? null,
       ttwror: perf?.kpis?.inInterval?.ttwror ?? null,
+      dividends: perf?.dividends?.inInterval?.gainNet ?? 0,
     })
 
     const map = {}

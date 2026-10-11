@@ -37,6 +37,13 @@ export default function PortfolioDashboard({
     const [range, setRange] = useState('1Y')
     const [perfByRange, setPerfByRange] = useState({})
     const [portfolioPerfByRange, setPortfolioPerfByRange] = useState({})
+    const currentPerf = portfolioPerfByRange[range]
+    const periodRealized = range === 'MAX'
+        ? activeHoldings.reduce((sum, h) => sum + (h.realizedGain || 0), 0)
+        : (currentPerf?.realizedGain ?? 0)
+    const periodDividends = range === 'MAX'
+        ? activeHoldings.reduce((sum, h) => sum + (h.dividends || 0), 0)
+        : (currentPerf?.dividends ?? Object.values(perfByRange[range] || {}).reduce((sum, p) => sum + (p.dividends || 0), 0))
 
     useEffect(() => {
         if (perfByRange[range] && portfolioPerfByRange[range]) return
@@ -97,12 +104,11 @@ export default function PortfolioDashboard({
                 }}>
                     <AssetHoldingDonut holdings={activeHoldings} compact={true} />
                 </div>
-
-                {/* Die 2 KPI-Karten: Auf PC rechts, auf Handy sauber darunter */}
+                {/* Die 3 KPI-Karten: Synchron mit dem gewählten Zeitraum */}
                 <div style={{
-                    flex: '2 1 280px',
+                    flex: '2 1 320px',
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
                     gap: 12,
                     minWidth: 0,
                     width: '100%'
@@ -111,13 +117,19 @@ export default function PortfolioDashboard({
                         label="Aktive Positionen"
                         value={activeHoldings.length.toString()}
                         color="#a78bfa"
-                        sub="Alle Assets im Depot"
+                        sub="Assets im Depot"
                     />
                     <KpiCard
-                        label="Progn. Jahresausschüttung"
-                        value={fmt(forecast12m?.net ?? 0)}
+                        label={range === 'MAX' ? "Realisierter Gewinn" : "Realisiert im Zeitraum"}
+                        value={`${periodRealized >= 0 ? '+' : ''}${fmt(periodRealized)}`}
+                        color={periodRealized >= 0 ? "#22c55e" : "#ef4444"}
+                        sub={range === 'MAX' ? "Seit Kauf" : `Zeitraum: ${range}`}
+                    />
+                    <KpiCard
+                        label={range === 'MAX' ? "Erhaltene Dividenden" : "Dividenden im Zeitraum"}
+                        value={periodDividends > 0 ? `+${fmt(periodDividends)}` : '0,00 €'}
                         color="#22c55e"
-                        sub="Nächste 12 Monate Netto"
+                        sub={range === 'MAX' ? "Seit Kauf" : `Zeitraum: ${range}`}
                     />
                 </div>
             </div>
