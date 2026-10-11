@@ -226,7 +226,9 @@ export default function PortfolioPerformanceChart({
                 marginBottom: 12
             }}>
                 <div>
-                    <h3 style={{fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9'}}>📈 Performance</h3>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9' }}>
+                        {mode === 'value' ? '💶 Wertentwicklung' : '📈 Rendite'}
+                    </h3>
 
                     {mode === 'value' ? (
                         <>
@@ -293,11 +295,14 @@ export default function PortfolioPerformanceChart({
                 <ComposedChart key={`${mode}-${returnType}`} data={data}
                                margin={{top: 8, right: 4, left: 0, bottom: 0}}>
                     <defs>
-                        <linearGradient id="lineColor" x1="0" y1="0" x2="0" y2="1">
+                        {/* Linienfarbe: Eindeutige ID pro Modus */}
+                        <linearGradient id={`lineColor-${mode}`} x1="0" y1="0" x2="0" y2="1">
                             <stop offset={off} stopColor="#22c55e" />
                             <stop offset={off} stopColor="#ef4444" />
                         </linearGradient>
-                        <linearGradient id="perfFill" x1="0" y1="0" x2="0" y2="1">
+
+                        {/* Flächenfüllung: Eindeutige ID pro Modus */}
+                        <linearGradient id={`perfFill-${mode}`} x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
                             <stop offset={off} stopColor="#22c55e" stopOpacity={0.02} />
                             <stop offset={off} stopColor="#ef4444" stopOpacity={0.02} />
@@ -326,16 +331,16 @@ export default function PortfolioPerformanceChart({
                         }}
                     />
                     {mode === 'value' && (
-                        <Area type="monotone" dataKey="v" stroke="url(#lineColor)" strokeWidth={2}
-                              fill="url(#perfFill)" dot={false} isAnimationActive={false}/>
+                        <Area type="monotone" dataKey="v" stroke={`url(#lineColor-${mode})`} strokeWidth={2}
+                              fill={`url(#perfFill-${mode})`} dot={false} isAnimationActive={false} />
                     )}
                     {mode === 'value' && hasCapital && (
                         <Line type="monotone" dataKey="c" stroke="#94a3b8" strokeWidth={1.5}
                               strokeDasharray="4 4" dot={false} isAnimationActive={false}/>
                     )}
                     {mode === 'return' && (
-                        <Area type="monotone" dataKey={retKey} stroke="url(#lineColor)" strokeWidth={2}
-                              fill="url(#perfFill)" dot={false} isAnimationActive={false} connectNulls/>
+                        <Area type="monotone" dataKey={retKey} stroke={`url(#lineColor-${mode})`} strokeWidth={2}
+                              fill={`url(#perfFill-${mode})`} dot={false} isAnimationActive={false} connectNulls />
                     )}
                 </ComposedChart>
             </ResponsiveContainer>

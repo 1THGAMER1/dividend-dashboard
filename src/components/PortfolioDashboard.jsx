@@ -226,32 +226,34 @@ export default function PortfolioDashboard({
                                         </div>
                                     </div>
 
-                                    {/*Untere Zeile: Einstandswert*/}
-                                    {(cost > 0 || realized !== 0 || dividends > 0) && (
-                                        <div style={{
-                                            borderTop: '1px solid #1a2233',
-                                            paddingTop: 10,
-                                            display: 'grid',
-                                            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                                            gap: 8,
-                                        }}>
-                                            {cost > 0 && <Stat label="Einstandswert" value={fmt(cost)} />}
-                                            {realized !== 0 && (
-                                                <Stat
-                                                    label="Realisiert"
-                                                    value={`${realized >= 0 ? '+' : ''}${fmt(realized)}`}
-                                                    color={realized >= 0 ? '#22c55e' : '#ef4444'}
-                                                />
-                                            )}
-                                            {dividends > 0 && (
-                                                <Stat
-                                                    label="Dividenden"
-                                                    value={`+${fmt(dividends)}`}
-                                                    color="#22c55e"
-                                                />
-                                            )}
-                                        </div>
-                                    )}
+                                    <div style={{
+                                        borderTop: '1px solid #1a2233',
+                                        paddingTop: 10,
+                                        marginTop: 12,
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(3, 1fr)',
+                                        gap: 8,
+                                    }}>
+                                        {/* 1. Kachel: Einstandswert */}
+                                        <Stat
+                                            label="Einstandswert"
+                                            value={cost > 0 ? fmt(cost) : '—'}
+                                        />
+
+                                        {/* 2. Kachel: Realisiert (Teilverkäufe) */}
+                                        <Stat
+                                            label="Realisiert"
+                                            value={realized !== 0 ? `${realized >= 0 ? '+' : ''}${fmt(realized)}` : '—'}
+                                            color={realized !== 0 ? (realized >= 0 ? '#22c55e' : '#ef4444') : '#64748b'}
+                                        />
+
+                                        {/* 3. Kachel: Dividenden */}
+                                        <Stat
+                                            label="Dividenden"
+                                            value={dividends > 0 ? `+${fmt(dividends)}` : '—'}
+                                            color={dividends > 0 ? '#22c55e' : '#64748b'}
+                                        />
+                                    </div>
                                 </div>
                             )
                         })}
