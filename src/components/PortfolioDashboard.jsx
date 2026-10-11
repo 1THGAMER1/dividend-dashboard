@@ -5,6 +5,7 @@ import { fetchPositionPerformance } from '../api.js'
 import AssetHoldingDonut from "./AssetHoldingDonut.jsx"
 import HoldingDetailModal from './HoldingDetailModal.jsx'
 
+
 const fmt = (n) => {
     const val = Number(n || 0)
     const options = {
@@ -299,6 +300,7 @@ export default function PortfolioDashboard({
                             return (
                                 <div
                                     key={item.id || item.isin}
+                                    onClick={() => setSelectedHolding(item)}
                                     style={{
                                         background: '#161b27',
                                         border: '1px solid #1e2a3a',
@@ -307,9 +309,19 @@ export default function PortfolioDashboard({
                                         display: 'flex',
                                         flexDirection: 'column',
                                         gap: 8,
-                                        transition: 'background 0.15s ease',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = '#38bdf8'
+                                        e.currentTarget.style.background = '#1a2233'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = '#1e2a3a'
+                                        e.currentTarget.style.background = '#161b27'
                                     }}
                                 >
+
                                     {/* HAUPTZEILE: LINKS NAME, RECHTS MARKTWERT */}
                                     <div style={{
                                         display: 'flex',
@@ -479,7 +491,7 @@ export default function PortfolioDashboard({
                     </div>
                 </div>
             )}
-            {/* DETAIL MODAL FÜR AUSGEWÄHLTEN BESTAND */}
+            {/* DETAIL MODAL */}
             {selectedHolding && (
                 <HoldingDetailModal
                     holding={selectedHolding}
