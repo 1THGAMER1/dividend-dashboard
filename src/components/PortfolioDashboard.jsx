@@ -176,7 +176,7 @@ export default function PortfolioDashboard({
                         Keine aktiven Bestände gefunden.
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {activeHoldings.map((item, idx) => {
                             const sharesNum = getShares(item)
                             const cost = item.costValue || 0
@@ -192,82 +192,82 @@ export default function PortfolioDashboard({
                             const isPositive = profit >= 0
 
                             return (
-                                <div key={item.isin || idx} style={{
-                                    background: '#10141f',
-                                    border: '1px solid #1a2233',
-                                    borderRadius: 12,
-                                    padding: '14px 16px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 10
-                                }}>
-                                    {/* Obere Zeile: Logo, Name & Aktueller Wert */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            {logoOf(item) && (
-                                                <img
-                                                    src={logoOf(item)}
-                                                    alt=""
-                                                    width={44}
-                                                    height={44}
-                                                    style={{ borderRadius: 10, background: '#fff', objectFit: 'contain', flexShrink: 0 }}
-                                                    onError={(e) => { e.currentTarget.style.display = 'none' }}
-                                                />
-                                            )}
-                                            <div>
-                                                <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
-                                                    {getDisplayName(item)}
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                                                <span style={{ background: '#1e293b', color: '#38bdf8', fontSize: 10, padding: '2px 6px', borderRadius: 6, fontWeight: 500 }}>
-                                                    {item.type || 'Asset'}
-                                                </span>
-                                                    {sharesNum > 0 && (
-                                                        <span style={{ fontSize: 12, color: '#64748b' }}>
-                                                            {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
-                                                        </span>
-                                                    )}
-                                                </div>
+                                <div
+                                    key={item.id || item.isin}
+                                    style={{
+                                        background: '#161b27',
+                                        border: '1px solid #1e2a3a',
+                                        borderRadius: 12,
+                                        padding: '10px 16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 16,
+                                        flexWrap: 'wrap',
+                                        transition: 'background 0.15s ease',
+                                    }}
+                                >
+                                    {/* 1. LINKS: Logo, Name & Badge */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 220, flex: '1 1 240px' }}>
+                                        {logoOf(item) && (
+                                            <img
+                                                src={logoOf(item)}
+                                                alt=""
+                                                width={32}
+                                                height={32}
+                                                style={{ borderRadius: 8, background: '#fff', objectFit: 'contain', flexShrink: 0 }}
+                                                onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                            />
+                                        )}
+                                        <div style={{ overflow: 'hidden' }}>
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {getDisplayName(item)}
                                             </div>
-                                        </div>
-
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>
-                                                {val > 0 ? fmt(val) : '—'}
-                                            </div>
-                                            <div style={{ fontSize: 12, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444', marginTop: 2 }}>
-                                                {pending ? '…' : base > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                        <span style={{ background: '#1e293b', color: '#38bdf8', fontSize: 9, padding: '1px 5px', borderRadius: 4, fontWeight: 500 }}>
+                                            {item.type || 'Asset'}
+                                        </span>
+                                                {sharesNum > 0 && (
+                                                    <span style={{ fontSize: 11, color: '#64748b' }}>
+                                                {sharesNum.toLocaleString('de-DE', { maximumFractionDigits: 4 })} Anteile
+                                            </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div style={{
-                                        borderTop: '1px solid #1a2233',
-                                        paddingTop: 10,
-                                        marginTop: 12,
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(3, 1fr)',
-                                        gap: 8,
-                                    }}>
-                                        {/* 1. Kachel: Einstandswert */}
-                                        <Stat
-                                            label="Einstandswert"
-                                            value={cost > 0 ? fmt(cost) : '—'}
-                                        />
+                                    {/* 2. MITTE: Einstand, Realisiert, Dividenden (kompakt als dezente Mini-Spalten) */}
+                                    <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <div style={{ textAlign: 'right', minWidth: 75 }}>
+                                            <div style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3 }}>Einstand</div>
+                                            <div style={{ fontSize: 12, fontWeight: 500, color: '#94a3b8', marginTop: 1 }}>
+                                                {cost > 0 ? fmt(cost) : '—'}
+                                            </div>
+                                        </div>
 
-                                        {/* 2. Kachel: Realisiert (Teilverkäufe) */}
-                                        <Stat
-                                            label="Realisiert"
-                                            value={realized !== 0 ? `${realized >= 0 ? '+' : ''}${fmt(realized)}` : '—'}
-                                            color={realized !== 0 ? (realized >= 0 ? '#22c55e' : '#ef4444') : '#64748b'}
-                                        />
+                                        <div style={{ textAlign: 'right', minWidth: 70 }}>
+                                            <div style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3 }}>Realisiert</div>
+                                            <div style={{ fontSize: 12, fontWeight: 500, color: realized !== 0 ? (realized >= 0 ? '#22c55e' : '#ef4444') : '#64748b', marginTop: 1 }}>
+                                                {realized !== 0 ? `${realized >= 0 ? '+' : ''}${fmt(realized)}` : '—'}
+                                            </div>
+                                        </div>
 
-                                        {/* 3. Kachel: Dividenden */}
-                                        <Stat
-                                            label="Dividenden"
-                                            value={dividends > 0 ? `+${fmt(dividends)}` : '—'}
-                                            color={dividends > 0 ? '#22c55e' : '#64748b'}
-                                        />
+                                        <div style={{ textAlign: 'right', minWidth: 70 }}>
+                                            <div style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3 }}>Dividenden</div>
+                                            <div style={{ fontSize: 12, fontWeight: 500, color: dividends > 0 ? '#22c55e' : '#64748b', marginTop: 1 }}>
+                                                {dividends > 0 ? `+${fmt(dividends)}` : '—'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. RECHTS: Marktwert & Rendite */}
+                                    <div style={{ textAlign: 'right', minWidth: 110 }}>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>
+                                            {val > 0 ? fmt(val) : '—'}
+                                        </div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: isPositive ? '#22c55e' : '#ef4444', marginTop: 1 }}>
+                                            {pending ? '…' : base > 0 ? `${isPositive ? '+' : ''}${fmt(profit)} (${isPositive ? '+' : ''}${profitPercent.toFixed(2).replace('.', ',')}%)` : '—'}
+                                        </div>
                                     </div>
                                 </div>
                             )
