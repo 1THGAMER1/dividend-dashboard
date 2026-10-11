@@ -193,6 +193,17 @@ export default function PortfolioPerformanceChart({
     const retValue = returnType === 'twr' ? last.r : simpleReturn
     const positive = (mode === 'value' ? gainRange : retValue ?? 0) >= 0
     const color = mode === 'return' ? (positive ? '#22c55e' : '#ef4444') : '#009991'
+    const off = useMemo(() => {
+        if (!data.length) return 0
+        const values = data.map(d => (mode === 'return' ? d[retKey] : d.v)).filter(v => v != null)
+        const max = Math.max(...values)
+        const min = Math.min(...values)
+        const zero = mode === 'return' ? 0 : (data[0]?.v ?? 0)
+
+        if (max <= zero) return 0
+        if (min >= zero) return 1
+        return (max - zero) / (max - min)
+    }, [data, mode, retKey])
 
     return (
         <div style={cardStyle}>
@@ -264,9 +275,15 @@ export default function PortfolioPerformanceChart({
                 <ComposedChart key={`${mode}-${returnType}`} data={data}
                                margin={{top: 8, right: 4, left: 0, bottom: 0}}>
                     <defs>
+                        <linearGradient id="lineColor" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset={off} stopColor="#22c55e" />
+                            <stop offset={off} stopColor="#ef4444" />
+                        </linearGradient>
                         <linearGradient id="perfFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={color} stopOpacity={0.35}/>
-                            <stop offset="100%" stopColor={color} stopOpacity={0}/>
+                            <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
+                            <stop offset={off} stopColor="#22c55e" stopOpacity={0.02} />
+                            <stop offset={off} stopColor="#ef4444" stopOpacity={0.02} />
+                            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.35} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid stroke="#1e2a3a" vertical={false}/>
@@ -291,7 +308,7 @@ export default function PortfolioPerformanceChart({
                         }}
                     />
                     {mode === 'value' && (
-                        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2}
+                        <Area type="monotone" dataKey="v" stroke="url(#lineColor)" strokeWidth={2}
                               fill="url(#perfFill)" dot={false} isAnimationActive={false}/>
                     )}
                     {mode === 'value' && hasCapital && (
@@ -299,8 +316,8 @@ export default function PortfolioPerformanceChart({
                               strokeDasharray="4 4" dot={false} isAnimationActive={false}/>
                     )}
                     {mode === 'return' && (
-                        <Area type="monotone" dataKey={retKey} stroke={color} strokeWidth={2}
-                              fill="url(#perfFill)" dot={false} isAnimationActive={false} connectNulls />
+                        <Area type="monotone" dataKey={retKey} stroke="url(#lineColor)" strokeWidth={2}
+                              fill="url(#perfFill)" dot={false} isAnimationActive={false} connectNulls/>
                     )}
                 </ComposedChart>
             </ResponsiveContainer>
