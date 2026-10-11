@@ -491,7 +491,6 @@ export default function PortfolioDashboard({
                     </div>
                 </div>
             )}
-            {/* DETAIL MODAL */}
             {selectedHolding && (
                 <HoldingDetailModal
                     holding={selectedHolding}
