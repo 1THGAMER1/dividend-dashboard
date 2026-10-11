@@ -107,11 +107,9 @@ export default function PortfolioPerformanceChart({
         const first = sub[0]
         const gain0 = gainOf(first, showRealized)
 
-        return sub.map(p => {
-            // TTWROR, auf den Beginn des Zeitraums bezogen
+        // Roh-Berechnung der Kurve
+        const rawPoints = sub.map(p => {
             const r = ((1 + p.twr / 100) / (1 + first.twr / 100) - 1) * 100
-
-            // Einfache Rendite
             let s = null
             if (range === 'MAX') {
                 s = p.c > 0 ? (gainOf(p, showRealized) / p.c) * 100 : null
@@ -120,10 +118,20 @@ export default function PortfolioPerformanceChart({
                 const base = first.v + netFlow > 0 ? first.v + netFlow : first.v
                 s = base > 0 ? ((gainOf(p, showRealized) - gain0) / base) * 100 : null
             }
-
             return { ...p, r, s }
         })
-    }, [twrSeries, range, showRealized])
+
+        // Skalierung: Endpunkt der einfachen Rendite exakt an den Parqet-KPI anpassen
+        const targetEnd = range === 'MAX' ? null : (showRealized ? null : portfolioPerformance?.unrealizedReturn)
+        const lastRawS = rawPoints[rawPoints.length - 1]?.s
+
+        if (targetEnd != null && lastRawS && Math.abs(lastRawS) > 0.0001) {
+            const factor = targetEnd / lastRawS
+            return rawPoints.map(p => ({ ...p, s: p.s != null ? p.s * factor : null }))
+        }
+
+        return rawPoints
+    }, [twrSeries, range, showRealized, portfolioPerformance])
 
     if (series === undefined) return null // z. B. geteilte Ansicht ohne Verlaufsdaten
 
@@ -150,20 +158,6 @@ export default function PortfolioPerformanceChart({
     ])
 
     const hasCapital = data.some(p => p.c != null)
-    // TEMPORÄR: Vergleichswerte für den gewählten Zeitraum
-    const dbg = (() => {
-        const c0 = first.c ?? 0
-        const gainRangeDbg = (last.v - (last.c ?? 0)) - (first.v - c0) // Gewinn im Zeitraum ohne Einzahlungen
-        const flow = (last.c ?? 0) - c0                                // Einzahlungen im Zeitraum
-        const avgV = data.reduce((s, p) => s + p.v, 0) / data.length
-        const f = (x) => (x == null || !Number.isFinite(x) ? '—' : `${x.toFixed(2).replace('.', ',')} %`)
-        return `Gewinn ${gainRangeDbg.toFixed(2)} € · Einzahlung ${flow.toFixed(2)} € · Start ${first.v.toFixed(2)} € · Ende ${last.v.toFixed(2)} €\n`
-            + `A: Gewinn/(Start+Einzahlung) ${f(gainRangeDbg / (first.v + flow) * 100)}\n`
-            + `B: Gewinn/Start ${f(gainRangeDbg / first.v * 100)}\n`
-            + `C: Gewinn/Kapital am Ende ${f(gainRangeDbg / last.c * 100)}\n`
-            + `D: Gewinn/Ø Depotwert ${f(gainRangeDbg / avgV * 100)}\n`
-            + `TTWROR ${f(last.r)}`
-    })()
     // Gewinn im gewählten Zeitraum (bei Max = Gesamtgewinn)
     const unrealizedGain = portfolioPerformance?.unrealizedGain
     const realizedGain = portfolioPerformance?.realizedGain
@@ -287,9 +281,9 @@ export default function PortfolioPerformanceChart({
                         <Line type="monotone" dataKey="c" stroke="#94a3b8" strokeWidth={1.5}
                               strokeDasharray="4 4" dot={false} isAnimationActive={false}/>
                     )}
-                    {mode === 'return' && returnType === 'twr' && (
+                    {mode === 'return' && (
                         <Area type="monotone" dataKey={retKey} stroke={color} strokeWidth={2}
-                              fill="url(#perfFill)" dot={false} isAnimationActive={false} connectNulls/>
+                              fill="url(#perfFill)" dot={false} isAnimationActive={false} connectNulls />
                     )}
                 </ComposedChart>
             </ResponsiveContainer>
