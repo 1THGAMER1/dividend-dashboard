@@ -6,12 +6,15 @@ import EtfUploadWidget from "../components/EtfUploadWidget.jsx";
 
 export default function PortfolioPageView({
                                               page,
+                                              onNavigate,
                                               currentValue,
                                               enrichedHoldings,
                                               holdings,
                                               byHolding,
                                               performanceSeries,
-                                              onNavigate,
+                                              buyActs = [],
+                                              sellActs = [],
+                                              forecastByHolding = {},
                                           }) {
     const activeHoldings = enrichedHoldings || holdings
 
@@ -26,9 +29,8 @@ export default function PortfolioPageView({
 
                     <PortfolioDashboard
                         currentValue={currentValue}
-                        holdings={activeHoldings}
+                        holdings={enrichedHoldings || holdings}
                         performanceSeries={performanceSeries}
-                        forecast12m={forecast12m}
                         buyActs={buyActs}
                         sellActs={sellActs}
                         byHolding={byHolding}

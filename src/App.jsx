@@ -294,6 +294,9 @@ export default function App() {
                   holdings={holdings}
                   byHolding={byHolding}
                   performanceSeries={performanceSeries}
+                  buyActs={buyActs}
+                  sellActs={sellActs}
+                  forecastByHolding={forecastByHolding}
               />
           )}
         </div>
