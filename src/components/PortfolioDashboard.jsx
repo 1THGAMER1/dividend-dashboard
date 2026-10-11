@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import KpiCard from './KpiCard.jsx'
 import PortfolioPerformanceChart from './PortfolioPerformanceChart.jsx'
 import { fetchPositionPerformance } from '../api.js'
+import AssetAllocationDonut from "./AssetAllocationDonut.jsx";
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -75,14 +76,45 @@ export default function PortfolioDashboard({
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {/* KPI KARTEN */}
-            <div className="kpi-grid">
-                <KpiCard
-                    label="Aktive Positionen"
-                    value={activeHoldings.length.toString()}
-                    color="#a78bfa"
-                    sub="Alle Assets im Depot"
-                />
+            {/* ALLOCATION DONUT (LINKS) & KPI KARTEN (RECHTS) */}
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                gap: 16,
+                alignItems: 'stretch'
+            }}>
+                {/* Linke Seite: Asset Allocation Donut */}
+                <div style={{
+                    background: '#161b27',
+                    border: '1px solid #1e2a3a',
+                    borderRadius: 16,
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    minHeight: 220
+                }}>
+                    <AssetAllocationDonut
+                        enrichedHoldings={activeHoldings}
+                        totalPortfolioValue={displayValue}
+                    />
+                </div>
+
+                {/* Rechte Seite: KPI Karten */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'space-between' }}>
+                    <KpiCard
+                        label="Portfolio Marktwert"
+                        value={displayValue > 0 ? fmt(displayValue) : '--- €'}
+                        color="#60a5fa"
+                        sub="Aktueller Gesamtwert"
+                    />
+                    <KpiCard
+                        label="Aktive Positionen"
+                        value={activeHoldings.length.toString()}
+                        color="#a78bfa"
+                        sub="Alle Assets im Depot"
+                    />
+                </div>
             </div>
             {/* PERFORMANCE-CHART */}
             <PortfolioPerformanceChart

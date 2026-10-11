@@ -188,9 +188,12 @@ export default function PortfolioPerformanceChart({
         : (showRealized
             ? (baseCapital && gainRange != null ? (gainRange / baseCapital) * 100 : null)
             : portfolioPerformance?.unrealizedReturn ?? null)
+    const exactTwr = (range !== 'MAX' && portfolioPerformance?.ttwror != null)
+        ? portfolioPerformance.ttwror
+        : last.r
 
     const retKey = returnType === 'twr' ? 'r' : 's'
-    const retValue = returnType === 'twr' ? last.r : simpleReturn
+    const retValue = returnType === 'twr' ? exactTwr : simpleReturn
     const positive = (mode === 'value' ? gainRange : retValue ?? 0) >= 0
     const color = mode === 'return' ? (positive ? '#22c55e' : '#ef4444') : '#009991'
     const off = useMemo(() => {
@@ -243,8 +246,7 @@ export default function PortfolioPerformanceChart({
     {pct(simpleReturn)}
 </span>
                                 {' · '}
-                                TTWROR <span
-                                style={{color: (last.r ?? 0) >= 0 ? '#22c55e' : '#ef4444'}}>{pct(last.r)}</span>
+                                TTWROR <span style={{color: (exactTwr ?? 0) >= 0 ? '#22c55e' : '#ef4444'}}>{pct(exactTwr)}</span>
                             </div>
                         </>
                     )}

@@ -611,6 +611,7 @@
       unrealizedGain: unrealized?.gainGross ?? null,
       unrealizedReturn: unrealized?.returnGross ?? null,
       realizedGain: realized?.gainGross ?? null,
+      ttwror: perf?.kpis?.inInterval?.ttwror ?? null,
     })
 
     const map = {}
@@ -622,7 +623,7 @@
       map[key] = {
         unrealized: prev.unrealized + (perf.unrealizedGains?.inInterval?.gainNet ?? 0),
         realized:   prev.realized   + (perf.realizedGains?.inInterval?.gainNet ?? 0),
-        dividends:  prev.dividends  + (perf.dividends?.inInterval?.gainNet ?? 0), // <--- NEU
+        dividends:  prev.dividends  + (perf.dividends?.inInterval?.gainNet ?? 0),
         startValue: prev.startValue + (perf.valuation?.atIntervalStart ?? 0),
       }
     }
