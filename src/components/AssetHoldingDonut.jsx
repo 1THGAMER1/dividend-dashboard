@@ -31,12 +31,23 @@ export default function AssetHoldingDonut({ holdings = [], compact = false }) {
         fill: COLORS[index % COLORS.length]
     }))
 
-    // Wenn compact aktiviert ist: Nur der Donut ohne Überschrift und ohne Liste
     if (compact) {
+        const eurTotal = Math.round(totalValue).toLocaleString('de-DE') + ' €'
+
         return (
-            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: '16px 20px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{ width: '100%', height: 200, position: 'relative' }}>
-                    <ResponsiveContainer width="100%" height={200}>
+            <div style={{
+                background: '#161b27',
+                border: '1px solid #1e2a3a',
+                borderRadius: 16,
+                padding: '20px',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxSizing: 'border-box'
+            }}>
+                <div style={{ width: '100%', height: 260, position: 'relative' }}>
+                    <ResponsiveContainer width="100%" height={260}>
                         <PieChart>
                             <Tooltip
                                 content={({ active, payload }) => {
@@ -59,8 +70,8 @@ export default function AssetHoldingDonut({ holdings = [], compact = false }) {
                                 nameKey="name"
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={55}
-                                outerRadius={80}
+                                innerRadius={75}
+                                outerRadius={110}
                                 paddingAngle={2}
                                 stroke="#161b27"
                                 strokeWidth={2}
@@ -77,8 +88,8 @@ export default function AssetHoldingDonut({ holdings = [], compact = false }) {
                         textAlign: 'center',
                         pointerEvents: 'none'
                     }}>
-                        <div style={{ fontSize: 10, color: '#7a8ba0', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Bestände</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#e0e6f0', marginTop: 1 }}>{activeHoldings.length}</div>
+                        <div style={{ fontSize: 11, color: '#7a8ba0', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Gesamtwert</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{eurTotal}</div>
                     </div>
                 </div>
             </div>

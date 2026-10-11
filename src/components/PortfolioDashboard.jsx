@@ -65,10 +65,6 @@ export default function PortfolioDashboard({
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
     const getDisplayName = (item) => item.name || item.isin || 'Unbekanntes Asset'
-    console.log('[Dashboard]', range,
-        '| Einträge:', Object.keys(perfByRange[range] || {}).length,
-        '| Zeitraum-Wert:', JSON.stringify(perfByRange[range]?.[activeHoldings[0]?.isin]),
-        '| Gesamtgewinn:', (activeHoldings[0]?.value ?? 0) - (activeHoldings[0]?.costValue ?? 0))
 
     const logoOf = (item) =>
         item.logo || (/^[A-Z]{2}[A-Z0-9]{10}$/.test(item.isin || '') ? `https://image.parqet.com/security/${item.isin}` : null)
@@ -79,9 +75,9 @@ export default function PortfolioDashboard({
             {/* ALLOCATION DONUT (LINKS) & KPI KARTEN (RECHTS) */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
                 gap: 16,
-                alignItems: 'start'
+                alignItems: 'stretch'
             }}>
                 {/* Linke Seite: Asset Allocation Donut*/}
                 <div>

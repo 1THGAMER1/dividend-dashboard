@@ -327,7 +327,6 @@
   
     // 2. Krypto direkt über CoinMarketCap abfragen (kein Yahoo-Kontakt!)
     if (cryptoSymbolsToFetch.length > 0) {
-      console.log(`[CMC Batch] Lade Krypto direkt:`, cryptoSymbolsToFetch)
       const cmcCoins = await fetchCryptoPricesBatch(cryptoSymbolsToFetch)
   
       for (const [rawSymbol, coinData] of Object.entries(cmcCoins)) {
@@ -598,11 +597,6 @@
         interval: { type: 'relative', value: PARQET_INTERVAL[range] ?? 'max' },
       }),
     })
-    console.log(
-        '[Parqet Zeitraum]',
-        range,
-        JSON.stringify(data?.performance, null, 2)
-    )
     const perf = data?.performance
     const unrealized = perf?.unrealizedGains?.inInterval
     const realized = perf?.realizedGains?.inInterval
@@ -627,7 +621,6 @@
         startValue: prev.startValue + (perf.valuation?.atIntervalStart ?? 0),
       }
     }
-    console.log('[Positionen]', range, '→', PARQET_INTERVAL[range], '| Beispiel:', JSON.stringify(Object.values(map)[0]))
     return map
   }
 
