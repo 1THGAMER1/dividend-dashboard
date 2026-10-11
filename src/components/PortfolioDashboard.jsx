@@ -3,6 +3,7 @@ import KpiCard from './KpiCard.jsx'
 import PortfolioPerformanceChart from './PortfolioPerformanceChart.jsx'
 import { fetchPositionPerformance } from '../api.js'
 import AssetHoldingDonut from "./AssetHoldingDonut.jsx"
+import HoldingDetailModal from './HoldingDetailModal.jsx'
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -30,12 +31,16 @@ function Stat({ label, value, color = '#cbd5e1' }) {
 export default function PortfolioDashboard({
                                                currentValue,
                                                currentVal,
-                                               forecast12m,
                                                holdings = [],
-                                               performanceSeries
+                                               performanceSeries,
+                                               buyActs = [],
+                                               sellActs = [],
+                                               byHolding = {},
+                                               forecastByHolding = {},
                                            }) {
     const displayValue = currentValue ?? currentVal ?? 0
     const [range, setRange] = useState('1Y')
+    const [selectedHolding, setSelectedHolding] = useState(null)
     const [sortBy, setSortBy] = useState('value') // 'value' | 'profit' | 'profitPercent' | 'dividends' | 'realized'
     const [sortDir, setSortDir] = useState('desc') // 'desc' | 'asc'
 
@@ -444,7 +449,16 @@ export default function PortfolioDashboard({
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center'
-                                }}>
+                                }}
+                                     onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = '#2a3a50'
+                                    e.currentTarget.style.background = '#1a2233'
+                                }}
+                                     onMouseLeave={(e) => {
+                                         e.currentTarget.style.borderColor = '#1e2a3a'
+                                         e.currentTarget.style.background = '#161b27'
+                                     }}
+                                >
                                     <div>
                                         <div style={{ fontSize: 13, fontWeight: 500, color: '#94a3b8' }}>
                                             {getDisplayName(item)}
@@ -463,6 +477,20 @@ export default function PortfolioDashboard({
                         })}
                     </div>
                 </div>
+            )}
+            {/* DETAIL MODAL FÜR AUSGEWÄHLTEN BESTAND */}
+            {selectedHolding && (
+                <HoldingDetailModal
+                    holding={selectedHolding}
+                    onClose={() => setSelectedHolding(null)}
+                    buyActs={buyActs}
+                    sellActs={sellActs}
+                    byHolding={byHolding}
+                    forecastByHolding={forecastByHolding}
+                    range={range}
+                    perfByRange={perfByRange}
+                    totalPortfolioValue={displayValue}
+                />
             )}
         </div>
     )

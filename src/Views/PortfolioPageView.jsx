@@ -27,8 +27,12 @@ export default function PortfolioPageView({
                     <PortfolioDashboard
                         currentValue={currentValue}
                         holdings={activeHoldings}
-                        byHolding={byHolding}
                         performanceSeries={performanceSeries}
+                        forecast12m={forecast12m}
+                        buyActs={buyActs}
+                        sellActs={sellActs}
+                        byHolding={byHolding}
+                        forecastByHolding={forecastByHolding}
                     />
                 </>
             )}
