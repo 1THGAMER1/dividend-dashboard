@@ -40,22 +40,17 @@ export default function AssetHoldingDonut({ holdings = [], compact = false }) {
 
     const eurTotal = Math.round(totalValue).toLocaleString('de-DE') + ' €'
 
-    // 1. KOMPAKTE ANSICHT (fürs Dashboard)
+    // 1. KOMPAKTE ANSICHT (für die große Dashboard-Karte)
     if (compact) {
         return (
             <div style={{
-                background: '#161b27',
-                border: '1px solid #1e2a3a',
-                borderRadius: 16,
-                padding: '20px',
-                height: '100%',
+                width: '100%',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxSizing: 'border-box'
             }}>
-                <div style={{ width: '100%', height: 260, position: 'relative' }}>
-                    <ResponsiveContainer width="100%" height={260}>
+                <div style={{ width: '100%', maxWidth: 280, height: 240, position: 'relative' }}>
+                    <ResponsiveContainer width="100%" height={240}>
                         <PieChart>
                             <Tooltip
                                 content={({ active, payload }) => {
@@ -78,8 +73,8 @@ export default function AssetHoldingDonut({ holdings = [], compact = false }) {
                                 nameKey="name"
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={75}
-                                outerRadius={110}
+                                innerRadius={70}
+                                outerRadius={105}
                                 paddingAngle={2}
                                 stroke="#161b27"
                                 strokeWidth={2}

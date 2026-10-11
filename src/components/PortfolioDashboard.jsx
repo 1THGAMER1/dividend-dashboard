@@ -73,30 +73,43 @@ export default function PortfolioDashboard({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* ALLOCATION DONUT (LINKS) & KPI KARTEN (RECHTS) */}
+            {/* GROSSE HERO KPI-CARD (VOLLBREITE) */}
             <div style={{
+                background: '#161b27',
+                border: '1px solid #1e2a3a',
+                borderRadius: 16,
+                padding: 'clamp(16px, 2.5vw, 24px)',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                gap: 16,
-                alignItems: 'stretch'
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: 24,
+                alignItems: 'center',
+                width: '100%',
+                boxSizing: 'border-box'
             }}>
-                {/* Linke Seite: Asset Allocation Donut*/}
-                <div>
+                {/* Donut mit Gesamtwert */}
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <AssetHoldingDonut holdings={activeHoldings} compact={true} />
                 </div>
 
-                {/* Rechte Seite: 3 KPI Karten */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <KpiCard
-                        label="Portfolio Marktwert"
-                        value={displayValue > 0 ? fmt(displayValue) : '--- €'}
-                        color="#60a5fa"
-                        sub="Aktueller Gesamtwert"
-                    />
+                {/* Die 2 KPI-Karten – füllen auf dem PC die gesamte rechte Fläche */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: 16,
+                    height: '100%',
+                    alignContent: 'center'
+                }}>
                     <KpiCard
                         label="Aktive Positionen"
                         value={activeHoldings.length.toString()}
                         color="#a78bfa"
                         sub="Alle Assets im Depot"
+                    />
+                    <KpiCard
+                        label="Progn. Jahresausschüttung"
+                        value={fmt(forecast12m?.net ?? 0)}
+                        color="#22c55e"
+                        sub="Nächste 12 Monate Netto"
                     />
                 </div>
             </div>
