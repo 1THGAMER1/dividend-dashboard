@@ -89,6 +89,7 @@ export default function PortfolioPerformanceChart({
     const setMode = setInternalMode
     const [returnType, setReturnType] = useState('simple') // 'simple' | 'twr'
     const [showRealized, setShowRealized] = useState(false)
+    const [valueSubMode, setValueSubMode] = useState('value') // 'value' | 'drawdown'
 
     const twrSeries = useMemo(
         () => (Array.isArray(series) ? series.map(p => ({...p, twr: p.t ?? 0})) : []),
@@ -111,6 +112,13 @@ export default function PortfolioPerformanceChart({
         const first = sub[0]
         const gain0 = gainOf(first, showRealized)
 
+        // Höchststand bis zu jedem Punkt für Drawdown ermitteln
+        let runningPeak = 0
+        twrSeries.forEach(p => {
+            if (p.v > runningPeak) runningPeak = p.v
+            p._peak = runningPeak
+        })
+
         // Roh-Berechnung der Kurve
         const rawPoints = sub.map(p => {
             const r = ((1 + p.twr / 100) / (1 + first.twr / 100) - 1) * 100
@@ -122,7 +130,11 @@ export default function PortfolioPerformanceChart({
                 const base = first.v + netFlow > 0 ? first.v + netFlow : first.v
                 s = base > 0 ? ((gainOf(p, showRealized) - gain0) / base) * 100 : null
             }
-            return { ...p, r, s }
+
+            // Drawdown: Parqet-Wert oder berechnet aus Peak
+            const dd = p.dd != null ? p.dd : (p._peak > 0 ? ((p.v - p._peak) / p._peak) * 100 : 0)
+
+            return { ...p, r, s, dd: Math.min(0, dd) }
         })
 
         let targetEnd = null
@@ -227,26 +239,37 @@ export default function PortfolioPerformanceChart({
             }}>
                 <div>
                     <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9' }}>
-                        {mode === 'value' ? '💶 Wertentwicklung' : '📈 Rendite'}
+                        {mode === 'value'
+                            ? (valueSubMode === 'drawdown' ? '📉 Drawdown' : '💶 Wertentwicklung')
+                            : '📈 Rendite'}
                     </h3>
 
                     {mode === 'value' ? (
-                        <>
-                            <div style={{
-                                fontSize: 22,
-                                fontWeight: 700,
-                                color: '#f1f5f9',
-                                marginTop: 6
-                            }}>{eur(last.v)}</div>
-                            <div style={{fontSize: 12, marginTop: 2, color: gainRange >= 0 ? '#22c55e' : '#ef4444'}}>
-                                {range === 'MAX' ? 'Gewinn seit Kauf' : 'Gewinn im Zeitraum'}{' '}
-                                {gainRange == null
-                                    ? '—'
-                                    : `${gainRange >= 0 ? '+' : ''}${eur(gainRange)}`}
-                                {' '}({pct(simpleReturn)})
-                                {last.c != null && <span style={{color: '#64748b'}}> · investiert {eur(last.c)}</span>}
-                            </div>
-                        </>
+                        valueSubMode === 'drawdown' ? (
+                            <>
+                                <div style={{ fontSize: 22, fontWeight: 700, color: (last.dd ?? 0) >= 0 ? '#22c55e' : '#ef4444', marginTop: 6 }}>
+                                    {pct(last.dd ?? 0)}
+                                </div>
+                                <div style={{ fontSize: 12, marginTop: 2, color: '#64748b' }}>
+                                    Max. Drawdown im Zeitraum:{' '}
+                                    <span style={{ color: '#ef4444', fontWeight: 600 }}>
+                                        {pct(Math.min(...data.map(d => d.dd ?? 0)))}
+                                    </span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', marginTop: 6 }}>
+                                    {eur(last.v)}
+                                </div>
+                                <div style={{ fontSize: 12, marginTop: 2, color: gainRange >= 0 ? '#22c55e' : '#ef4444' }}>
+                                    {range === 'MAX' ? 'Gewinn seit Kauf' : 'Gewinn im Zeitraum'}{' '}
+                                    {gainRange == null ? '—' : `${gainRange >= 0 ? '+' : ''}${eur(gainRange)}`}{' '}
+                                    ({pct(simpleReturn)})
+                                    {last.c != null && <span style={{ color: '#64748b' }}> · investiert {eur(last.c)}</span>}
+                                </div>
+                            </>
+                        )
                     ) : (
                         <>
                             <div style={{fontSize: 22, fontWeight: 700, color, marginTop: 6}}>{pct(retValue)}</div>
@@ -275,7 +298,12 @@ export default function PortfolioPerformanceChart({
                             <button onClick={() => setMode('return')} style={btn(mode === 'return')}>Rendite</button>
                         </div>
                     )}
-
+                    {mode === 'value' && (
+                        <div style={toggleWrap}>
+                            <button onClick={() => setValueSubMode('value')} style={btn(valueSubMode === 'value')}>Wert</button>
+                            <button onClick={() => setValueSubMode('drawdown')} style={btn(valueSubMode === 'drawdown')}>Drawdown</button>
+                        </div>
+                    )}
                     {mode === 'return' && (
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <div style={toggleWrap}>
@@ -308,6 +336,11 @@ export default function PortfolioPerformanceChart({
                             <stop offset={off} stopColor="#ef4444" stopOpacity={0.02} />
                             <stop offset="100%" stopColor="#ef4444" stopOpacity={0.35} />
                         </linearGradient>
+                        {/* Drawdown-Verlauf: Von oben rot nach unten verblassend */}
+                        <linearGradient id="drawdownFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#ef4444" stopOpacity={0.4} />
+                            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
+                        </linearGradient>
                     </defs>
                     <CartesianGrid stroke="#1e2a3a" vertical={false}/>
                     <XAxis
@@ -317,7 +350,7 @@ export default function PortfolioPerformanceChart({
                     />
                     <YAxis
                         width={44} domain={['auto', 'auto']}
-                        tickFormatter={mode === 'value' ? eurShort : (v) => `${v.toFixed(0)}%`}
+                        tickFormatter={mode === 'value' ? (valueSubMode === 'drawdown' ? (v) => `${v.toFixed(0)}%` : eurShort) : (v) => `${v.toFixed(0)}%`}
                         tick={{fill: '#64748b', fontSize: 10}} axisLine={false} tickLine={false}
                     />
                     <Tooltip
@@ -325,18 +358,23 @@ export default function PortfolioPerformanceChart({
                         labelStyle={{color: '#94a3b8'}}
                         labelFormatter={fmtDate}
                         formatter={(val, _name, item) => {
+                            if (item.dataKey === 'dd') return [pct(val), 'Drawdown']
                             if (item.dataKey === 'r') return [pct(val), 'TTWROR']
                             if (item.dataKey === 's') return [pct(val), 'Rendite (einfach)']
                             return [eur(val), item.dataKey === 'c' ? 'Investiert' : 'Depotwert']
                         }}
                     />
-                    {mode === 'value' && (
+                    {mode === 'value' && valueSubMode === 'value' && (
                         <Area type="monotone" dataKey="v" stroke={`url(#lineColor-${mode})`} strokeWidth={2}
                               fill={`url(#perfFill-${mode})`} dot={false} isAnimationActive={false} />
                     )}
-                    {mode === 'value' && hasCapital && (
+                    {mode === 'value' && valueSubMode === 'value' && hasCapital && (
                         <Line type="monotone" dataKey="c" stroke="#94a3b8" strokeWidth={1.5}
-                              strokeDasharray="4 4" dot={false} isAnimationActive={false}/>
+                              strokeDasharray="4 4" dot={false} isAnimationActive={false} />
+                    )}
+                    {mode === 'value' && valueSubMode === 'drawdown' && (
+                        <Area type="monotone" dataKey="dd" stroke="#ef4444" strokeWidth={2}
+                              fill="url(#drawdownFill)" dot={false} isAnimationActive={false} />
                     )}
                     {mode === 'return' && (
                         <Area type="monotone" dataKey={retKey} stroke={`url(#lineColor-${mode})`} strokeWidth={2}
