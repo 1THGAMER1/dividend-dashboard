@@ -202,7 +202,14 @@ export default function App() {
 
   const nominalTotal = kpi['all']?.net ?? 0
   const realTotal = calcRealTotal(monthly)
-  const portfolioData = { currentValue, totalDividendsNet: nominalTotal, dividendYield: (dividendYield['12m'] ?? dividendYield['all'] ?? 0) / 100, cagrTotal: yoy }
+  const forecastYield = currentValue > 0 ? (forecast12m.net / currentValue) : 0
+  const portfolioData = {
+    currentValue,
+    totalDividendsNet: nominalTotal,
+    dividendYield: (dividendYield['12m'] ?? dividendYield['all'] ?? 0) / 100,
+    forecastDividendYield: forecastYield,
+    cagrTotal: yoy
+  }
 
   return (
       <div style={{ minHeight: '100vh', background: '#0f1420', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
