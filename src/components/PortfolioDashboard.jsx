@@ -33,6 +33,7 @@ export default function PortfolioDashboard({
                                                currentVal,
                                                holdings = [],
                                                performanceSeries,
+                                               forecast12m,
                                                buyActs = [],
                                                sellActs = [],
                                                byHolding = {},
