@@ -15,6 +15,7 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
             justifyContent: 'space-between',
             minHeight:      110,
             cursor:         onClick ? 'pointer' : 'default',
+            containerType: 'inline-size',
         }}>
             <div style={{
                 fontSize:      10,
@@ -26,15 +27,13 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
             </div>
 
             <div style={{
-                fontSize:   isLong ? 14 : 30,
                 fontWeight: isLong ? 600 : 700,
                 color:      isLong ? '#c8d6e5' : color,
                 lineHeight: isLong ? 1.35 : 1,
                 wordBreak:  'break-word',
                 margin:     '8px 0 4px 0',
                 whiteSpace: 'nowrap',
-                overflow:   'hidden',
-                textOverflow: 'ellipsis',
+                fontSize: 'clamp(1rem, 11cqi, 1.75rem)',
             }}>
                 {value}
             </div>

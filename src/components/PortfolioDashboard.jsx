@@ -157,12 +157,11 @@ export default function PortfolioDashboard({
                 </div>
                 {/* Die 4 KPI-Karten: Synchron mit dem gewählten Zeitraum */}
                 <div style={{
-                    flex: '2 1 340px',
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
+                    flex: '2 1 0',
+                    display: 'flex',
+                    flexWrap: 'wrap',
                     gap: 10,
-                    minWidth: 0,
-                    width: '100%'
+                    minWidth: 'min(100%, max-content)',
                 }}>
                     <KpiCard
                         label="Aktive Positionen"
