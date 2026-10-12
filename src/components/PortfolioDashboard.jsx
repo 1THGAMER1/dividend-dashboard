@@ -45,6 +45,23 @@ export default function PortfolioDashboard({
     const [selectedHolding, setSelectedHolding] = useState(null)
     const [sortBy, setSortBy] = useState('value') // 'value' | 'profit' | 'profitPercent' | 'dividends' | 'realized'
     const [sortDir, setSortDir] = useState('desc') // 'desc' | 'asc'
+    const [isMobile, setIsMobile] = useState(
+        () => window.matchMedia('(max-width: 40rem)').matches
+    )
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 40rem)')
+        const onChange = (e) => setIsMobile(e.matches)
+        mq.addEventListener('change', onChange)
+        return () => mq.removeEventListener('change', onChange)
+    }, [])
+
+    const SORT_OPTIONS = [
+        ['value', 'Allokation'],
+        ['profit', 'Gewinn (€)'],
+        ['profitPercent', 'Rendite (%)'],
+        ['dividends', 'Dividenden'],
+        ['realized', 'Realisiert'],
+    ]
 
     const handleSort = (field) => {
         if (sortBy === field) {
@@ -146,7 +163,7 @@ export default function PortfolioDashboard({
             }}>
                 {/* Donut mit Gesamtwert */}
                 <div style={{
-                    flex: '1 1 260px',
+                    flex: '1 1 16rem',
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
@@ -157,11 +174,11 @@ export default function PortfolioDashboard({
                 </div>
                 {/* Die 4 KPI-Karten: Synchron mit dem gewählten Zeitraum */}
                 <div style={{
-                    flex: '2 1 0',
-                    display: 'flex',
-                    flexWrap: 'wrap',
+                    flex: '2 1 20rem',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 9rem), 1fr))',
                     gap: 10,
-                    minWidth: 'min(100%, max-content)',
+                    minWidth: 0,
                 }}>
                     <KpiCard
                         label="Aktive Positionen"
@@ -232,48 +249,79 @@ export default function PortfolioDashboard({
                     <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#f1f5f9' }}>
                         💼 Aktive Bestände ({activeHoldings.length})
                     </h3>
+                    {/* Sortierung: Handy = Auswahlfeld, PC = Knöpfe */}
+                    {isMobile ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <select
+                                value={sortBy}
+                                onChange={(e) => { setSortBy(e.target.value); setSortDir('desc') }}
+                                style={{
+                                    background: '#0f1420',
+                                    color: '#f1f5f9',
+                                    border: '1px solid #1e2a3a',
+                                    borderRadius: 8,
+                                    padding: '6px 10px',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                }}
+                            >
+                                {SORT_OPTIONS.map(([field, label]) => (
+                                    <option key={field} value={field}>{label}</option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+                                aria-label="Sortierrichtung umkehren"
+                                style={{
+                                    background: '#009991',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: 8,
+                                    padding: '6px 10px',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                {sortDir === 'desc' ? '↓' : '↑'}
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{
+                            display: 'flex',
+                            gap: 4,
+                            background: '#0f1420',
+                            padding: 3,
+                            borderRadius: 8,
+                            border: '1px solid #1e2a3a',
+                            flexWrap: 'wrap',
+                        }}>
+                            {SORT_OPTIONS.map(([field, label]) => {
+                                const active = sortBy === field
+                                const arrow = active ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
+                                return (
+                                    <button
+                                        key={field}
+                                        onClick={() => handleSort(field)}
+                                        style={{
+                                            background: active ? '#009991' : 'transparent',
+                                            color: active ? '#fff' : '#64748b',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            padding: '4px 8px',
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        {label}{arrow}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    )}
 
-                    {/* Sortier-Buttons */}
-                    <div style={{
-                        display: 'flex',
-                        gap: 4,
-                        background: '#0f1420',
-                        padding: 3,
-                        borderRadius: 8,
-                        border: '1px solid #1e2a3a',
-                        overflowX: 'auto',
-                        maxWidth: '100%'
-                    }}>
-                        {[
-                            ['value', 'Allokation'],
-                            ['profit', 'Gewinn (€)'],
-                            ['profitPercent', 'Rendite (%)'],
-                            ['dividends', 'Dividenden'],
-                            ['realized', 'Realisiert'],
-                        ].map(([field, label]) => {
-                            const active = sortBy === field
-                            const arrow = active ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
-                            return (
-                                <button
-                                    key={field}
-                                    onClick={() => handleSort(field)}
-                                    style={{
-                                        background: active ? '#009991' : 'transparent',
-                                        color: active ? '#fff' : '#64748b',
-                                        border: 'none',
-                                        borderRadius: 6,
-                                        padding: '4px 8px',
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                >
-                                    {label}{arrow}
-                                </button>
-                            )
-                        })}
-                    </div>
                 </div>
 
                 {activeHoldings.length === 0 ? (

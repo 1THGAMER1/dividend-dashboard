@@ -130,6 +130,15 @@ export default function App() {
   const [tickerProgress, setTickerProgress] = useState(null)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const menuRef = useRef(null)
+  const [isMobile, setIsMobile] = useState(
+      () => window.matchMedia('(max-width: 40rem)').matches
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 40rem)')
+    const onChange = (e) => setIsMobile(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
   const currentTabs = appMode === 'dividends' ? DIVIDEND_TABS : PORTFOLIO_TABS
 
   useEffect(() => {
@@ -219,7 +228,7 @@ export default function App() {
 
   return (
       <div style={{ minHeight: '100vh', background: '#0f1420', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
-        <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#161b27', borderBottom: '1px solid #1e2a3a', padding: '0 8px', height: 52, position: 'sticky', top: 0, zIndex: 100, gap: 6 }}>
+        <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#161b27', borderBottom: '1px solid #1e2a3a', padding: isMobile ? '6px 8px' : '0 8px', minHeight: 52, flexWrap: 'wrap', rowGap: 6, position: 'sticky', top: 0, zIndex: 100, gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <DashLogo size={26} />
             <div style={{ display: 'flex', background: '#0f1420', padding: 2, borderRadius: 8, border: '1px solid #1e2a3a' }}>
@@ -227,7 +236,9 @@ export default function App() {
               <button onClick={() => handleModeSwitch('portfolio')} style={{ background: appMode === 'portfolio' ? '#009991' : 'transparent', color: appMode === 'portfolio' ? '#ffffff' : '#64748b', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>💼 Portfolio</button>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 2, overflowX: 'auto', paddingBottom: 2 }}>
+          <div style={isMobile
+              ? { order: 3, width: '100%', display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', paddingBottom: 4 }
+              : { display: 'flex', gap: 2, overflowX: 'auto', paddingBottom: 2 }}>
             {currentTabs.map(tab => (
                 <button key={tab.id} onClick={() => handlePageChange(tab.id)} style={{ background: page === tab.id ? '#009991' : 'transparent', color: page === tab.id ? 'white' : '#556070', border: 'none', borderRadius: 8, padding: '5px 8px', cursor: 'pointer', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                   <span>{tab.emoji}</span><span>{tab.label}</span>
