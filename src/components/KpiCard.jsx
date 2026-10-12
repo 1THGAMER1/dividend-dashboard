@@ -1,6 +1,41 @@
+import React, { useLayoutEffect, useRef, useState } from 'react'
+
+const MIN_REM = 1
+const MAX_REM = 2.5
+
 export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, subHighlight, onClick }) {
     const len    = typeof value === 'string' ? value.length : 0
     const isLong = len > 18
+    const boxRef  = useRef(null)
+    const textRef = useRef(null)
+    const [fontPx, setFontPx] = useState(null)
+
+    useLayoutEffect(() => {
+        const box = boxRef.current
+        const text = textRef.current
+        if (!box || !text || isLong) return
+
+        const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+
+        const fit = () => {
+            const available = box.clientWidth
+            const width = text.getBoundingClientRect().width
+            const current = parseFloat(getComputedStyle(text).fontSize)
+            if (!available || !width || !current) return
+
+            // Schrift so skalieren, dass der Text die Breite ausfüllt (2 % Luft)
+            const next = Math.min(
+                MAX_REM * rootPx,
+                Math.max(MIN_REM * rootPx, current * (available / width) * 0.98)
+            )
+            setFontPx(prev => (prev != null && Math.abs(prev - next) < 0.5 ? prev : next))
+        }
+
+        fit()
+        const ro = new ResizeObserver(fit)
+        ro.observe(box)
+        return () => ro.disconnect()
+    }, [value, isLong])
 
     return (
         <div onClick={onClick} style={{
@@ -15,7 +50,6 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
             justifyContent: 'space-between',
             minHeight:      110,
             cursor:         onClick ? 'pointer' : 'default',
-            containerType: 'inline-size',
         }}>
             <div style={{
                 fontSize:      10,
@@ -26,16 +60,19 @@ export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, 
                 {label}
             </div>
 
-            <div style={{
+            <div ref={boxRef} style={{
                 fontWeight: isLong ? 600 : 700,
                 color:      isLong ? '#c8d6e5' : color,
                 lineHeight: isLong ? 1.35 : 1,
-                wordBreak:  'break-word',
                 margin:     '8px 0 4px 0',
-                whiteSpace: 'nowrap',
-                fontSize: 'clamp(1rem, 11cqi, 1.75rem)',
+                overflow:   'hidden',
+                whiteSpace: isLong ? 'normal' : 'nowrap',
+                wordBreak:  isLong ? 'break-word' : 'normal',
+                fontSize:   isLong ? '1rem' : (fontPx ? `${fontPx}px` : '1.5rem'),
             }}>
-                {value}
+                <span ref={textRef} style={{ display: 'inline-block' }}>
+                    {value}
+                </span>
             </div>
 
             {/* Detail + Sub */}
