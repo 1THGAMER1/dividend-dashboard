@@ -63,6 +63,7 @@ export default function HoldingDetailModal({
 
     const myBuys = (buyActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'BUY' }))
     const mySells = (sellActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'SELL' }))
+    console.log('[Modal]', holding.name, '| Verkäufe gesamt:', sellActs.length, '| für diesen Wert:', mySells.length, '| Beispiel:', sellActs[0]?.asset)
 
     // Dividenden aus byHolding oder übergebenen Aktivitäten filtern
     const divEntry = byHolding[isin] || byHolding[holding.id] || {}

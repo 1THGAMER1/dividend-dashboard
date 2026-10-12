@@ -44,6 +44,7 @@ export default function useDividendData() {
     const [forecastByHolding, setForecastByHolding] = useState({})
     const [dividendYield,     setDividendYield]     = useState({ all: 0, ytd: 0, '12m': 0 })
     const [buyActs,           setBuyActs]           = useState([])
+    const [sellActs,          setSellActs]          = useState([])
     const [holdings,          setHoldings]          = useState([])
     const [enrichedHoldings,  setEnrichedHoldings]  = useState([])
     const [kpi,               setKpi]               = useState({
@@ -88,6 +89,7 @@ export default function useDividendData() {
         setByHolding(bh);
         setForecastByHolding(fc.forecastByHolding);
         setBuyActs(buyActsData ?? []);
+        setSellActs(sellActsData ?? []);
 
         if (fc.enrichedHoldings) {
             setEnrichedHoldings(applyParqetPositions(fc.enrichedHoldings, parqetPositions));
@@ -342,7 +344,7 @@ export default function useDividendData() {
         kpi, dividendYield,
         currentValue,
         performanceSeries,
-        buyActs,
+        buyActs, sellActs,
         holdings,
         enrichedHoldings,
         loading, authLoading,
