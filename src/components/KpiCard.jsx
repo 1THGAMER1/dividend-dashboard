@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
 
 const MIN_REM = 1
-const MAX_REM = 2.5
+const MAX_REM = 2
 
 export default function KpiCard({ label, value, color = '#e0e6f0', sub, detail, subHighlight, onClick }) {
     const len    = typeof value === 'string' ? value.length : 0
