@@ -77,7 +77,7 @@ export default function PortfolioPerformanceChart({
                                                       forcedMode,
                                                       hideRanges = false,
                                                   }) {
-    const [ownRange, setOwnRange] = useState('1Y')
+    const [ownRange, setOwnRange] = useState('MAX')
     const range = rangeProp ?? ownRange
     const setRange = onRangeChange ?? setOwnRange
     const [internalMode, setInternalMode] = useState('value')

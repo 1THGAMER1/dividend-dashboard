@@ -99,20 +99,7 @@ export default function AssetHoldingDonut({ holdings = [], compact = false, onNa
         )
     }
     // 2. VOLLSTÄNDIGE ANSICHT (für die Allokation-Seite)
-    const handleGoToXray = () => {
-        if (typeof onNavigate === 'function') {
-            onNavigate('portfolio-xray')
-            return
-        }
-
-        // 1. Wenn deine App Hash-Routing nutzt (z. B. /#xray)
-        window.location.hash = '#xray'
-
-        // 2. Event feuern, damit React-Router / State-Listener anspringen
-        window.dispatchEvent(new Event('hashchange'))
-        window.dispatchEvent(new PopStateEvent('popstate'))
-    }
-
+const handleGoToXray = () => onNavigate?.('portfolio-xray')
     return (
         <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 'clamp(16px, 3vw, 28px)', marginBottom: 24 }}>
             <div style={{

@@ -283,6 +283,27 @@
       return empty
     }
   }
+  // Kursverlauf eines Werts für die Einzelansicht (pro Sitzung zwischengespeichert)
+  const historyCache = new Map()
+
+  export async function fetchHoldingHistory(symbol) {
+    const empty = { history: [], splits: [] }
+    if (!symbol) return empty
+    if (historyCache.has(symbol)) return historyCache.get(symbol)
+    try {
+      const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(symbol)}&range=5y&interval=1d&series=1`)
+      if (!res.ok) return empty
+      const data = await res.json()
+      const result = {
+        history: Array.isArray(data.history) ? data.history : [],
+        splits: Array.isArray(data.splits) ? data.splits : [],
+      }
+      historyCache.set(symbol, result)
+      return result
+    } catch {
+      return empty
+    }
+  }
   
   async function fetchCryptoPricesBatch(symbols = []) {
     if (symbols.length === 0) return {}

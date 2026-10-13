@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import HoldingPriceChart from './HoldingPriceChart.jsx'
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -227,6 +228,12 @@ export default function HoldingDetailModal({
                     {/* TAB 1: ÜBERSICHT */}
                     {tab === 'overview' && (
                         <>
+                            <HoldingPriceChart
+                                symbol={/krypto|crypto/i.test(holding.type || '')
+                                    ? `${String(holding.isin || '').toUpperCase()}-EUR`
+                                    : (holding.isin || holding.id)}
+                                activities={allActivities}
+                            />
                             {/* Großer Marktwert-Kasten */}
                             <div style={{
                                 background: '#0f1420',

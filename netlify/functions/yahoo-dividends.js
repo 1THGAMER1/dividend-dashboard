@@ -178,6 +178,16 @@ export const handler = async function(event, context) {
                 split.ratio !== 1
             )
             .sort((a, b) => a.date.localeCompare(b.date));
+        // Optional: Kursverlauf für Charts (nur mit ?series=1)
+        const wantSeries = event.queryStringParameters?.series === '1';
+        let history = [];
+        if (wantSeries) {
+            const timestamps = result.timestamp || [];
+            const closes = result.indicators?.quote?.[0]?.close || [];
+            history = timestamps
+                .map((t, i) => ({ d: new Date(t * 1000).toISOString().slice(0, 10), close: closes[i] }))
+                .filter(p => p.close != null && Number.isFinite(p.close));
+        }
 
         // Jahresdividenden berechnen
         const yearlyTotals = {};
@@ -226,8 +236,8 @@ export const handler = async function(event, context) {
                         for (const year of Object.keys(yearlyTotals)) {
                             yearlyTotals[year] *= conversionRate;
                         }
-
                         currency = 'EUR';
+                        history = history.map(p => ({ ...p, close: p.close * conversionRate }));
                     }
                 }
             } catch (e) {
@@ -244,6 +254,7 @@ export const handler = async function(event, context) {
             fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
             fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
             dividends,
+            history,
             splits,
             yearlyTotals,
             totalDividendsCount: dividends.length,
