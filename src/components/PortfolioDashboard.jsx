@@ -105,7 +105,7 @@ export default function PortfolioDashboard({
                 const realized = rp ? rp.realized : (item.realizedGain || 0)
                 const dividends = rp ? rp.dividends : (item.dividends || 0)
                 const profit = rp ? rp.unrealized : val - cost
-                const base = rp ? (rp.startValue > 0 ? rp.startValue : cost) : cost
+                const base = rp ? (rp.basis > 0 ? rp.basis : cost) : cost
                 const profitPercent = base > 0 ? (profit / base) * 100 : 0
 
                 switch (field) {
@@ -340,7 +340,7 @@ export default function PortfolioDashboard({
                             const realized = rp ? rp.realized : (item.realizedGain || 0)
                             const dividends = rp ? rp.dividends : (item.dividends || 0)
                             const profit = unrealized
-                            const base = rp ? (rp.startValue > 0 ? rp.startValue : cost) : cost
+                            const base = rp ? (rp.basis > 0 ? rp.basis : cost) : cost
                             const profitPercent = base > 0 ? (profit / base) * 100 : 0
                             const isPositive = profit >= 0
 
@@ -364,8 +364,8 @@ export default function PortfolioDashboard({
                                         e.currentTarget.style.background = '#1a2233'
                                     }}
                                     onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = '#1e2a3a'
-                                        e.currentTarget.style.background = '#161b27'
+                                        e.currentTarget.style.borderColor = '#1a2233'
+                                        e.currentTarget.style.background = '#10141f'
                                     }}
                                 >
 
@@ -515,8 +515,8 @@ export default function PortfolioDashboard({
                                     e.currentTarget.style.background = '#1a2233'
                                 }}
                                      onMouseLeave={(e) => {
-                                         e.currentTarget.style.borderColor = '#1e2a3a'
-                                         e.currentTarget.style.background = '#161b27'
+                                         e.currentTarget.style.borderColor = '#1a2233'
+                                         e.currentTarget.style.background = '#10141f'
                                      }}
                                 >
                                     <div>

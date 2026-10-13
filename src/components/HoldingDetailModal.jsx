@@ -42,7 +42,7 @@ export default function HoldingDetailModal({
     const realized = rp ? rp.realized : (holding.realizedGain || 0)
     const dividends = rp ? rp.dividends : (holding.dividends || 0)
     const profit = unrealized
-    const base = rp ? (rp.startValue > 0 ? rp.startValue : cost) : cost
+    const base = rp ? (rp.basis > 0 ? rp.basis : cost) : cost
     const profitPercent = base > 0 ? (profit / base) * 100 : 0
     const isPositive = profit >= 0
 
