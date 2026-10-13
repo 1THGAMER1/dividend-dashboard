@@ -41,7 +41,7 @@ export default function PortfolioDashboard({
                                                forecastByHolding = {},
                                            }) {
     const displayValue = currentValue ?? currentVal ?? 0
-    const [range, setRange] = useState('1Y')
+    const [range, setRange] = useState('MAX')
     const [selectedHolding, setSelectedHolding] = useState(null)
     const [sortBy, setSortBy] = useState('value') // 'value' | 'profit' | 'profitPercent' | 'dividends' | 'realized'
     const [sortDir, setSortDir] = useState('desc') // 'desc' | 'asc'
