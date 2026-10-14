@@ -100,6 +100,8 @@ export default function HoldingDetailModal({
     // Prognostizierte Dividenden nächste 12 Monate
     const fcMonths = forecastByHolding[isin] || forecastByHolding[holding.id] || {}
     const forecast12mHolding = Object.values(fcMonths).reduce((s, v) => s + (v || 0), 0)
+    const hasReceivedDivs = totalDivsHistorical > 0
+    const hasForecast = forecast12mHolding > 0
 
     const MONTH_NAMES = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
@@ -388,54 +390,78 @@ export default function HoldingDetailModal({
                     {/* TAB 3: DIVIDENDEN */}
                     {tab === 'dividends' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            {/* Zusammenfassung oben */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
-                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Bisher erhalten gesamt</div>
-                                    <div style={{ fontSize: 18, fontWeight: 700, color: '#22c55e', marginTop: 2 }}>{fmt(totalDivsHistorical)}</div>
-                                </div>
-                                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
-                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Prognose nächste 12M</div>
-                                    <div style={{ fontSize: 18, fontWeight: 700, color: '#38bdf8', marginTop: 2 }}>{fmt(forecast12mHolding)}</div>
-                                </div>
-                            </div>
-
-                            {/* Historie nach Jahren */}
-                            {divYears.length === 0 && Object.keys(fcMonths).length === 0 ? (
-                                <div style={{ textAlign: 'center', color: '#64748b', padding: '30px 0', fontSize: 13 }}>
-                                    Keine Dividenden für dieses Asset erfasst.
+                            {!hasReceivedDivs && !hasForecast ? (
+                                <div style={{
+                                    textAlign: 'center',
+                                    color: '#64748b',
+                                    padding: '40px 16px',
+                                    fontSize: 13,
+                                    background: '#0f1420',
+                                    border: '1px dashed #1e2a3a',
+                                    borderRadius: 10,
+                                }}>
+                                    <div style={{ fontSize: 28, marginBottom: 8 }}>💰</div>
+                                    <div style={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>
+                                        Noch keine Dividenden erhalten
+                                    </div>
+                                    <div style={{ fontSize: 12 }}>
+                                        Für dieses Asset wurden bisher keine Ausschüttungen erfasst.
+                                    </div>
                                 </div>
                             ) : (
-                                divYears.map(year => {
-                                    const months = divEntry.monthly[year] || []
-                                    const yearSum = months.reduce((s, v) => s + (v || 0), 0)
-                                    if (yearSum <= 0) return null
-
-                                    return (
-                                        <div key={year} style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                                <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{year}</span>
-                                                <span style={{ fontSize: 13, fontWeight: 700, color: '#22c55e' }}>+{fmt(yearSum)}</span>
-                                            </div>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
-                                                {months.map((mVal, mIdx) => (
-                                                    <div key={mIdx} style={{
-                                                        background: mVal > 0 ? 'rgba(34, 197, 94, 0.08)' : '#090d15',
-                                                        border: `1px solid ${mVal > 0 ? 'rgba(34, 197, 94, 0.25)' : '#161b27'}`,
-                                                        borderRadius: 6,
-                                                        padding: '4px 6px',
-                                                        textAlign: 'center'
-                                                    }}>
-                                                        <div style={{ fontSize: 9, color: '#64748b' }}>{MONTH_NAMES[mIdx]}</div>
-                                                        <div style={{ fontSize: 10, fontWeight: 600, color: mVal > 0 ? '#22c55e' : '#475569', marginTop: 1 }}>
-                                                            {mVal > 0 ? fmt(mVal) : '—'}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                <>
+                                    {/* Zusammenfassung oben */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Bisher erhalten gesamt</div>
+                                            {hasReceivedDivs ? (
+                                                <div style={{ fontSize: 18, fontWeight: 700, color: '#22c55e', marginTop: 2 }}>{fmt(totalDivsHistorical)}</div>
+                                            ) : (
+                                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Noch keine Dividenden erhalten</div>
+                                            )}
                                         </div>
-                                    )
-                                })
+                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Prognose nächste 12M</div>
+                                            {hasForecast ? (
+                                                <div style={{ fontSize: 18, fontWeight: 700, color: '#38bdf8', marginTop: 2 }}>{fmt(forecast12mHolding)}</div>
+                                            ) : (
+                                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Keine Prognose verfügbar</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Historie nach Jahren */}
+                                    {divYears.map(year => {
+                                        const months = divEntry.monthly[year] || []
+                                        const yearSum = months.reduce((s, v) => s + (v || 0), 0)
+                                        if (yearSum <= 0) return null
+
+                                        return (
+                                            <div key={year} style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{year}</span>
+                                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#22c55e' }}>+{fmt(yearSum)}</span>
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+                                                    {months.map((mVal, mIdx) => (
+                                                        <div key={mIdx} style={{
+                                                            background: mVal > 0 ? 'rgba(34, 197, 94, 0.08)' : '#090d15',
+                                                            border: `1px solid ${mVal > 0 ? 'rgba(34, 197, 94, 0.25)' : '#161b27'}`,
+                                                            borderRadius: 6,
+                                                            padding: '4px 6px',
+                                                            textAlign: 'center'
+                                                        }}>
+                                                            <div style={{ fontSize: 9, color: '#64748b' }}>{MONTH_NAMES[mIdx]}</div>
+                                                            <div style={{ fontSize: 10, fontWeight: 600, color: mVal > 0 ? '#22c55e' : '#475569', marginTop: 1 }}>
+                                                                {mVal > 0 ? fmt(mVal) : '—'}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </>
                             )}
                         </div>
                     )}
