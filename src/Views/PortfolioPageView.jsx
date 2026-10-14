@@ -3,6 +3,7 @@ import PortfolioDashboard from '../components/PortfolioDashboard.jsx'
 import AssetAllocationDonut from '../components/AssetAllocationDonut.jsx'
 import AssetHoldingDonut from '../components/AssetHoldingDonut.jsx'
 import EtfUploadWidget from "../components/EtfUploadWidget.jsx";
+import HoldingDetailModal from "../components/HoldingDetailModal.jsx";
 
 export default function PortfolioPageView({
                                               page,
@@ -17,6 +18,7 @@ export default function PortfolioPageView({
                                               forecastByHolding = {},
                                           }) {
     const activeHoldings = enrichedHoldings || holdings
+    const [selectedHolding, setSelectedHolding] = React.useState(null)
 
     return (
         <div>
@@ -46,14 +48,26 @@ export default function PortfolioPageView({
                         <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Aufteilung deiner echten Depotwerte nach Klassen</p>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <AssetHoldingDonut holdings={holdings} onNavigate={onNavigate} />
+                        <AssetHoldingDonut holdings={activeHoldings} onNavigate={onNavigate} />
                         <AssetAllocationDonut holdings={activeHoldings} />
                     </div>
                 </>
             )}
 
             {page === 'portfolio-xray' && (
-                <EtfUploadWidget holdings={activeHoldings} currentValue={currentValue} />
+                <EtfUploadWidget holdings={activeHoldings} currentValue={currentValue} onSelectHolding={setSelectedHolding} />
+            )}
+            {selectedHolding && (
+                <HoldingDetailModal
+                    holding={selectedHolding}
+                    onClose={() => setSelectedHolding(null)}
+                    buyActs={buyActs}
+                    sellActs={sellActs}
+                    byHolding={byHolding}
+                    forecastByHolding={forecastByHolding}
+                    range="MAX"
+                    totalPortfolioValue={currentValue}
+                />
             )}
         </div>
     )

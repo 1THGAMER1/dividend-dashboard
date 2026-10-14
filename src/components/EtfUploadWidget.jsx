@@ -23,8 +23,8 @@ const BADGES = {
     local: { text: 'Nur in dieser Sitzung', color: '#f59e0b' }
 }
 
-export default function EtfUploadWidget({ holdings, currentValue }) {
-    const [catalog, setCatalog] = useState({})   // freigegebene Daten (alle Nutzer)
+export default function EtfUploadWidget({ holdings, currentValue, onSelectHolding}) {
+    const [catalog, setCatalog] = useState({})
     const [mine, setMine] = useState({})         // eigene Uploads (pending / approved / local)
     const [loadingFile, setLoadingFile] = useState(null)
     const [loadingStored, setLoadingStored] = useState(true)
@@ -287,7 +287,7 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
 
             {/* X-RAY VIEW BLEIBT DARUNTER VOLLSTÄNDIG ERHALTEN */}
             {Object.keys(etfHoldingsMap).length > 0 ? (
-                <PortfolioXRayView etfHoldingsMap={etfHoldingsMap} userHoldings={holdings} currentValue={currentValue} ownedHoldings={holdings}/>
+                <PortfolioXRayView etfHoldingsMap={etfHoldingsMap} userHoldings={holdings} currentValue={currentValue} ownedHoldings={holdings} onSelectHolding={onSelectHolding}/>
             ) : (
                 !loadingStored && (
                     <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }}>
