@@ -20,7 +20,10 @@ const NO_DIVIDEND_TYPES = new Set(['crypto', 'cryptocurrency'])
 function applyParqetPositions(list, positions) {
     if (!Array.isArray(list) || !positions || Object.keys(positions).length === 0) return list
     return list.map(item => {
-        const pos = positions[item.id] || positions[item.isin]
+        const pos = positions[item.id] ||
+            positions[item.isin] ||
+            Object.entries(positions).find(([k]) => k.startsWith(item.isin) || item.isin?.startsWith(k))?.[1];
+
         if (!pos) return item // Rückfall: eigene Berechnung aus Käufen/Verkäufen
         return {
             ...item,
@@ -28,8 +31,8 @@ function applyParqetPositions(list, positions) {
             value:        pos.value,
             costValue:    pos.cost,
             realizedGain: pos.realizedGain,
-            dividends:    pos.dividends ?? 0, // <--- NEU
-            logo:         pos.logo,
+            dividends:    pos.dividends ?? 0,
+            logo:         pos.logo || item.logo,
         }
     })
 }
@@ -156,21 +159,34 @@ export default function useDividendData() {
             tracker[isin].realizedGains += parseFloat(String(act.realizedGainsNet || act.realizedGains || 0).replace(',', '.')) || 0;
         });
 
+        // 1. Robuster Resolver: Löst jeden Key (auch hld_...) sauber auf das Symbol/ISIN auf
+        const canonicalKey = (rawKey) => {
+            if (!rawKey) return rawKey;
+            if (idMap[rawKey]?.isin) return idMap[rawKey].isin;
+            if (tickers[rawKey]) return tickers[rawKey];
+            const foundInMap = Object.entries(idMap).find(([hId, val]) => hId === rawKey || val.isin === rawKey);
+            if (foundInMap) return foundInMap[1].isin;
+            return rawKey;
+        };
+
         const allKeys = Array.from(new Set([
             ...Object.keys(names),
             ...Object.keys(tracker),
             ...Object.values(idMap).map(x => x.isin)
         ]));
 
-        const list = allKeys.map(key => {
-            const mapped = idMap[key] || Object.values(idMap).find(x => x.isin === key);
+        const rawList = allKeys.map(key => {
+            const resolvedIsin = canonicalKey(key);
+            const mapped = idMap[key] || idMap[resolvedIsin] || Object.values(idMap).find(x => x.isin === resolvedIsin);
 
-            const isin = tickers[key] || mapped?.isin || key;
-            const name = names[key] || mapped?.name || key;
-            const type = types[key] || mapped?.type || 'Wertpapier';
+            const isin = resolvedIsin;
+            const name = names[key] || names[isin] || mapped?.name || isin;
+            const type = types[key] || types[isin] || mapped?.type || 'Wertpapier';
 
-            let shares = tracker[key]?.shares || tracker[isin]?.shares || 0;
-            let val = tracker[key]?.val || tracker[isin]?.val || 0;
+            // Anteile und Einstand aus Tracker zusammenführen (egal ob unter hld_... oder Symbol gebucht)
+            const shares = (tracker[key]?.shares || 0) + (key !== isin ? (tracker[isin]?.shares || 0) : 0);
+            const val = (tracker[key]?.val || 0) + (key !== isin ? (tracker[isin]?.val || 0) : 0);
+            const soldVal = (tracker[key]?.soldValue || 0) + (key !== isin ? (tracker[isin]?.soldValue || 0) : 0);
 
             // --- LIVE-MARKTWERT ERMITTELN ---
             const currentPrice = yahooByIsin[isin]?.price || null;
@@ -185,11 +201,40 @@ export default function useDividendData() {
                 shares: shares > 0.0001 ? shares : 0,
                 value: shares > 0.0001 ? marketValue : 0,
                 costValue: val,
-                soldValue: tracker[key]?.soldValue || 0,
+                soldValue: soldVal,
             };
         });
 
-        const uniqueList = Array.from(new Map(list.map(item => [item.isin, item])).values());
+        // 2. Zusammenführen (Mergen) nach aufgelöster ISIN / Symbol:
+        // Verhindert doppelte Krypto-Einträge und führt Werte zusammen!
+        const mergedMap = new Map();
+        for (const item of rawList) {
+            const targetKey = item.isin;
+            if (!mergedMap.has(targetKey)) {
+                mergedMap.set(targetKey, { ...item });
+            } else {
+                const prev = mergedMap.get(targetKey);
+                // Behalte den schöneren Namen (keine hld_... ID)
+                const betterName = (!item.name?.startsWith('hld_') && item.name) ? item.name : prev.name;
+                const betterId = (!prev.id?.startsWith('hld_')) ? prev.id : item.id;
+
+                mergedMap.set(targetKey, {
+                    ...prev,
+                    id: betterId,
+                    name: betterName,
+                    // Nimm die höheren/kombinierten Werte
+                    shares: Math.max(prev.shares, item.shares),
+                    value: Math.max(prev.value, item.value),
+                    costValue: Math.max(prev.costValue, item.costValue),
+                    soldValue: Math.max(prev.soldValue, item.soldValue),
+                });
+            }
+        }
+
+        const uniqueList = Array.from(mergedMap.values())
+            // Krypto-Geisterpositionen filtern, die reine hld_... IDs geblieben sind und keinen Wert haben
+            .filter(item => !(item.isin?.startsWith('hld_') && item.shares <= 0.0001));
+
         setHoldings(applyParqetPositions(uniqueList, parqetPositions));
     }, []);
 
