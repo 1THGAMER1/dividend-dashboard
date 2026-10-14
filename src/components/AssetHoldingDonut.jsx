@@ -99,7 +99,7 @@ export default function AssetHoldingDonut({ holdings = [], compact = false, onNa
         )
     }
     // 2. VOLLSTÄNDIGE ANSICHT (für die Allokation-Seite)
-const handleGoToXray = () => onNavigate?.('portfolio-xray')
+const handleGoToXray = () => onNavigate?.('xray')
     return (
         <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 'clamp(16px, 3vw, 28px)', marginBottom: 24 }}>
             <div style={{
