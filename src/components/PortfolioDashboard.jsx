@@ -510,23 +510,37 @@ export default function PortfolioDashboard({
                             const isPositive = gain >= 0
 
                             return (
-                                <div key={item.isin || idx} style={{
-                                    background: '#10141f',
-                                    border: '1px solid #1a2233',
-                                    borderRadius: 12,
-                                    padding: '12px 16px',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}
-                                     onMouseEnter={(e) => {
-                                    e.currentTarget.style.borderColor = '#2a3a50'
-                                    e.currentTarget.style.background = '#1a2233'
-                                }}
-                                     onMouseLeave={(e) => {
-                                         e.currentTarget.style.borderColor = '#1a2233'
-                                         e.currentTarget.style.background = '#10141f'
-                                     }}
+                                <div
+                                    key={item.isin || idx}
+                                    onClick={() => setSelectedHolding({
+                                        ...item,
+                                        id: item.id || item.isin,
+                                        isin: item.isin || item.id,
+                                        name: getDisplayName(item),
+                                        shares: 0,
+                                        value: 0,
+                                        costValue: 0,
+                                        realizedGain: gain,
+                                    })}
+                                    style={{
+                                        background: '#10141f',
+                                        border: '1px solid #1a2233',
+                                        borderRadius: 12,
+                                        padding: '12px 16px',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'border-color 0.15s, background 0.15s',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = '#2a3a50'
+                                        e.currentTarget.style.background = '#1a2233'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = '#1a2233'
+                                        e.currentTarget.style.background = '#10141f'
+                                    }}
                                 >
                                     <div>
                                         <div style={{ fontSize: 13, fontWeight: 500, color: '#94a3b8' }}>

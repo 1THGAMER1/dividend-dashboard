@@ -59,11 +59,18 @@ export default function HoldingDetailModal({
     // Aktivitäten filtern (Käufe & Verkäufe für diese ISIN)
     const isMyAct = (a) => {
         const aIsin = a.asset?.isin || a.asset?.symbol || a.holdingId || a.isin
-        return aIsin === isin || aIsin === holding.id || a.holdingId === holding.holdingId
+        return aIsin === isin || aIsin === holding.id ||
+            (holding.holdingId && a.holdingId === holding.holdingId)
     }
 
     const myBuys = (buyActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'BUY' }))
     const mySells = (sellActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'SELL' }))
+    const actAmount = (a) => parseFloat(a.amount || a.total || a.amountNet || 0)
+    const isSold = sharesNum <= 0
+    const totalBought = myBuys.reduce((s, a) => s + actAmount(a), 0)
+    const totalSold = mySells.reduce((s, a) => s + actAmount(a), 0)
+// Fallback, falls holding.realizedGain bei verkauften Werten fehlt
+    const realizedDisplay = isSold && !rp && !realized ? totalSold - totalBought : realized
     console.log('[Modal]', holding.name, '| Verkäufe gesamt:', sellActs.length, '| für diesen Wert:', mySells.length, '| Beispiel:', sellActs[0]?.asset)
 
     // Dividenden aus byHolding oder übergebenen Aktivitäten filtern
@@ -101,7 +108,7 @@ export default function HoldingDetailModal({
     const fcMonths = forecastByHolding[isin] || forecastByHolding[holding.id] || {}
     const forecast12mHolding = Object.values(fcMonths).reduce((s, v) => s + (v || 0), 0)
     const hasReceivedDivs = totalDivsHistorical > 0
-    const hasForecast = forecast12mHolding > 0
+    const hasForecast = !isSold && forecast12mHolding > 0
 
 // Prognostizierte Dividendenrendite (Forward Yield)
     const yieldOnValue = hasForecast && val > 0 ? (forecast12mHolding / val) * 100 : null
@@ -170,6 +177,11 @@ export default function HoldingDetailModal({
                                 {holding.type && (
                                     <span style={{ background: '#1e293b', color: '#38bdf8', padding: '1px 6px', borderRadius: 4, fontWeight: 500, fontSize: 10 }}>
                                         {holding.type}
+                                    </span>
+                                )}
+                                {isSold && (
+                                    <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', padding: '1px 6px', borderRadius: 4, fontWeight: 600, fontSize: 10 }}>
+                                        VERKAUFT
                                     </span>
                                 )}
                             </div>
@@ -241,6 +253,39 @@ export default function HoldingDetailModal({
                                     : (holding.isin || holding.id)}
                                 activities={allActivities}
                             />
+                            {isSold && (
+                                <>
+                                    <div style={{
+                                        background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 12, padding: 16,
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12
+                                    }}>
+                                        <div>
+                                            <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>Realisierter Gewinn/Verlust</div>
+                                            <div style={{ fontSize: 24, fontWeight: 700, color: realizedDisplay >= 0 ? '#22c55e' : '#ef4444', marginTop: 2 }}>
+                                                {realizedDisplay >= 0 ? '+' : ''}{fmt(realizedDisplay)}
+                                            </div>
+                                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Position vollständig verkauft</div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Gekauft</div>
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', marginTop: 3 }}>{fmt(totalBought)}</div>
+                                        </div>
+                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Verkauft</div>
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', marginTop: 3 }}>{fmt(totalSold)}</div>
+                                        </div>
+                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Dividenden gesamt</div>
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: totalDivsHistorical > 0 ? '#22c55e' : '#64748b', marginTop: 3 }}>
+                                                {totalDivsHistorical > 0 ? `+${fmt(totalDivsHistorical)}` : '—'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                             {/* Großer Marktwert-Kasten */}
                             <div style={{
                                 background: '#0f1420',
@@ -416,7 +461,8 @@ export default function HoldingDetailModal({
                             ) : (
                                 <>
                                     {/* Zusammenfassung oben */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: isSold ? '1fr' : '1fr 1fr', gap: 10 }}>
+                                        {/* Kasten 1: immer sichtbar */}
                                         <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
                                             <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Bisher erhalten gesamt</div>
                                             {hasReceivedDivs ? (
@@ -426,38 +472,43 @@ export default function HoldingDetailModal({
                                             )}
                                         </div>
 
-                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
-                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Prognose nächste 12M</div>
-                                            {hasForecast ? (
-                                                <div style={{ fontSize: 18, fontWeight: 700, color: '#38bdf8', marginTop: 2 }}>{fmt(forecast12mHolding)}</div>
-                                            ) : (
-                                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Keine Prognose verfügbar</div>
-                                            )}
-                                        </div>
+                                        {/* Kästen 2-4: nur bei aktiven Positionen */}
+                                        {!isSold && (
+                                            <>
+                                                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Prognose nächste 12M</div>
+                                                    {hasForecast ? (
+                                                        <div style={{ fontSize: 18, fontWeight: 700, color: '#38bdf8', marginTop: 2 }}>{fmt(forecast12mHolding)}</div>
+                                                    ) : (
+                                                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Keine Prognose verfügbar</div>
+                                                    )}
+                                                </div>
 
-                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
-                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Dividendenrendite</div>
-                                            {yieldOnValue !== null ? (
-                                                <>
-                                                    <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24', marginTop: 2 }}>{fmtPct(yieldOnValue)}</div>
-                                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>auf aktuellen Wert (Prognose)</div>
-                                                </>
-                                            ) : (
-                                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>—</div>
-                                            )}
-                                        </div>
+                                                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Dividendenrendite</div>
+                                                    {yieldOnValue !== null ? (
+                                                        <>
+                                                            <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24', marginTop: 2 }}>{fmtPct(yieldOnValue)}</div>
+                                                            <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>auf aktuellen Wert (Prognose)</div>
+                                                        </>
+                                                    ) : (
+                                                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>—</div>
+                                                    )}
+                                                </div>
 
-                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
-                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Yield on Cost</div>
-                                            {yieldOnCost !== null ? (
-                                                <>
-                                                    <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24', marginTop: 2 }}>{fmtPct(yieldOnCost)}</div>
-                                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>auf Einstandswert (Prognose)</div>
-                                                </>
-                                            ) : (
-                                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>—</div>
-                                            )}
-                                        </div>
+                                                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Yield on Cost</div>
+                                                    {yieldOnCost !== null ? (
+                                                        <>
+                                                            <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24', marginTop: 2 }}>{fmtPct(yieldOnCost)}</div>
+                                                            <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>auf Einstandswert (Prognose)</div>
+                                                        </>
+                                                    ) : (
+                                                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>—</div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
 
                                     {/* Historie nach Jahren */}
