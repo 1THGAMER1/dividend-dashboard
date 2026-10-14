@@ -6,6 +6,14 @@ import { getPassword } from './passwordStore.js'
 // damit alle späteren Aufrufe sofort dasselbe resolved Promise zurückbekommen
 // und kein zweiter Supabase-Request entsteht.
 let _clientIdPromise = null
+let _refreshPromise = null
+
+// Nur Parqet-Tokens löschen, Supabase-Anmeldung bleibt bestehen
+function clearParqetTokens() {
+  sessionStorage.removeItem('parqet_access_token')
+  sessionStorage.removeItem('parqet_expires_at')
+  localStorage.removeItem('parqet_refresh_token')
+}
 
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
 const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
@@ -164,35 +172,48 @@ export async function getAccessToken() {
   const expiresAt    = Number(sessionStorage.getItem('parqet_expires_at') || 0)
   const refreshToken = localStorage.getItem('parqet_refresh_token')
 
-  if (!token && !refreshToken) return null
-
   if (token && Date.now() < expiresAt - 60_000) return token
+  if (!refreshToken) return null
 
-  const clientId = await getClientId()
-  if (!refreshToken || !clientId) { logout(); return null }
+  // Läuft schon eine Erneuerung, auf diese warten statt eine zweite zu starten
+  if (_refreshPromise) return _refreshPromise
 
-  try {
-    const body = new URLSearchParams({
-      grant_type:    'refresh_token',
-      refresh_token: refreshToken,
-      client_id:     clientId,
-    })
-    const res = await fetch(TOKEN_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    })
-    if (!res.ok) throw new Error('Refresh failed')
+  _refreshPromise = (async () => {
+    const clientId = await getClientId().catch(() => null)
+    if (!clientId) return null // kurzzeitig keine Client-ID: nichts löschen
+
+    let res
+    try {
+      res = await fetch(TOKEN_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type:    'refresh_token',
+          refresh_token: refreshToken,
+          client_id:     clientId,
+        }),
+      })
+    } catch {
+      return null // Netzwerkfehler: Tokens behalten, später erneut versuchen
+    }
+
+    if (!res.ok) {
+      // Nur bei echter Ablehnung (Refresh-Token ungültig oder abgelaufen) löschen
+      if (res.status === 400 || res.status === 401) clearParqetTokens()
+      return null
+    }
+
     const tokens = await res.json()
-
     sessionStorage.setItem('parqet_access_token', tokens.access_token)
     sessionStorage.setItem('parqet_expires_at',   String(Date.now() + (tokens.expires_in || 3600) * 1000))
     if (tokens.refresh_token) localStorage.setItem('parqet_refresh_token', tokens.refresh_token)
-
     return tokens.access_token
-  } catch {
-    logout()
-    return null
+  })()
+
+  try {
+    return await _refreshPromise
+  } finally {
+    _refreshPromise = null
   }
 }
 

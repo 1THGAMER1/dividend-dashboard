@@ -11,6 +11,55 @@
 const ENC = new TextEncoder()
 const DEC = new TextDecoder()
 const KEY_STORAGE = '_dd_key' // sessionStorage key for the cached JWK
+// IndexedDB-Helfer: übersteht das Schließen von Tabs und Browser-Apps
+const DB_NAME = 'dd_vault'
+const STORE_NAME = 'keys'
+
+function getIDB() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') return reject(new Error('No IndexedDB'))
+    const req = indexedDB.open(DB_NAME, 1)
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE_NAME)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function idbGet(key) {
+  try {
+    const db = await getIDB()
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly')
+      const req = tx.objectStore(STORE_NAME).get(key)
+      req.onsuccess = () => resolve(req.result || null)
+      req.onerror = () => resolve(null)
+    })
+  } catch { return null }
+}
+
+async function idbSet(key, val) {
+  try {
+    const db = await getIDB()
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite')
+      tx.objectStore(STORE_NAME).put(val, key)
+      tx.oncomplete = () => resolve(true)
+      tx.onerror = () => resolve(false)
+    })
+  } catch { return false }
+}
+
+async function idbDel(key) {
+  try {
+    const db = await getIDB()
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite')
+      tx.objectStore(STORE_NAME).delete(key)
+      tx.oncomplete = () => resolve(true)
+      tx.onerror = () => resolve(false)
+    })
+  } catch { return false }
+}
 
 function b64(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)))
@@ -40,32 +89,33 @@ async function deriveKey(password, salt) {
   )
 }
 
-/**
- * Persists the derived key as a JWK string in sessionStorage.
- * sessionStorage survives page reloads but is cleared when the tab is closed.
- * Only the 256-bit key material is stored — never the password itself.
- */
 async function cacheKey(key, salt) {
   const jwk = await crypto.subtle.exportKey('jwk', key)
-  sessionStorage.setItem(KEY_STORAGE, JSON.stringify({ jwk, salt: b64(salt) }))
+  const data = { jwk, salt: b64(salt) }
+  // Sowohl in IndexedDB (dauerhaft) als auch sessionStorage (schnell) ablegen
+  await idbSet(KEY_STORAGE, data)
+  sessionStorage.setItem(KEY_STORAGE, JSON.stringify(data))
 }
 
-/**
- * Attempts to restore a previously cached key from sessionStorage.
- * Returns null if nothing is cached or if the cache is corrupt.
- */
 async function restoreKey() {
   try {
-    const raw = sessionStorage.getItem(KEY_STORAGE)
-    if (!raw) return null
-    const { jwk } = JSON.parse(raw)
+    // 1. Zuerst IndexedDB versuchen (überlebt geschlossene Tabs)
+    let data = await idbGet(KEY_STORAGE)
+    // 2. Fallback auf sessionStorage
+    if (!data) {
+      const raw = sessionStorage.getItem(KEY_STORAGE)
+      if (raw) data = JSON.parse(raw)
+    }
+    if (!data || !data.jwk) return null
+
     return await crypto.subtle.importKey(
-      'jwk', jwk,
-      { name: 'AES-GCM' },
-      false,          // not exportable after restore (principle of least privilege)
-      ['encrypt', 'decrypt']
+        'jwk', data.jwk,
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt', 'decrypt']
     )
   } catch {
+    idbDel(KEY_STORAGE)
     sessionStorage.removeItem(KEY_STORAGE)
     return null
   }
@@ -91,10 +141,8 @@ export async function getOrDeriveKey(password, salt) {
   return key
 }
 
-/**
- * Removes the cached key from sessionStorage (call on logout).
- */
 export function clearCachedKey() {
+  idbDel(KEY_STORAGE)
   sessionStorage.removeItem(KEY_STORAGE)
 }
 

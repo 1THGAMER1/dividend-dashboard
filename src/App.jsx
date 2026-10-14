@@ -126,7 +126,7 @@ export default function App() {
   const [kpiRange, setKpiRange] = useState('all')
   const [appUser, setAppUser] = useState(undefined)
   const [clientIdReady, setClientIdReady] = useState(false)
-  const [profileLoading, setProfileLoading] = useState(true)
+  const [checkedUserId, setCheckedUserId] = useState(null)
   const [tickerProgress, setTickerProgress] = useState(null)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -163,18 +163,17 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (!appUser) { setClientIdReady(false); return }
     let active = true
-    async function loadProfileState() {
-      if (!appUser) { if (active) { setClientIdReady(false); setProfileLoading(false) } return }
-      try {
-        const clientId = await getClientId()
-        if (active) setClientIdReady(!!clientId)
-      } catch { if (active) setClientIdReady(false) }
-      finally { if (active) setProfileLoading(false) }
-    }
-    loadProfileState()
+    getClientId()
+        .then(id => { if (active) setClientIdReady(!!id) })
+        .catch(() => { if (active) setClientIdReady(false) })
+        .finally(() => { if (active) setCheckedUserId(appUser.id) })
     return () => { active = false }
   }, [appUser])
+
+  // Prüfung läuft, solange sie für den aktuellen Nutzer noch nicht abgeschlossen ist
+  const profileLoading = !!appUser && checkedUserId !== appUser.id
 
   if (appUser === undefined || profileLoading) return <LoadingScreen text="App wird vorbereitet…" />
   if (!appUser)        return <AppLogin />
