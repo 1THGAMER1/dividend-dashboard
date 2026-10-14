@@ -103,6 +103,11 @@ export default function HoldingDetailModal({
     const hasReceivedDivs = totalDivsHistorical > 0
     const hasForecast = forecast12mHolding > 0
 
+// Prognostizierte Dividendenrendite (Forward Yield)
+    const yieldOnValue = hasForecast && val > 0 ? (forecast12mHolding / val) * 100 : null
+    const yieldOnCost = hasForecast && cost > 0 ? (forecast12mHolding / cost) * 100 : null
+    const fmtPct = (p) => `${p.toFixed(2).replace('.', ',')} %`
+
     const MONTH_NAMES = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
     return (
@@ -420,12 +425,37 @@ export default function HoldingDetailModal({
                                                 <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Noch keine Dividenden erhalten</div>
                                             )}
                                         </div>
+
                                         <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
                                             <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Prognose nächste 12M</div>
                                             {hasForecast ? (
                                                 <div style={{ fontSize: 18, fontWeight: 700, color: '#38bdf8', marginTop: 2 }}>{fmt(forecast12mHolding)}</div>
                                             ) : (
                                                 <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Keine Prognose verfügbar</div>
+                                            )}
+                                        </div>
+
+                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Dividendenrendite</div>
+                                            {yieldOnValue !== null ? (
+                                                <>
+                                                    <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24', marginTop: 2 }}>{fmtPct(yieldOnValue)}</div>
+                                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>auf aktuellen Wert (Prognose)</div>
+                                                </>
+                                            ) : (
+                                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>—</div>
+                                            )}
+                                        </div>
+
+                                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
+                                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Yield on Cost</div>
+                                            {yieldOnCost !== null ? (
+                                                <>
+                                                    <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24', marginTop: 2 }}>{fmtPct(yieldOnCost)}</div>
+                                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>auf Einstandswert (Prognose)</div>
+                                                </>
+                                            ) : (
+                                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>—</div>
                                             )}
                                         </div>
                                     </div>
