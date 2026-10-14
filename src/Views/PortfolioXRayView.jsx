@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
-import { computePortfolioXRay, getRegion } from '../utils/portfolioXray'
+import { computePortfolioXRay, getRegion, normalizeName, getShares } from '../utils/portfolioXray'
 
 const PALETTE = [
     '#009991', '#3b82f6', '#22c55e', '#f59e0b', '#ec4899',
@@ -38,12 +38,38 @@ const toggleStyle = (active, disabled) => ({
 
 const fmt = (n) => n.toFixed(1).replace('.', ',')
 
-export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, currentValue, data, subtitle = 'Vollständige Aufschlüsselung deines Gesamtdepots' }) {
+export default function PortfolioXRayView({
+                                              etfHoldingsMap,
+                                              userHoldings,
+                                              currentValue,
+                                              data,
+                                              subtitle = 'Vollständige Aufschlüsselung deines Gesamtdepots',
+                                              ownedHoldings = [],   // aktive Positionen (gleiche Objekte wie in der Depotliste)
+                                              onSelectHolding,
+                                          }) {
     const [topLimit, setTopLimit] = useState(15)
     const [activeTab, setActiveTab] = useState('holdings')
     const [filters, setFilters] = useState(DEFAULT_FILTERS)
     const [hideOther, setHideOther] = useState(false)
     const [showAllLegend, setShowAllLegend] = useState(false)
+
+    // Index: normalisierter Name -> Holding-Objekt (nur aktive Positionen)
+    const ownedIndex = useMemo(() => {
+        const m = new Map()
+        ownedHoldings.forEach(h => {
+            const shares = getShares(h)
+            if (shares !== undefined && parseFloat(shares) <= 0) return
+            const key = normalizeName(h.name || h.title)
+            if (key) m.set(key, h)
+        })
+        return m
+    }, [ownedHoldings])
+
+    const findOwned = (name) => {
+        // ETFs ohne Aufschlüsselung heißen im X-Ray "NAME (NICHT AUFGESCHLÜSSELT)" bzw. "NAME (REST)"
+        const key = String(name || '').replace(/ \((REST|NICHT AUFGESCHLÜSSELT)\)$/, '')
+        return ownedIndex.get(key) || null
+    }
 
     const hideCrypto = filters[activeTab].crypto
     const hideCommodities = filters[activeTab].commodities
@@ -111,8 +137,14 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
     // Kreis und Legende: nach Größe sortiert
     const sortedData = [...activeData].sort((a, b) => b.value - a.value)
 
+    // Besitz-Flag: nur in "Top Aktien" und nur für Positionen, die es im Depot gibt
+    const sortedWithOwned = sortedData.map(d => ({
+        ...d,
+        owned: activeTab === 'holdings' && d.name !== 'Sonstige' ? findOwned(d.name) : null,
+    }))
+
     const LEGEND_PREVIEW = 12
-    const legendItems = showAllLegend ? sortedData : sortedData.slice(0, LEGEND_PREVIEW)
+    const legendItems = showAllLegend ? sortedWithOwned : sortedWithOwned.slice(0, LEGEND_PREVIEW)
 
     // Was steckt noch in "Global"?
     const globalAll = rawData.filter(i => String(i.Country).toUpperCase() === 'GLOBAL')
@@ -179,7 +211,7 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                 <ResponsiveContainer width="100%" aspect={1}>
                     <PieChart key={[activeTab, topLimit, hideCrypto, hideCommodities, hideOther].join('-')}>
                         <Pie
-                            data={sortedData}
+                            data={sortedWithOwned}
                             dataKey="value"
                             nameKey="name"
                             cx="50%"
@@ -190,6 +222,10 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                             stroke="#161b27"
                             strokeWidth={2}
                             isAnimationActive={false}
+                            onClick={(entry) => {
+                                const h = entry?.owned || entry?.payload?.owned || findOwned(entry?.name)
+                                if (h) onSelectHolding?.(h)
+                            }}
                         />
                         <Tooltip
                             contentStyle={{ background: '#161b27', borderColor: '#2a3a50', borderRadius: 8, color: '#fff', fontSize: 12 }}
@@ -205,22 +241,35 @@ export default function PortfolioXRayView({ etfHoldingsMap, userHoldings, curren
                 gap: '6px 16px', fontSize: 11
             }}>
                 {legendItems.map(d => (
-                    <li key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: '#c8d4e0' }}>
+                    <li
+                        key={d.name}
+                        onClick={d.owned ? () => onSelectHolding?.(d.owned) : undefined}
+                        title={d.owned ? 'Im Depot – Details öffnen' : d.name}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: '#c8d4e0',
+                            cursor: d.owned ? 'pointer' : 'default',
+                        }}
+                    >
                         <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.fill, flexShrink: 0 }} />
-                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.name}>
-                {d.name}
-            </span>
+                        <span style={{
+                            flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            color: d.owned ? '#93c5fd' : '#c8d4e0',
+                            textDecoration: d.owned ? 'underline dotted' : 'none',
+                        }}>
+                            {d.name}
+                        </span>
+                        {d.owned && <span style={{ color: '#38bdf8', fontSize: 10, flexShrink: 0 }}>↗</span>}
                         <span style={{ color: '#64748b', flexShrink: 0 }}>{fmt(d.value)} %</span>
                     </li>
                 ))}
             </ul>
 
-            {sortedData.length > LEGEND_PREVIEW && (
+            {sortedWithOwned.length > LEGEND_PREVIEW && (
                 <button
                     onClick={() => setShowAllLegend(v => !v)}
                     style={{ ...toggleStyle(false, false), marginTop: 12 }}
                 >
-                    {showAllLegend ? 'Weniger anzeigen' : `Alle ${sortedData.length} anzeigen`}
+                    {showAllLegend ? 'Weniger anzeigen' : `Alle ${sortedWithOwned.length} anzeigen`}
                 </button>
             )}
 

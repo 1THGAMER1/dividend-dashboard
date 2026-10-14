@@ -115,7 +115,7 @@ export default function SharedPortfolioView({ sharedToken }) {
                 )}
 
                 {sharedTab === 'xray' && hasXray && (
-                    <PortfolioXRayView data={xrayData} subtitle="Aufschlüsselung des Gesamtdepots (Stand des geteilten Portfolios)" />
+                    <PortfolioXRayView data={xrayData} subtitle="Aufschlüsselung des Gesamtdepots (Stand des geteilten Portfolios)" ownedHoldings={holdings}/>
                 )}
             </div>
         </div>

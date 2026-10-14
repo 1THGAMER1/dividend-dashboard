@@ -287,7 +287,7 @@ export default function EtfUploadWidget({ holdings, currentValue }) {
 
             {/* X-RAY VIEW BLEIBT DARUNTER VOLLSTÄNDIG ERHALTEN */}
             {Object.keys(etfHoldingsMap).length > 0 ? (
-                <PortfolioXRayView etfHoldingsMap={etfHoldingsMap} userHoldings={holdings} currentValue={currentValue} />
+                <PortfolioXRayView etfHoldingsMap={etfHoldingsMap} userHoldings={holdings} currentValue={currentValue} ownedHoldings={holdings}/>
             ) : (
                 !loadingStored && (
                     <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }}>
