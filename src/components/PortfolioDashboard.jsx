@@ -4,6 +4,7 @@ import PortfolioPerformanceChart from './PortfolioPerformanceChart.jsx'
 import { fetchPositionPerformance } from '../api.js'
 import AssetHoldingDonut from "./AssetHoldingDonut.jsx"
 import HoldingDetailModal from './HoldingDetailModal.jsx'
+import { isLoggedIn } from '../auth.js'
 
 
 const fmt = (n) => {
@@ -76,17 +77,25 @@ export default function PortfolioDashboard({
     const [portfolioPerfByRange, setPortfolioPerfByRange] = useState({})
 
     useEffect(() => {
+        if (!isLoggedIn()) return
         if (perfByRange[range] && portfolioPerfByRange[range]) return
+
         let cancelled = false
         fetchPositionPerformance(range, summary => {
             if (!cancelled) {
                 setPortfolioPerfByRange(prev => ({ ...prev, [range]: summary }))
             }
         })
-            .then(map => { if (!cancelled) setPerfByRange(prev => ({ ...prev, [range]: map })) })
+            .then(map => {
+                if (!cancelled) setPerfByRange(prev => ({ ...prev, [range]: map }))
+            })
             .catch(e => {
                 console.warn('[Positionen] Zeitraum-Abruf fehlgeschlagen:', e.message)
-                if (!cancelled) setPerfByRange(prev => ({ ...prev, [range]: {} }))
+                if (!cancelled) {
+                    // BEIDE States befüllen, damit keine Endlosschleife entsteht!
+                    setPerfByRange(prev => ({ ...prev, [range]: {} }))
+                    setPortfolioPerfByRange(prev => ({ ...prev, [range]: {} }))
+                }
             })
         return () => { cancelled = true }
     }, [range, perfByRange, portfolioPerfByRange])
