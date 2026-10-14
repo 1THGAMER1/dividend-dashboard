@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import PortfolioDashboard from '../components/PortfolioDashboard.jsx'
 import AssetAllocationDonut from '../components/AssetAllocationDonut.jsx'
 import AssetHoldingDonut from '../components/AssetHoldingDonut.jsx'
-import EtfUploadWidget from "../components/EtfUploadWidget.jsx";
-import HoldingDetailModal from "../components/HoldingDetailModal.jsx";
+import EtfUploadWidget from "../components/EtfUploadWidget.jsx"
+import HoldingDetailModal from '../components/HoldingDetailModal.jsx'
 
 export default function PortfolioPageView({
                                               page,
@@ -18,7 +18,8 @@ export default function PortfolioPageView({
                                               forecastByHolding = {},
                                           }) {
     const activeHoldings = enrichedHoldings || holdings
-    const [selectedHolding, setSelectedHolding] = React.useState(null)
+    const [selectedHolding, setSelectedHolding] = useState(null)
+    const [etfHoldingsMap, setEtfHoldingsMap] = useState({})
 
     return (
         <div>
@@ -31,7 +32,7 @@ export default function PortfolioPageView({
 
                     <PortfolioDashboard
                         currentValue={currentValue}
-                        holdings={enrichedHoldings || holdings}
+                        holdings={activeHoldings}
                         performanceSeries={performanceSeries}
                         buyActs={buyActs}
                         sellActs={sellActs}
@@ -55,8 +56,14 @@ export default function PortfolioPageView({
             )}
 
             {page === 'portfolio-xray' && (
-                <EtfUploadWidget holdings={activeHoldings} currentValue={currentValue} onSelectHolding={setSelectedHolding} />
+                <EtfUploadWidget
+                    holdings={activeHoldings}
+                    currentValue={currentValue}
+                    onSelectHolding={setSelectedHolding}
+                    onEtfMapReady={setEtfHoldingsMap}
+                />
             )}
+
             {selectedHolding && (
                 <HoldingDetailModal
                     holding={selectedHolding}
@@ -67,6 +74,7 @@ export default function PortfolioPageView({
                     forecastByHolding={forecastByHolding}
                     range="MAX"
                     totalPortfolioValue={currentValue}
+                    etfHoldingsMap={etfHoldingsMap}
                 />
             )}
         </div>

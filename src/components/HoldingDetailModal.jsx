@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import HoldingPriceChart from './HoldingPriceChart.jsx'
 
 const fmt = (n) => {
@@ -26,6 +26,7 @@ export default function HoldingDetailModal({
                                                range = 'MAX',
                                                perfByRange = {},
                                                totalPortfolioValue = 0,
+                                               etfHoldingsMap = {},
                                            }) {
     const [tab, setTab] = useState('overview') // 'overview' | 'activities' | 'dividends'
 
@@ -69,9 +70,7 @@ export default function HoldingDetailModal({
     const isSold = sharesNum <= 0
     const totalBought = myBuys.reduce((s, a) => s + actAmount(a), 0)
     const totalSold = mySells.reduce((s, a) => s + actAmount(a), 0)
-// Fallback, falls holding.realizedGain bei verkauften Werten fehlt
     const realizedDisplay = isSold && !rp && !realized ? totalSold - totalBought : realized
-    console.log('[Modal]', holding.name, '| Verkäufe gesamt:', sellActs.length, '| für diesen Wert:', mySells.length, '| Beispiel:', sellActs[0]?.asset)
 
     // Dividenden aus byHolding oder übergebenen Aktivitäten filtern
     const divEntry = byHolding[isin] || byHolding[holding.id] || {}
@@ -80,10 +79,9 @@ export default function HoldingDetailModal({
         Object.entries(divEntry.monthly).forEach(([year, months]) => {
             months.forEach((amt, mIdx) => {
                 if (amt > 0) {
-                    // Erzeuge einen Eintrag pro Auszahlungsmonat
                     myDivs.push({
                         _type: 'DIVIDEND',
-                        datetime: `${year}-${String(mIdx + 1).padStart(2, '0')}-15`, // Monatsmitte als Referenz
+                        datetime: `${year}-${String(mIdx + 1).padStart(2, '0')}-15`,
                         amount: amt,
                         shares: sharesNum
                     })
@@ -92,28 +90,42 @@ export default function HoldingDetailModal({
         })
     }
 
-    // Alle drei Transaktionsarten chronologisch nach Datum sortieren (neueste zuerst)
     const allActivities = [...myBuys, ...mySells, ...myDivs].sort(
         (a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0)
     )
-    // Erhaltene Dividenden nach Jahren
     const divYears = Object.keys(divEntry.monthly || {}).sort((a, b) => b - a)
 
-    // Gesamte historische Dividenden
     const totalDivsHistorical = Object.values(divEntry.monthly || {})
         .flatMap(months => months)
         .reduce((sum, v) => sum + (v || 0), 0)
 
-    // Prognostizierte Dividenden nächste 12 Monate
     const fcMonths = forecastByHolding[isin] || forecastByHolding[holding.id] || {}
     const forecast12mHolding = Object.values(fcMonths).reduce((s, v) => s + (v || 0), 0)
     const hasReceivedDivs = totalDivsHistorical > 0
     const hasForecast = !isSold && forecast12mHolding > 0
 
-// Prognostizierte Dividendenrendite (Forward Yield)
     const yieldOnValue = hasForecast && val > 0 ? (forecast12mHolding / val) * 100 : null
     const yieldOnCost = hasForecast && cost > 0 ? (forecast12mHolding / cost) * 100 : null
     const fmtPct = (p) => `${p.toFixed(2).replace('.', ',')} %`
+
+    // Look-Through Berechnung: In welchen ETFs ist diese Position enthalten?
+    const etfContributions = useMemo(() => {
+        if (!etfHoldingsMap || !holding) return []
+        const assetName = (holding.name || '').trim().toLowerCase()
+        if (!assetName) return []
+
+        const results = []
+        for (const [etfName, rows] of Object.entries(etfHoldingsMap)) {
+            const match = rows.find(r => r.Name.trim().toLowerCase() === assetName)
+            if (match && match.Weight > 0) {
+                results.push({
+                    etfName,
+                    weightInEtf: match.Weight,
+                })
+            }
+        }
+        return results
+    }, [etfHoldingsMap, holding])
 
     const MONTH_NAMES = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
@@ -253,6 +265,26 @@ export default function HoldingDetailModal({
                                     : (holding.isin || holding.id)}
                                 activities={allActivities}
                             />
+
+                            {/* Look-Through ETF-Aufteilung */}
+                            {etfContributions.length > 0 && (
+                                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 12, padding: 14 }}>
+                                    <h4 style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', margin: '0 0 10px 0' }}>
+                                        📦 Indirekte Anteile über ETFs (Look-Through)
+                                    </h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {etfContributions.map((item, idx) => (
+                                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                                                <span style={{ color: '#94a3b8' }}>{item.etfName}</span>
+                                                <span style={{ color: '#38bdf8', fontWeight: 600 }}>
+                                                    {item.weightInEtf.toFixed(2).replace('.', ',')} % im ETF
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {isSold && (
                                 <>
                                     <div style={{
@@ -360,7 +392,7 @@ export default function HoldingDetailModal({
                         </>
                     )}
 
-                    {/* TAB 2: AKTIVITÄTEN (Käufe & Verkäufe) */}
+                    {/* TAB 2: AKTIVITÄTEN */}
                     {tab === 'activities' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             {allActivities.length === 0 ? (
@@ -460,9 +492,7 @@ export default function HoldingDetailModal({
                                 </div>
                             ) : (
                                 <>
-                                    {/* Zusammenfassung oben */}
                                     <div style={{ display: 'grid', gridTemplateColumns: isSold ? '1fr' : '1fr 1fr', gap: 10 }}>
-                                        {/* Kasten 1: immer sichtbar */}
                                         <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
                                             <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Bisher erhalten gesamt</div>
                                             {hasReceivedDivs ? (
@@ -472,7 +502,6 @@ export default function HoldingDetailModal({
                                             )}
                                         </div>
 
-                                        {/* Kästen 2-4: nur bei aktiven Positionen */}
                                         {!isSold && (
                                             <>
                                                 <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: 12 }}>
@@ -511,7 +540,6 @@ export default function HoldingDetailModal({
                                         )}
                                     </div>
 
-                                    {/* Historie nach Jahren */}
                                     {divYears.map(year => {
                                         const months = divEntry.monthly[year] || []
                                         const yearSum = months.reduce((s, v) => s + (v || 0), 0)
