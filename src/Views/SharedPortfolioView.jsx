@@ -106,7 +106,10 @@ export default function SharedPortfolioView({ sharedToken }) {
 
                 {sharedTab === 'assets' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <AssetHoldingDonut holdings={sharedData.holdings || []} />
+                        <AssetHoldingDonut
+                            holdings={sharedData.holdings || []}
+                            onNavigate={hasXray ? () => setSharedTab('xray') : undefined}
+                        />
                         <AssetAllocationDonut holdings={sharedData.holdings || []} currentValue={sharedData.currentValue || 0} />
                     </div>
                 )}
