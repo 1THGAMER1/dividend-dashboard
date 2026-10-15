@@ -10,13 +10,15 @@ const PALETTE = [
 
 const TABS = [
     ['holdings', 'Top Aktien'],
+    ['sectors', 'Sektoren'],
     ['regions', 'Regionen'],
-    ['countries', 'Länder']
+    ['countries', 'Länder'],
 ]
 
 // Standard je Ansicht: true = wird ausgeblendet
 const DEFAULT_FILTERS = {
     holdings: { crypto: false, commodities: false },
+    sectors: { crypto: true, commodities: true },
     regions: { crypto: true, commodities: true },
     countries: { crypto: true, commodities: true }
 }
@@ -98,6 +100,16 @@ export default function PortfolioXRayView({
         })),
         ...(restWeight > 0 && !hideOther ? [{ name: 'Sonstige', value: +restWeight.toFixed(2), fill: '#64748b' }] : [])
     ]
+    // --- Sektoren ---
+    const sectorMap = {}
+    rawData.forEach(item => {
+        const rawSec = item.Sector || item.sector || item.Industry || item.industry
+        const sec = rawSec && String(rawSec).trim() ? String(rawSec).trim() : 'Sonstige / Nicht klassifiziert'
+        sectorMap[sec] = (sectorMap[sec] || 0) + item.Weight
+    })
+    const chartSectorsData = Object.entries(sectorMap)
+        .map(([name, value], index) => ({ name, value: +value.toFixed(2), fill: PALETTE[index % PALETTE.length] }))
+        .sort((a, b) => b.value - a.value)
 
     // --- Regionen ---
     const regionMap = {}
@@ -122,10 +134,16 @@ export default function PortfolioXRayView({
         .slice(0, 15)
 
     // "Sonstige" gibt es nur in Top Aktien (Rest hinter Top-N) und Regionen
-    const otherAvailable = activeTab !== 'countries'
+    const otherAvailable = activeTab === 'holdings' || activeTab === 'regions'
     const otherWeight = activeTab === 'holdings' ? restWeight : activeTab === 'regions' ? regionsOther : 0
 
-    let activeData = activeTab === 'holdings' ? chartHoldingsData : activeTab === 'regions' ? chartRegionsData : chartCountriesData
+    let activeData = activeTab === 'holdings'
+        ? chartHoldingsData
+        : activeTab === 'sectors'
+            ? chartSectorsData
+            : activeTab === 'regions'
+                ? chartRegionsData
+                : chartCountriesData
 
     // Nach dem Ausblenden auf 100 % der sichtbaren Positionen hochrechnen
     const rescale = hideCrypto || hideCommodities || (hideOther && otherAvailable)
