@@ -33,10 +33,10 @@ export default function HoldingDetailModal({
                                            }) {
     const [tab, setTab] = useState('overview') // 'overview' | 'activities' | 'dividends'
     const [etfCatalog, setEtfCatalog] = useState(_cachedEtfCatalog || {})
+    const [etfLoading, setEtfLoading] = useState(!_cachedEtfCatalog)
     const sharesNum = parseFloat(holding.shares) || 0
     const isSold = sharesNum <= 0
     const val = holding.value || 0
-
     // Alle aktiven ETFs aus dem Depot ermitteln
     const myEtfs = useMemo(() => {
         return (allHoldings || []).filter(h => {
@@ -45,12 +45,19 @@ export default function HoldingDetailModal({
         })
     }, [allHoldings])
 
-    // ETF-Katalogdaten laden (geprüfter Katalog + eigene Uploads)
+    // ETF-Katalogdaten laden (Katalog + eigene Uploads)
     useEffect(() => {
-        if (_cachedEtfCatalog) return
+        if (_cachedEtfCatalog) {
+            setEtfLoading(false)
+            return
+        }
         const keys = [...new Set(myEtfs.map(etfKeyFor).filter(Boolean))]
-        if (!keys.length) return
+        if (!keys.length) {
+            setEtfLoading(false)
+            return
+        }
 
+        setEtfLoading(true)
         Promise.all([loadCatalog(keys), loadMySubmissions(keys)])
             .then(([cat, own]) => {
                 const merged = { ...cat, ...own }
@@ -58,6 +65,7 @@ export default function HoldingDetailModal({
                 setEtfCatalog(merged)
             })
             .catch(err => console.warn('[HoldingModal] ETF-Katalog konnte nicht geladen werden:', err))
+            .finally(() => setEtfLoading(false))
     }, [myEtfs])
 
     // Berechne, in welchen ETFs diese Aktie steckt
@@ -78,8 +86,8 @@ export default function HoldingDetailModal({
                 const rIsin = (r.ISIN || r.isin || '').trim().toUpperCase()
                 if (isinUpper && rIsin && isinUpper === rIsin) return true
                 const rName = (r.Name || r.name || r.Holding || '').trim().toLowerCase()
-                return !!(nameLower && rName && (rName === nameLower || (nameLower.length > 5 && rName.includes(nameLower))));
-
+                if (nameLower && rName && (rName === nameLower || (nameLower.length > 4 && rName.includes(nameLower)))) return true
+                return false
             })
 
             if (match) {
@@ -187,7 +195,13 @@ export default function HoldingDetailModal({
     const yieldOnValue = hasForecast && val > 0 ? (forecast12mHolding / val) * 100 : null
     const yieldOnCost = hasForecast && cost > 0 ? (forecast12mHolding / cost) * 100 : null
     const fmtPct = (p) => `${p.toFixed(2).replace('.', ',')} %`
-
+    console.log('[ETF-Debug] Holding:', holding.name, '| isin:', holding.isin, '| id:', holding.id)
+    console.log('[ETF-Debug] myEtfs:', myEtfs.map(e => ({ name: e.name, key: etfKeyFor(e) })))
+    console.log('[ETF-Debug] Katalog-Schlüssel:', Object.keys(etfCatalog))
+    if (myEtfs[0]) {
+        const firstEntry = etfCatalog[etfKeyFor(myEtfs[0])]
+        console.log('[ETF-Debug] Beispiel-Zeilen aus', myEtfs[0].name, ':', firstEntry?.rows?.slice(0, 3))
+    }
     const MONTH_NAMES = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
     return (
