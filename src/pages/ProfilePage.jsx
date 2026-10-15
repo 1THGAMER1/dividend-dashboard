@@ -58,6 +58,32 @@ export default function ProfilePage({ appUser, onNavigate }) {
         }
         loadProfile()
     }, [appUser])
+    // Automatischer Abgleich der Dividenden beim Laden der Profilseite
+    useEffect(() => {
+        async function autoUpdateRanking() {
+            if (!appUser || !participateRanking) return
+
+            const annualDividend = kpi?.all?.net ||
+                kpi?.['12m']?.net ||
+                Object.values(monthly || {}).flatMap(m => m).reduce((a, b) => a + (b || 0), 0) || 0
+
+            if (annualDividend <= 0) return
+
+            try {
+                await supabase
+                    .from('community_dividends')
+                    .upsert({
+                        user_id: appUser.id,
+                        display_name: displayName.trim() || 'Anonym',
+                        annual_dividend: annualDividend,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'user_id' })
+            } catch (err) {
+                console.error('Automatisches Aktualisieren des Rankings fehlgeschlagen:', err)
+            }
+        }
+        autoUpdateRanking()
+    }, [appUser, participateRanking, kpi, monthly, displayName])
 
     const generateRandomName = () => {
         const randomPrefix = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)]
