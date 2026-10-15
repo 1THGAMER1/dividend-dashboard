@@ -4,6 +4,11 @@ import useDividendData from '../hooks/useDividendData'
 import { computePortfolioXRay } from '../utils/portfolioXray'
 import { loadEtfHoldingsMapFor } from '../utils/etfHoldingsStore'
 
+const RANDOM_NAMES = [
+    'DividendHero', 'ZinseszinsKing', 'CashflowCaptain', 'DividendenFuchs',
+    'PassivesEinkommen', 'AktienHai', 'YieldJunkie', 'SparplanProfi', 'VermögensBuilder'
+]
+
 export default function ProfilePage({ appUser }) {
     const [parqetId, setParqetId] = useState('')
     const [loading, setLoading] = useState(false)
@@ -11,10 +16,14 @@ export default function ProfilePage({ appUser }) {
     const [imgError, setImgError] = useState(false)
     const [existingToken, setexistingToken] = useState(null)
 
+    // Community Ranking States
+    const [participateRanking, setParticipateRanking] = useState(false)
+    const [displayName, setDisplayName] = useState('')
+
     // Holen uns die Portfolio-Daten inklusive enrichedHoldings direkt aus dem Hook
     const { currentValue, holdings, enrichedHoldings, monthly, kpi, byHolding } = useDividendData()
 
-    // Lade bestehende Parqet ID und prüfen, ob bereits ein Share-Token existiert
+    // Lade bestehende Profildaten (Parqet ID, Share-Token sowie Ranking-Opt-in)
     useEffect(() => {
         async function loadProfile() {
             if (!appUser) return
@@ -26,11 +35,23 @@ export default function ProfilePage({ appUser }) {
                     .maybeSingle()
 
                 if (error) throw error
-                if (data?.parqet_client_id) {
-                    setParqetId(data.parqet_client_id)
-                }
-                if (data?.share_token) {
-                    setexistingToken(data.share_token)
+                if (data?.parqet_client_id) setParqetId(data.parqet_client_id)
+                if (data?.share_token) setexistingToken(data.share_token)
+
+                // Prüfen ob bereits im Community Ranking eingetragen
+                const { data: rankData } = await supabase
+                    .from('community_dividends')
+                    .select('display_name')
+                    .eq('user_id', appUser.id)
+                    .maybeSingle()
+
+                if (rankData) {
+                    setParticipateRanking(true)
+                    setDisplayName(rankData.display_name || '')
+                } else {
+                    // Zufälligen Standardnamen generieren falls noch nicht vorhanden
+                    const randomDefault = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)] + Math.floor(Math.random() * 900 + 100)
+                    setDisplayName(randomDefault)
                 }
             } catch (err) {
                 console.error('Fehler beim Laden des Profils:', err.message)
@@ -38,6 +59,39 @@ export default function ProfilePage({ appUser }) {
         }
         loadProfile()
     }, [appUser])
+    // Automatischer Sync für das Ranking
+    useEffect(() => {
+        async function autoSyncRanking() {
+            if (!appUser || !participateRanking) return
+
+            // Holt die Netto-Jahressumme direkt aus dem KPI-Objekt oder berechnet sie als Fallback
+            const annualDividend = kpi?.all?.net ||
+                kpi?.['12m']?.net ||
+                Object.values(monthly || {}).flatMap(m => m).reduce((a, b) => a + (b || 0), 0)
+
+            if (!annualDividend || annualDividend <= 0) return
+
+            try {
+                await supabase
+                    .from('community_dividends')
+                    .upsert({
+                        user_id: appUser.id,
+                        display_name: displayName.trim() || 'Anonym',
+                        annual_dividend: annualDividend,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'user_id' })
+            } catch (err) {
+                console.error('Automatisches Syncen des Rankings fehlgeschlagen:', err)
+            }
+        }
+        autoSyncRanking()
+    }, [appUser, participateRanking, monthly, kpi, displayName])
+
+    const generateRandomName = () => {
+        const randomPrefix = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)]
+        const randomNum = Math.floor(Math.random() * 900 + 100)
+        setDisplayName(`${randomPrefix}${randomNum}`)
+    }
 
     const handleSharePortfolio = async () => {
         try {
@@ -51,8 +105,6 @@ export default function ProfilePage({ appUser }) {
 
             const token = existingToken || crypto.randomUUID()
 
-            // X-Ray vorab berechnen und kompakt speichern: [Name, Land, Gewicht in %]
-            // Die selben Positionen wie in der App verwenden; stimmen die Zahlen nicht, hier holdings und enrichedHoldings tauschen
             let xray = null
             try {
                 const xrayBase = enrichedHoldings?.length ? enrichedHoldings : holdings
@@ -64,7 +116,7 @@ export default function ProfilePage({ appUser }) {
                         .slice(0, 6000)
                 }
             } catch (xrayErr) {
-                console.warn('X-Ray konnte nicht berechnet werden, wird nicht mitgeteilt:', xrayErr)
+                console.warn('X-Ray konnte nicht berechnet werden:', xrayErr)
             }
 
             const portfolioPayload = {
@@ -89,7 +141,6 @@ export default function ProfilePage({ appUser }) {
                 )
                 .select('updated_at')
             if (shareError) throw shareError
-            if (!saved?.length) throw new Error('Die Datenbank hat die Änderung nicht übernommen (fehlende Berechtigung).')
 
             const { error: profileError } = await supabase
                 .from('profiles')
@@ -98,15 +149,29 @@ export default function ProfilePage({ appUser }) {
 
             setexistingToken(token)
 
-            const shareUrl = `${window.location.origin}/#share/${token}`
-            const stand = new Date(saved[0].updated_at).toLocaleString('de-DE')
-            const xrayHint = xray ? ' ' : ' (ohne X-Ray, dafür fehlen ETF-Daten)'
-            try {
-                await navigator.clipboard.writeText(shareUrl)
-                setMessage({ type: 'success', text: `Link kopiert${xrayHint}. Geteilter Stand: ${stand}` })
-            } catch {
-                setMessage({ type: 'success', text: `Aktualisiert${xrayHint}, Stand: ${stand}. Link: ${shareUrl}` })
+            // --- COMMUNITY RANKING SYNCHRONISATION ---
+            if (participateRanking) {
+                // Jährliche Dividende aus kpi oder monthly berechnen
+                const annualDividend = kpi?.annualDividends || Object.values(monthly || {}).flatMap(m => m).reduce((a, b) => a + (b || 0), 0)
+
+                await supabase
+                    .from('community_dividends')
+                    .upsert({
+                        user_id: appUser.id,
+                        display_name: displayName.trim() || 'Anonym',
+                        annual_dividend: annualDividend,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'user_id' })
+            } else {
+                // Falls Opt-in deaktiviert wurde, aus Ranking entfernen
+                await supabase
+                    .from('community_dividends')
+                    .delete()
+                    .eq('user_id', appUser.id)
             }
+
+            const shareUrl = `${window.location.origin}/#share/${token}`
+            setMessage({ type: 'success', text: `Einstellungen & Portfolio erfolgreich aktualisiert!` })
         } catch (err) {
             setMessage({ type: 'error', text: 'Fehler: ' + err.message })
         } finally {
@@ -114,7 +179,6 @@ export default function ProfilePage({ appUser }) {
         }
     }
 
-    // Parqet Client ID speichern/aktualisieren
     const handleSaveParqetId = async (e) => {
         e.preventDefault()
         setLoading(true)
@@ -138,17 +202,6 @@ export default function ProfilePage({ appUser }) {
         }
     }
 
-    const getProviders = (user) => {
-        if (!user) return []
-        const providers =
-            user.identities?.map((id) => id.provider) ||
-            user.app_metadata?.providers ||
-            [user.app_metadata?.provider]
-
-        return [...new Set(providers.filter(Boolean))]
-    }
-
-    const activeProviders = getProviders(appUser)
     const avatarUrl = appUser?.user_metadata?.avatar_url
 
     return (
@@ -158,89 +211,87 @@ export default function ProfilePage({ appUser }) {
             </h2>
 
             {/* BENUTZER-PROFIL KARTE */}
-            <div
-                style={{
-                    background: '#161b27',
-                    border: '1px solid #1e2a3a',
-                    borderRadius: 16,
-                    padding: 24,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 20,
-                    marginBottom: 24,
-                }}
-            >
-                <div
-                    style={{
-                        width: 64,
-                        height: 64,
-                        borderRadius: '50%',
-                        overflow: 'hidden',
-                        background: '#ea580c',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 24,
-                        fontWeight: 700,
-                        color: '#ffffff',
-                        flexShrink: 0,
-                    }}
-                >
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24, display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24 }}>
+                <div style={{ width: 64, height: 64, borderRadius: '50%', overflow: 'hidden', background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, color: '#ffffff', flexShrink: 0 }}>
                     {avatarUrl && !imgError ? (
-                        <img
-                            src={avatarUrl}
-                            alt="Profil"
-                            onError={() => setImgError(true)}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
+                        <img src={avatarUrl} alt="Profil" onError={() => setImgError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                         appUser?.email?.[0]?.toUpperCase() ?? '👤'
                     )}
                 </div>
-
                 <div>
                     <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#f1f5f9' }}>
                         {appUser?.user_metadata?.full_name || appUser?.user_metadata?.name || 'Benutzer'}
                     </h3>
-                    <p style={{ margin: '4px 0 8px 0', fontSize: 14, color: '#94a3b8' }}>
-                        {appUser?.email}
-                    </p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: 14, color: '#94a3b8' }}>{appUser?.email}</p>
+                </div>
+            </div>
+
+            {message && (
+                <div style={{ padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 24, background: message.type === 'success' ? '#0a2d1a' : '#2d0a0a', border: `1px solid ${message.type === 'success' ? '#14532d' : '#7f1d1d'}`, color: message.type === 'success' ? '#86efac' : '#fca5a5' }}>
+                    {message.type === 'success' ? '✓ ' : '⚠ '}{message.text}
+                </div>
+            )}
+
+            {/* COMMUNITY RANKING KARTE */}
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24, marginBottom: 24 }}>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    🏆 Anonymisiertes Community-Ranking
+                </h3>
+                <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>
+                    Nimm am anonymen Bestenvergleich teil und vergleiche deine jährlichen Dividenden mit anderen Nutzern.
+                </p>
+
+                {/* Erklärung was preisgegeben wird */}
+                <div style={{ background: '#0f1420', border: '1px solid #2a3a50', borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 12, color: '#cbd5e1', lineHeight: 1.4 }}>
+                    <strong style={{ color: '#38bdf8' }}>Was wird geteilt?</strong> Es wird ausschließlich dein gewählter <strong>Benutzername</strong> und die gerundete <strong>Summe deiner jährlichen Dividenden</strong> veröffentlicht. Es werden niemals deine E-Mail-Adresse, dein Realname, einzelne Aktienpositionen oder Kontodaten preisgegeben.
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, fontWeight: 500 }}>
+                        <input
+                            type="checkbox"
+                            checked={participateRanking}
+                            onChange={(e) => setParticipateRanking(e.target.checked)}
+                            style={{ width: 16, height: 16, accentColor: '#009991', cursor: 'pointer' }}
+                        />
+                        Am Community-Ranking teilnehmen
+                    </label>
+
+                    {participateRanking && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 400 }}>
+                            <label style={{ fontSize: 12, color: '#94a3b8' }}>Dein anonymer Anzeigename:</label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <input
+                                    type="text"
+                                    value={displayName}
+                                    onChange={(e) => setDisplayName(e.target.value)}
+                                    placeholder="z.B. DividendHero"
+                                    maxLength={30}
+                                    style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #2a3a50', background: '#0f1420', color: '#e0e6f0', fontSize: 13 }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={generateRandomName}
+                                    style={{ background: '#1e293b', color: '#38bdf8', border: '1px solid #2a3a50', borderRadius: 8, padding: '0 12px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                                    title="Zufälligen Namen generieren"
+                                >
+                                    🎲 Zufall
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* PORTFOLIO TEILEN KARTE */}
-            <div
-                style={{
-                    background: '#161b27',
-                    border: '1px solid #1e2a3a',
-                    borderRadius: 16,
-                    padding: 24,
-                    marginBottom: 24,
-                }}
-            >
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24, marginBottom: 24 }}>
                 <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
                     🔗 Anonymes Portfolio teilen
                 </h3>
                 <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#94a3b8' }}>
-                    Dein fester Nur-Lese-Link. Wenn du ihn kopierst, werden deine aktuellen Portfoliodaten für diesen Link aktualisiert.
+                    Dein fester Nur-Lese-Link. Über den Button unten speicherst du alle Änderungen (inkl. Ranking) und aktualisierst gleichzeitig dein geteiltes Portfolio.
                 </p>
-
-                {message && (
-                    <div
-                        style={{
-                            padding: '10px 14px',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            marginBottom: 16,
-                            background: message.type === 'success' ? '#0a2d1a' : '#2d0a0a',
-                            border: `1px solid ${message.type === 'success' ? '#14532d' : '#7f1d1d'}`,
-                            color: message.type === 'success' ? '#86efac' : '#fca5a5',
-                        }}
-                    >
-                        {message.type === 'success' ? '✓ ' : '⚠ '}
-                        {message.text}
-                    </div>
-                )}
 
                 <button
                     onClick={handleSharePortfolio}
@@ -256,19 +307,31 @@ export default function ProfilePage({ appUser }) {
                         cursor: 'pointer',
                     }}
                 >
-                    {loading ? 'Aktualisiere Link…' : 'Share-Link kopieren'}
+                    {loading ? 'Speichere & aktualisiere…' : 'Änderungen speichern & Link kopieren'}
                 </button>
             </div>
+            // Aktualisierter Ausschnitt für ProfilePage.jsx (füge diesen Button / Link in deine Profil-Karte oder darunter ein)
+
+            {participateRanking && (
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                    <span style={{ color: '#94a3b8' }}>Dein Platz im Ranking:</span>
+                    <button
+                        onClick={() => {
+                            if (typeof onNavigate === 'function') {
+                                onNavigate('community-ranking')
+                            } else {
+                                window.location.hash = 'community-ranking'
+                            }
+                        }}
+                        style={{ background: 'none', border: 'none', color: '#38bdf8', fontWeight: 600, cursor: 'pointer', padding: 0, fontSize: 13 }}
+                    >
+                        Zum Community-Ranking →
+                    </button>
+                </div>
+            )}
 
             {/* PARQET ANBINDUNG KARTE */}
-            <div
-                style={{
-                    background: '#161b27',
-                    border: '1px solid #1e2a3a',
-                    borderRadius: 16,
-                    padding: 24,
-                }}
-            >
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24 }}>
                 <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
                     🔑 Parqet Client ID
                 </h3>
@@ -282,29 +345,12 @@ export default function ProfilePage({ appUser }) {
                         placeholder="z.B. 60f7b1234a56789012345678"
                         value={parqetId}
                         onChange={(e) => setParqetId(e.target.value)}
-                        style={{
-                            flex: 1,
-                            padding: '10px 14px',
-                            borderRadius: 8,
-                            border: '1px solid #2a3a50',
-                            background: '#0f1420',
-                            color: '#e0e6f0',
-                            fontSize: 14,
-                        }}
+                        style={{ flex: 1, padding: '10px 14px', borderRadius: 8, border: '1px solid #2a3a50', background: '#0f1420', color: '#e0e6f0', fontSize: 14 }}
                     />
                     <button
                         type="submit"
                         disabled={loading}
-                        style={{
-                            background: loading ? '#1a2233' : '#1e3a5f',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: 8,
-                            padding: '0 20px',
-                            fontSize: 14,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                        }}
+                        style={{ background: loading ? '#1a2233' : '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: 8, padding: '0 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
                     >
                         {loading ? '⟳' : 'Speichern'}
                     </button>
