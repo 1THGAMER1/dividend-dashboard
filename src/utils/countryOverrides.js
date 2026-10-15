@@ -32,7 +32,26 @@ export function lookupCountry(normName) {
 export const SECTOR_OVERRIDES = {
     'NETFLIX': 'Kommunikationsdienste',
     'VERIZON COMMUNICATIONS': 'Kommunikationsdienste',
-    // 'NAME DER AKTIE': 'Informationstechnologie',
+    'NOVO': 'Gesundheitswesen',
+    'SANOFI FRANCE': 'Gesundheitswesen',
+    'ROCHE PS PAR': 'Gesundheitswesen',
+    'MUENCHENER RUECKVERSICHERUNGS GESELLSCH': 'Finanzen',
+    'DAI ICHI LIFE': 'Finanzen',
+    'SUMITOMO MITSUI TRUST': 'Finanzen',
+    'BLACKROCK FUNDING DE': 'Finanzen',
+    'CHINA CONSTRUCTION BANK': 'Finanzen',
+    'HANWHA AEROSPACE': 'Industrie',
+    'CACI INTERNATIONAL': 'Industrie',
+    'MOOG': 'Industrie',
+    'NIPPON YUSEN KK': 'Industrie',
+    'MITSUI OSK LINES': 'Industrie',
+    'VOLKSWAGEN': 'Zyklischer Konsum',
+    'CIE GENERALE DES ETABLISSEMENTS MICHELI': 'Zyklischer Konsum',
+    'CIE FINANCIERE RICHEMONT': 'Zyklischer Konsum',
+    'NIPPON TELEGRAPH AND TELEPHONE': 'Kommunikationsdienste',
+    'MEDIATEK': 'Informationstechnologie',
+    'OMV': 'Energie',
+    'TERNA RETE ELETTRICA NAZIONALE': 'Versorger',
 }
 
 export function lookupSector(normName) {
