@@ -61,6 +61,7 @@ export default function PortfolioPageView({
                 <HoldingDetailModal
                     holding={selectedHolding}
                     onClose={() => setSelectedHolding(null)}
+                    allHoldings={activeHoldings}
                     buyActs={buyActs}
                     sellActs={sellActs}
                     byHolding={byHolding}

@@ -81,12 +81,28 @@ export default function HoldingDetailModal({
             const entry = etfCatalog[key]
             if (!entry || !Array.isArray(entry.rows)) return
 
-            // Position im ETF anhand von ISIN oder Name finden
+            // Bereinige Firmennamen um Rechtsformen und Zusätze wie (ADR), A/S, Class B etc.
+            const clean = (s) => (s || '').toLowerCase()
+                .replace(/\(adr\)|\(the\)|\(registered\)|a\/s|class [a-z]|cl [a-z]|inc\.?|corp\.?|ag|se|nv|plc/gi, '')
+                .replace(/[^a-z0-9]/g, ' ')
+                .trim()
+
+            const baseHoldingName = clean(nameLower)
+
+            // Position im ETF anhand von ISIN oder bereinigtem Namen finden
             const match = entry.rows.find(r => {
                 const rIsin = (r.ISIN || r.isin || '').trim().toUpperCase()
                 if (isinUpper && rIsin && isinUpper === rIsin) return true
+
                 const rName = (r.Name || r.name || r.Holding || '').trim().toLowerCase()
-                if (nameLower && rName && (rName === nameLower || (nameLower.length > 4 && rName.includes(nameLower)))) return true
+                if (!rName) return false
+                if (nameLower && (rName === nameLower || rName.includes(nameLower))) return true
+
+                // Robuster Abgleich für ADRs (z. B. "novo nordisk" matcht "novo nordisk class b")
+                const baseRName = clean(rName)
+                if (baseHoldingName.length >= 4 && (baseRName.includes(baseHoldingName) || baseHoldingName.includes(baseRName))) {
+                    return true
+                }
                 return false
             })
 
