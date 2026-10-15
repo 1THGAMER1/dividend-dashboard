@@ -28,3 +28,17 @@ export function lookupCountry(normName) {
     }
     return null
 }
+// Sektor für direkt gehaltene Aktien ohne ETF-Daten (Schlüssel = Anfang des normalisierten Namens)
+export const SECTOR_OVERRIDES = {
+    'NETFLIX': 'Kommunikationsdienste',
+    'VERIZON COMMUNICATIONS': 'Kommunikationsdienste',
+    // 'NAME DER AKTIE': 'Informationstechnologie',
+}
+
+export function lookupSector(normName) {
+    if (!normName) return null
+    for (const [key, sector] of Object.entries(SECTOR_OVERRIDES)) {
+        if (normName === key || normName.startsWith(key + ' ')) return sector
+    }
+    return null
+}

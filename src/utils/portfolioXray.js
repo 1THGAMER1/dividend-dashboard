@@ -1,4 +1,4 @@
-import { lookupCountry } from './countryOverrides.js'
+import { lookupCountry, lookupSector } from './countryOverrides.js'
 
 export function normalizeName(name) {
     if (!name) return ''
@@ -32,6 +32,30 @@ export function isEtfName(name = '') {
     return /\betf\b|ucits|msci|stoxx|ftse|ishares|xtrackers|vanguard|vaneck|amundi|spdr/.test(String(name).toLowerCase())
 }
 
+// --- Sektoren: einheitliche deutsche Namen (GICS), egal ob die Datei englisch oder deutsch ist ---
+// Die Reihenfolge der Regeln ist wichtig (z. B. "Nicht-Basiskonsum" vor "Basiskonsum")
+const SECTOR_RULES = [
+    [/cash|derivat|bargeld|geldmarkt/i, 'Bargeld'],
+    [/consumer discretionary|nicht.?basis|^zyklisch/i, 'Zyklischer Konsum'],
+    [/consumer staples|basiskonsum|nicht.?zyklisch|defensiv/i, 'Basiskonsum'],
+    [/utilit|versorg/i, 'Versorger'],
+    [/real estate|immobil/i, 'Immobilien'],
+    [/information technology|informationstechnologie|^technolog|^it$/i, 'Informationstechnologie'],
+    [/communicat|kommunikation|telecom|telekom/i, 'Kommunikationsdienste'],
+    [/financ|finanz/i, 'Finanzen'],
+    [/health|gesundheit/i, 'Gesundheitswesen'],
+    [/industr/i, 'Industrie'],
+    [/\benergy\b|^energie/i, 'Energie'],
+    [/material|grundstoff|roh.{0,3}hilfs/i, 'Grundstoffe'],
+]
+
+export function normalizeSector(raw) {
+    const s = String(raw ?? '').trim()
+    if (!s || /^(-|--|—|n\/a|na|unknown|unbekannt|other|sonstige)$/i.test(s)) return null
+    for (const [re, name] of SECTOR_RULES) if (re.test(s)) return name
+    return s.slice(0, 60)
+}
+
 // --- Flexible Spaltenerkennung für Holdings-Zeilen ---
 const pick = (row, candidates) => {
     const keys = Object.keys(row || {})
@@ -44,8 +68,9 @@ const pick = (row, candidates) => {
 const NAME_KEYS = ['name', 'emittent', 'holding', 'bezeichnung', 'security name', 'issuer']
 const WEIGHT_KEYS = ['weight', 'weight (%)', 'gewichtung', 'gewichtung (%)', 'gewicht', 'anteil', '% of net assets', '% of fund']
 const COUNTRY_KEYS = ['country', 'land', 'standort', 'location', 'market']
+const SECTOR_KEYS = ['sector', 'sektor', 'sector classification', 'gics sector', 'branche']
 
-// Gibt bereinigte Zeilen { Name, Country, Weight } zurück (nur Zeilen mit Name und Gewicht > 0)
+// Gibt bereinigte Zeilen { Name, Country, Sector, Weight } zurück (nur Zeilen mit Name und Gewicht > 0)
 export function extractHoldingRows(rows) {
     if (!Array.isArray(rows)) return []
     const out = []
@@ -53,7 +78,12 @@ export function extractHoldingRows(rows) {
         const name = pick(row, NAME_KEYS)
         const weight = parseWeight(pick(row, WEIGHT_KEYS))
         if (!name || !(weight > 0)) continue
-        out.push({ Name: String(name), Country: pick(row, COUNTRY_KEYS) || 'GLOBAL', Weight: weight })
+        out.push({
+            Name: String(name),
+            Country: pick(row, COUNTRY_KEYS) || 'GLOBAL',
+            Sector: normalizeSector(pick(row, SECTOR_KEYS)),
+            Weight: weight,
+        })
     }
     return out
 }
@@ -85,16 +115,25 @@ export function getShares(item) {
     return undefined
 }
 
+// Sektor für Positionen, die kein ETF-Sektor liefert (Land steht schon fest)
+const SECTOR_BY_COUNTRY = { Krypto: 'Krypto', Rohstoffe: 'Rohstoffe', Bargeld: 'Bargeld' }
+
 export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue) {
     if (!currentValue || currentValue <= 0 || !userHoldings) return []
     const aggregated = {}
-    const add = (name, country, weight) => {
+    const add = (name, country, weight, sector) => {
         if (!name || !(weight > 0)) return
         if (!aggregated[name]) {
-            aggregated[name] = { Name: name, Country: country, Weight: 0 }
-        } else if (aggregated[name].Country === 'GLOBAL' && country && country !== 'GLOBAL') {
-            // Ein späterer ETF kennt das Land: übernehmen
-            aggregated[name].Country = country
+            aggregated[name] = { Name: name, Country: country, Sector: sector || null, Weight: 0 }
+        } else {
+            if (aggregated[name].Country === 'GLOBAL' && country && country !== 'GLOBAL') {
+                // Ein späterer ETF kennt das Land: übernehmen
+                aggregated[name].Country = country
+            }
+            if (!aggregated[name].Sector && sector) {
+                // Ein späterer ETF kennt den Sektor: übernehmen
+                aggregated[name].Sector = sector
+            }
         }
         aggregated[name].Weight += weight
     }
@@ -121,14 +160,14 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
 
         if (etf) {
             for (const row of extractHoldingRows(etf.holdings)) {
-                add(normalizeName(row.Name), row.Country, (row.Weight / 100) * p.weight * 100)
+                add(normalizeName(row.Name), row.Country, (row.Weight / 100) * p.weight * 100, row.Sector)
                 covered += row.Weight
             }
         }
 
         if (covered > 0) {
             // Rest, falls die Datei nicht 100 % abdeckt (z. B. nur Top-Positionen)
-            if (covered < 99.5) add(p.key + ' (REST)', 'GLOBAL', ((100 - covered) / 100) * p.weight * 100)
+            if (covered < 99.5) add(p.key + ' (REST)', 'GLOBAL', ((100 - covered) / 100) * p.weight * 100, 'ETF-Rest')
             continue
         }
 
@@ -137,13 +176,18 @@ export function computePortfolioXRay(etfHoldingsMap, userHoldings, currentValue)
         const isCrypto = ['BITCOIN', 'SOLANA', 'DOGECOIN', 'ETH'].some(c => p.key.includes(c))
         add(looksLikeEtf ? p.key + ' (NICHT AUFGESCHLÜSSELT)' : p.key,
             isCrypto ? 'Krypto' : 'GLOBAL',
-            p.weight * 100)
+            p.weight * 100,
+            looksLikeEtf ? 'Nicht aufgeschlüsselt' : null)
     }
 
     for (const entry of Object.values(aggregated)) {
         if (String(entry.Country).toUpperCase() === 'GLOBAL') {
             const c = lookupCountry(entry.Name)
             if (c) entry.Country = c
+        }
+        // Fehlender Sektor: Krypto, Rohstoffe und Bargeld haben feste Sektoren, sonst die Namensliste
+        if (!entry.Sector) {
+            entry.Sector = SECTOR_BY_COUNTRY[entry.Country] || lookupSector(entry.Name) || null
         }
     }
 

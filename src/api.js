@@ -357,7 +357,6 @@
             dividends: [],
             price: coinData.regularMarketPrice
           }
-          console.log(`[CMC Erfolg] ${rawSymbol} -> ${coinData.regularMarketPrice} €`)
         }
       }
     }

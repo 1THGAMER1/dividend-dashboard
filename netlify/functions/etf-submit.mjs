@@ -47,7 +47,8 @@ function validatePayload(p) {
             }
             continue
         }
-        rows.push({ Name, Country, Weight })
+        const Sector = cleanText(r?.Sector, 60)
+        rows.push({ Name, Country, Weight, ...(Sector ? { Sector } : {}) })
     }
     if (dropped > p.rows.length * 0.2) {
         return {

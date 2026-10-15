@@ -100,10 +100,8 @@ export default function HoldingDetailModal({
 
                 // Robuster Abgleich für ADRs (z. B. "novo nordisk" matcht "novo nordisk class b")
                 const baseRName = clean(rName)
-                if (baseHoldingName.length >= 4 && (baseRName.includes(baseHoldingName) || baseHoldingName.includes(baseRName))) {
-                    return true
-                }
-                return false
+                return !!(baseHoldingName.length >= 4 && (baseRName.includes(baseHoldingName) || baseHoldingName.includes(baseRName)));
+
             })
 
             if (match) {
@@ -168,7 +166,6 @@ export default function HoldingDetailModal({
     const totalSold = mySells.reduce((s, a) => s + actAmount(a), 0)
 // Fallback, falls holding.realizedGain bei verkauften Werten fehlt
     const realizedDisplay = isSold && !rp && !realized ? totalSold - totalBought : realized
-    console.log('[Modal]', holding.name, '| Verkäufe gesamt:', sellActs.length, '| für diesen Wert:', mySells.length, '| Beispiel:', sellActs[0]?.asset)
 
     // Dividenden aus byHolding oder übergebenen Aktivitäten filtern
     const divEntry = byHolding[isin] || byHolding[holding.id] || {}
@@ -211,13 +208,6 @@ export default function HoldingDetailModal({
     const yieldOnValue = hasForecast && val > 0 ? (forecast12mHolding / val) * 100 : null
     const yieldOnCost = hasForecast && cost > 0 ? (forecast12mHolding / cost) * 100 : null
     const fmtPct = (p) => `${p.toFixed(2).replace('.', ',')} %`
-    console.log('[ETF-Debug] Holding:', holding.name, '| isin:', holding.isin, '| id:', holding.id)
-    console.log('[ETF-Debug] myEtfs:', myEtfs.map(e => ({ name: e.name, key: etfKeyFor(e) })))
-    console.log('[ETF-Debug] Katalog-Schlüssel:', Object.keys(etfCatalog))
-    if (myEtfs[0]) {
-        const firstEntry = etfCatalog[etfKeyFor(myEtfs[0])]
-        console.log('[ETF-Debug] Beispiel-Zeilen aus', myEtfs[0].name, ':', firstEntry?.rows?.slice(0, 3))
-    }
     const MONTH_NAMES = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
     return (

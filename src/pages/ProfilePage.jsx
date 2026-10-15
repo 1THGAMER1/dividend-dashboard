@@ -59,7 +59,7 @@ export default function ProfilePage({ appUser }) {
                 const etfMap = await loadEtfHoldingsMapFor(xrayBase)
                 if (Object.keys(etfMap).length) {
                     xray = computePortfolioXRay(etfMap, xrayBase, currentValue)
-                        .map(i => [i.Name, i.Country, +i.Weight.toFixed(4)])
+                        .map(i => [i.Name, i.Country, +i.Weight.toFixed(4), i.Sector ?? null])
                         .filter(r => r[2] > 0)
                         .slice(0, 6000)
                 }

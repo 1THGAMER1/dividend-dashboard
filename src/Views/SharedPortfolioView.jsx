@@ -43,7 +43,7 @@ export default function SharedPortfolioView({ sharedToken }) {
 
     // Fertig berechneter X-Ray: [Name, Land, Gewicht] -> Objekte
     const xrayData = useMemo(
-        () => (sharedData?.xray || []).map(([Name, Country, Weight]) => ({ Name, Country, Weight })),
+        () => (sharedData?.xray || []).map(([Name, Country, Weight, Sector]) => ({ Name, Country, Weight, Sector })),
         [sharedData]
     )
     const hasXray = xrayData.length > 0

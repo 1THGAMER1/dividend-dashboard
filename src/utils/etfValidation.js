@@ -10,7 +10,8 @@ export function sanitizeRows(rows) {
         const country = String(r.Country ?? 'GLOBAL').replace(UNSAFE_CHARS, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'GLOBAL'
         const weight = +Number(r.Weight).toFixed(6) // erst runden, dann prüfen
         if (!name || !Number.isFinite(weight) || weight <= 0 || weight > 100) continue
-        clean.push({ Name: name, Country: country, Weight: weight })
+        const sector = r.Sector ? String(r.Sector).replace(UNSAFE_CHARS, '').replace(/\s+/g, ' ').trim().slice(0, 60) : ''
+        clean.push({ Name: name, Country: country, Weight: weight, ...(sector ? { Sector: sector } : {}) })
     }
     return clean
 }

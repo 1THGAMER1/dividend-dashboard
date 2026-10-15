@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { parseWeight } from './portfolioXray'
+import { parseWeight, normalizeSector } from './portfolioXray'
 
 const SAFE_READ_OPTIONS = {
     type: 'array',
@@ -19,7 +19,7 @@ async function readWorkbook(file) {
 const NAME_SYNONYMS = ['holding name', 'bezeichnung der position', 'security description', 'security name', 'wertpapiere', 'name', 'emittent', 'issuer', 'holding', 'bezeichnung', 'wertpapier']
 const WEIGHT_SYNONYMS = ['percent of fund', '% der assets', '% of market value', '% des fondsvolumens', '% of net assets', '% of fund', 'weighting', 'weight', 'gewichtung', 'gewicht', 'anteil']
 const COUNTRY_SYNONYMS = ['trade country name', 'country', 'land', 'standort', 'location', 'sitz', 'region']
-
+const SECTOR_SYNONYMS = ['sector classification', 'gics sector', 'sector', 'sektor', 'branche']
 // Englische Ländernamen -> deutsche Ländernamen, wie getRegion sie kennt
 const COUNTRY_EN_DE = {
     'UNITED STATES': 'Vereinigte Staaten', 'USA': 'Vereinigte Staaten', 'UNITED KINGDOM': 'Vereinigtes Königreich',
@@ -68,6 +68,7 @@ function parseSheet(ws) {
         const weightCol = findColumn(cells, WEIGHT_SYNONYMS)
         if (nameCol === -1 || weightCol === -1) continue
         const countryCol = findColumn(cells, COUNTRY_SYNONYMS)
+        const sectorCol = findColumn(cells, SECTOR_SYNONYMS)
 
         const rows = []
         for (const row of grid.slice(r + 1)) {
@@ -76,7 +77,8 @@ function parseSheet(ws) {
             if (!name || !(weight > 0) || /^(total|gesamt|summe|sum)\b/i.test(name)) continue
             let country = countryCol !== -1 ? String(row[countryCol] ?? '').trim() : ''
             country = COUNTRY_EN_DE[country.toUpperCase()] || ISO_TO_DE[country.toUpperCase()] || country || 'GLOBAL'
-            rows.push({ Name: name, Weight: weight, Country: country })
+            const sector = sectorCol !== -1 ? normalizeSector(row[sectorCol]) : null
+            rows.push({ Name: name, Weight: weight, Country: country, Sector: sector })
         }
         if (rows.length) return rows
     }
