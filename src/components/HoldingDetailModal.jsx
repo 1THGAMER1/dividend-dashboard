@@ -1,5 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import HoldingPriceChart from './HoldingPriceChart.jsx'
+import { etfKeyFor, loadCatalog, loadMySubmissions } from '../utils/etfHoldingsStore'
+import { isEtfName } from '../utils/portfolioXray'
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -15,10 +17,12 @@ const fmtDate = (d) => {
     if (!d) return '—'
     return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
+let _cachedEtfCatalog = null
 
 export default function HoldingDetailModal({
                                                holding,
                                                onClose,
+                                               allHoldings = [],
                                                buyActs = [],
                                                sellActs = [],
                                                byHolding = {},
@@ -28,7 +32,76 @@ export default function HoldingDetailModal({
                                                totalPortfolioValue = 0,
                                            }) {
     const [tab, setTab] = useState('overview') // 'overview' | 'activities' | 'dividends'
+    const [etfCatalog, setEtfCatalog] = useState(_cachedEtfCatalog || {})
 
+    // Alle aktiven ETFs aus dem Depot ermitteln
+    const myEtfs = useMemo(() => {
+        return (allHoldings || []).filter(h => {
+            const t = (h.type || '').toLowerCase()
+            return t.includes('etf') || t.includes('fonds') || isEtfName(h.name || '')
+        })
+    }, [allHoldings])
+
+    // ETF-Katalogdaten laden (geprüfter Katalog + eigene Uploads)
+    useEffect(() => {
+        if (_cachedEtfCatalog) return
+        const keys = [...new Set(myEtfs.map(etfKeyFor).filter(Boolean))]
+        if (!keys.length) return
+
+        Promise.all([loadCatalog(keys), loadMySubmissions(keys)])
+            .then(([cat, own]) => {
+                const merged = { ...cat, ...own }
+                _cachedEtfCatalog = merged
+                setEtfCatalog(merged)
+            })
+            .catch(err => console.warn('[HoldingModal] ETF-Katalog konnte nicht geladen werden:', err))
+    }, [myEtfs])
+
+    // Berechne, in welchen ETFs diese Aktie steckt
+    const indirectEtfHoldings = useMemo(() => {
+        if (!holding || isSold || !myEtfs.length) return []
+        const isinUpper = (holding.isin || holding.id || '').trim().toUpperCase()
+        const nameLower = (holding.name || '').trim().toLowerCase()
+
+        const results = []
+
+        myEtfs.forEach(etf => {
+            const key = etfKeyFor(etf)
+            const entry = etfCatalog[key]
+            if (!entry || !Array.isArray(entry.rows)) return
+
+            // Position im ETF anhand von ISIN oder Name finden
+            const match = entry.rows.find(r => {
+                const rIsin = (r.ISIN || r.isin || '').trim().toUpperCase()
+                if (isinUpper && rIsin && isinUpper === rIsin) return true
+                const rName = (r.Name || r.name || r.Holding || '').trim().toLowerCase()
+                return !!(nameLower && rName && (rName === nameLower || (nameLower.length > 5 && rName.includes(nameLower))));
+
+            })
+
+            if (match) {
+                const weight = parseFloat(String(match.Weight || match.weight || 0).replace(',', '.')) || 0
+                const etfVal = parseFloat(etf.value || 0)
+                const indirectValue = (etfVal * weight) / 100
+
+                results.push({
+                    etfName: etf.name || etf.title || 'ETF',
+                    etfValue: etfVal,
+                    weight: weight,
+                    indirectValue: indirectValue,
+                })
+            }
+        })
+
+        return results.sort((a, b) => b.indirectValue - a.indirectValue)
+    }, [holding, isSold, myEtfs, etfCatalog])
+
+    const totalIndirectValue = useMemo(() => {
+        return indirectEtfHoldings.reduce((sum, item) => sum + item.indirectValue, 0)
+    }, [indirectEtfHoldings])
+
+    const totalExposure = val + totalIndirectValue
+    const totalExposurePct = totalPortfolioValue > 0 ? ((totalExposure / totalPortfolioValue) * 100).toFixed(1).replace('.', ',') : null
     if (!holding) return null
 
     const isin = holding.isin || holding.id
@@ -357,6 +430,72 @@ export default function HoldingDetailModal({
                                     </div>
                                 </div>
                             </div>
+                            {/* ETF-Beteiligung (Indirekt in ETFs enthalten) */}
+                            {indirectEtfHoldings.length > 0 && (
+                                <div style={{
+                                    background: '#0f1420',
+                                    border: '1px solid #1e2a3a',
+                                    borderRadius: 12,
+                                    padding: 16,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 12
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                                        <div>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span>📦</span> Indirekt in deinen ETFs enthalten
+                                            </div>
+                                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                                Enthalten in {indirectEtfHoldings.length} {indirectEtfHoldings.length === 1 ? 'ETF' : 'ETFs'} deines Portfolios
+                                            </div>
+                                        </div>
+
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: '#38bdf8' }}>
+                                                +{fmt(totalIndirectValue)}
+                                            </div>
+                                            <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
+                                                Gesamt-Exposure: <strong style={{ color: '#e0e6f0' }}>{fmt(totalExposure)}</strong> {totalExposurePct && `(${totalExposurePct} %)`}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Aufschlüsselung nach einzelnen ETFs */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {indirectEtfHoldings.map((item, idx) => (
+                                            <div
+                                                key={idx}
+                                                style={{
+                                                    background: '#161b27',
+                                                    border: '1px solid #1e2a3a',
+                                                    borderRadius: 8,
+                                                    padding: '8px 12px',
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    gap: 10
+                                                }}
+                                            >
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {item.etfName}
+                                                    </div>
+                                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
+                                                        Gewichtung im ETF: <strong style={{ color: '#94a3b8' }}>{item.weight.toFixed(2).replace('.', ',')} %</strong>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>
+                                                        {fmt(item.indirectValue)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
 

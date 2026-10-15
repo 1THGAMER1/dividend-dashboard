@@ -565,6 +565,7 @@ export default function PortfolioDashboard({
                 <HoldingDetailModal
                     holding={selectedHolding}
                     onClose={() => setSelectedHolding(null)}
+                    allHoldings={activeHoldings}
                     buyActs={buyActs}
                     sellActs={sellActs}
                     byHolding={byHolding}
