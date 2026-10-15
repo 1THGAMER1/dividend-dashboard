@@ -33,6 +33,9 @@ export default function HoldingDetailModal({
                                            }) {
     const [tab, setTab] = useState('overview') // 'overview' | 'activities' | 'dividends'
     const [etfCatalog, setEtfCatalog] = useState(_cachedEtfCatalog || {})
+    const sharesNum = parseFloat(holding.shares) || 0
+    const isSold = sharesNum <= 0
+    const val = holding.value || 0
 
     // Alle aktiven ETFs aus dem Depot ermitteln
     const myEtfs = useMemo(() => {
@@ -105,9 +108,7 @@ export default function HoldingDetailModal({
     if (!holding) return null
 
     const isin = holding.isin || holding.id
-    const val = holding.value || 0
     const cost = holding.costValue || 0
-    const sharesNum = parseFloat(holding.shares) || 0
 
     // Zeitraum-Werte
     const rp = range === 'MAX' ? null : (perfByRange[range]?.[holding.id] ?? perfByRange[range]?.[holding.isin])
@@ -139,7 +140,6 @@ export default function HoldingDetailModal({
     const myBuys = (buyActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'BUY' }))
     const mySells = (sellActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'SELL' }))
     const actAmount = (a) => parseFloat(a.amount || a.total || a.amountNet || 0)
-    const isSold = sharesNum <= 0
     const totalBought = myBuys.reduce((s, a) => s + actAmount(a), 0)
     const totalSold = mySells.reduce((s, a) => s + actAmount(a), 0)
 // Fallback, falls holding.realizedGain bei verkauften Werten fehlt
