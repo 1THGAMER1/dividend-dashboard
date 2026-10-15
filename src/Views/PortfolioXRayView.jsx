@@ -88,6 +88,7 @@ export default function PortfolioXRayView({
         !(hideCrypto && i.Country === 'Krypto') &&
         !(hideCommodities && i.Country === 'Rohstoffe')
     )
+    console.table(rawData.filter(i => !i.Sector).slice(0, 20))
 
     // --- Top Aktien ---
     const topHoldings = rawData.slice(0, topLimit)
