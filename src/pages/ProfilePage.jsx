@@ -9,7 +9,7 @@ const RANDOM_NAMES = [
     'PassivesEinkommen', 'AktienHai', 'YieldJunkie', 'SparplanProfi', 'VermögensBuilder'
 ]
 
-export default function ProfilePage({ appUser }) {
+export default function ProfilePage({ appUser, onNavigate }) {
     const [parqetId, setParqetId] = useState('')
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState(null)
@@ -49,7 +49,6 @@ export default function ProfilePage({ appUser }) {
                     setParticipateRanking(true)
                     setDisplayName(rankData.display_name || '')
                 } else {
-                    // Zufälligen Standardnamen generieren falls noch nicht vorhanden
                     const randomDefault = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)] + Math.floor(Math.random() * 900 + 100)
                     setDisplayName(randomDefault)
                 }
@@ -59,20 +58,25 @@ export default function ProfilePage({ appUser }) {
         }
         loadProfile()
     }, [appUser])
-    // Automatischer Sync für das Ranking
-    useEffect(() => {
-        async function autoSyncRanking() {
-            if (!appUser || !participateRanking) return
 
-            // Holt die Netto-Jahressumme direkt aus dem KPI-Objekt oder berechnet sie als Fallback
-            const annualDividend = kpi?.all?.net ||
-                kpi?.['12m']?.net ||
-                Object.values(monthly || {}).flatMap(m => m).reduce((a, b) => a + (b || 0), 0)
+    const generateRandomName = () => {
+        const randomPrefix = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)]
+        const randomNum = Math.floor(Math.random() * 900 + 100)
+        setDisplayName(`${randomPrefix}${randomNum}`)
+    }
 
-            if (!annualDividend || annualDividend <= 0) return
+    // Speichern der Community-Ranking Einstellungen
+    const handleSaveRankingSettings = async () => {
+        setLoading(true)
+        setMessage(null)
 
-            try {
-                await supabase
+        try {
+            if (participateRanking) {
+                const annualDividend = kpi?.all?.net ||
+                    kpi?.['12m']?.net ||
+                    Object.values(monthly || {}).flatMap(m => m).reduce((a, b) => a + (b || 0), 0) || 0
+
+                const { error } = await supabase
                     .from('community_dividends')
                     .upsert({
                         user_id: appUser.id,
@@ -80,17 +84,23 @@ export default function ProfilePage({ appUser }) {
                         annual_dividend: annualDividend,
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'user_id' })
-            } catch (err) {
-                console.error('Automatisches Syncen des Rankings fehlgeschlagen:', err)
-            }
-        }
-        autoSyncRanking()
-    }, [appUser, participateRanking, monthly, kpi, displayName])
 
-    const generateRandomName = () => {
-        const randomPrefix = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)]
-        const randomNum = Math.floor(Math.random() * 900 + 100)
-        setDisplayName(`${randomPrefix}${randomNum}`)
+                if (error) throw error
+                setMessage({ type: 'success', text: 'Community-Ranking Einstellungen erfolgreich gespeichert!' })
+            } else {
+                const { error } = await supabase
+                    .from('community_dividends')
+                    .delete()
+                    .eq('user_id', appUser.id)
+
+                if (error) throw error
+                setMessage({ type: 'success', text: 'Du wurdest aus dem Community-Ranking entfernt.' })
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Fehler beim Speichern: ' + err.message })
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleSharePortfolio = async () => {
@@ -149,29 +159,13 @@ export default function ProfilePage({ appUser }) {
 
             setexistingToken(token)
 
-            // --- COMMUNITY RANKING SYNCHRONISATION ---
-            if (participateRanking) {
-                // Jährliche Dividende aus kpi oder monthly berechnen
-                const annualDividend = kpi?.annualDividends || Object.values(monthly || {}).flatMap(m => m).reduce((a, b) => a + (b || 0), 0)
-
-                await supabase
-                    .from('community_dividends')
-                    .upsert({
-                        user_id: appUser.id,
-                        display_name: displayName.trim() || 'Anonym',
-                        annual_dividend: annualDividend,
-                        updated_at: new Date().toISOString()
-                    }, { onConflict: 'user_id' })
-            } else {
-                // Falls Opt-in deaktiviert wurde, aus Ranking entfernen
-                await supabase
-                    .from('community_dividends')
-                    .delete()
-                    .eq('user_id', appUser.id)
-            }
-
             const shareUrl = `${window.location.origin}/#share/${token}`
-            setMessage({ type: 'success', text: `Einstellungen & Portfolio erfolgreich aktualisiert!` })
+            try {
+                await navigator.clipboard.writeText(shareUrl)
+                setMessage({ type: 'success', text: 'Portfolio aktualisiert & Link in Zwischenablage kopiert!' })
+            } catch {
+                setMessage({ type: 'success', text: `Portfolio erfolgreich aktualisiert!` })
+            }
         } catch (err) {
             setMessage({ type: 'error', text: 'Fehler: ' + err.message })
         } finally {
@@ -242,12 +236,11 @@ export default function ProfilePage({ appUser }) {
                     Nimm am anonymen Bestenvergleich teil und vergleiche deine jährlichen Dividenden mit anderen Nutzern.
                 </p>
 
-                {/* Erklärung was preisgegeben wird */}
                 <div style={{ background: '#0f1420', border: '1px solid #2a3a50', borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 12, color: '#cbd5e1', lineHeight: 1.4 }}>
                     <strong style={{ color: '#38bdf8' }}>Was wird geteilt?</strong> Es wird ausschließlich dein gewählter <strong>Benutzername</strong> und die gerundete <strong>Summe deiner jährlichen Dividenden</strong> veröffentlicht. Es werden niemals deine E-Mail-Adresse, dein Realname, einzelne Aktienpositionen oder Kontodaten preisgegeben.
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, fontWeight: 500 }}>
                         <input
                             type="checkbox"
@@ -282,6 +275,40 @@ export default function ProfilePage({ appUser }) {
                         </div>
                     )}
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                    <button
+                        onClick={handleSaveRankingSettings}
+                        disabled={loading}
+                        style={{
+                            background: '#1e3a5f',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: 8,
+                            padding: '8px 16px',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {loading ? 'Speichere...' : 'Ranking-Einstellungen speichern'}
+                    </button>
+
+                    {participateRanking && (
+                        <button
+                            onClick={() => {
+                                if (typeof onNavigate === 'function') {
+                                    onNavigate('community-ranking')
+                                } else {
+                                    window.location.hash = 'community-ranking'
+                                }
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#38bdf8', fontWeight: 600, cursor: 'pointer', padding: 0, fontSize: 13 }}
+                        >
+                            Zum Community-Ranking →
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* PORTFOLIO TEILEN KARTE */}
@@ -290,7 +317,7 @@ export default function ProfilePage({ appUser }) {
                     🔗 Anonymes Portfolio teilen
                 </h3>
                 <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#94a3b8' }}>
-                    Dein fester Nur-Lese-Link. Über den Button unten speicherst du alle Änderungen (inkl. Ranking) und aktualisierst gleichzeitig dein geteiltes Portfolio.
+                    Dein fester Nur-Lese-Link. Über den Button unten aktualisierst du dein geteiltes Portfolio.
                 </p>
 
                 <button
@@ -307,28 +334,9 @@ export default function ProfilePage({ appUser }) {
                         cursor: 'pointer',
                     }}
                 >
-                    {loading ? 'Speichere & aktualisiere…' : 'Änderungen speichern & Link kopieren'}
+                    {loading ? 'Aktualisiere…' : 'Share-Link kopieren / aktualisieren'}
                 </button>
             </div>
-            // Aktualisierter Ausschnitt für ProfilePage.jsx (füge diesen Button / Link in deine Profil-Karte oder darunter ein)
-
-            {participateRanking && (
-                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                    <span style={{ color: '#94a3b8' }}>Dein Platz im Ranking:</span>
-                    <button
-                        onClick={() => {
-                            if (typeof onNavigate === 'function') {
-                                onNavigate('community-ranking')
-                            } else {
-                                window.location.hash = 'community-ranking'
-                            }
-                        }}
-                        style={{ background: 'none', border: 'none', color: '#38bdf8', fontWeight: 600, cursor: 'pointer', padding: 0, fontSize: 13 }}
-                    >
-                        Zum Community-Ranking →
-                    </button>
-                </div>
-            )}
 
             {/* PARQET ANBINDUNG KARTE */}
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24 }}>
