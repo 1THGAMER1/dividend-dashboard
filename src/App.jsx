@@ -99,7 +99,12 @@ export default function App() {
       const hash = window.location.hash.replace('#', '')
       if (hash && hash !== page) {
         setPage(hash)
-        setAppMode(hash.startsWith('portfolio') ? 'portfolio' : 'dividends')
+        // Nur den App-Modus umschalten, wenn es sich um eine echte Modus-Seite handelt
+        if (hash.startsWith('portfolio')) {
+          setAppMode('portfolio')
+        } else if (['dashboard', 'calendar', 'calculator', 'drip'].includes(hash)) {
+          setAppMode('dividends')
+        }
       }
     }
     window.addEventListener('hashchange', handleHashChange)
@@ -270,7 +275,7 @@ export default function App() {
                       <p style={{ margin: 0, color: '#e0e6f0', fontSize: 13, fontWeight: 600 }}>{appUser?.user_metadata?.full_name || 'Benutzer'}</p>
                       <p style={{ margin: '2px 0 0', color: '#7a8ba0', fontSize: 11 }}>{appUser?.email}</p>
                     </div>
-                    <button onClick={() => { setPage('profile'); setUserMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#e0e6f0', padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>⚙️ Mein Profil</button>
+                    <button onClick={() => { handlePageChange('profile'); setUserMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#e0e6f0', padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>⚙️ Mein Profil</button>
                     <button onClick={() => { logout(); setUserMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#fca5a5', padding: '8px 16px', fontSize: 13, cursor: 'pointer', borderTop: '1px solid #1e2a3a', marginTop: 4 }}>🚪 Abmelden</button>
                   </div>
               )}
@@ -279,7 +284,7 @@ export default function App() {
         </nav>
 
         <div style={{ flex: 1, padding: '16px 20px', width: '100%', boxSizing: 'border-box' }}>
-          {page === 'profile' && <ProfilePage appUser={appUser} />}
+          {page === 'profile' && <ProfilePage appUser={appUser} onNavigate={handlePageChange} />}
           {page === 'roadmap' && <RoadmapPage />}
           {page === 'community-ranking' && (
               <div style={{ maxWidth: 800, margin: '0 auto' }}>
