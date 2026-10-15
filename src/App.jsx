@@ -12,6 +12,7 @@ import SharedPortfolioView   from './Views/SharedPortfolioView.jsx'
 import DividendDashboardView from './Views/DividendDashboardView.jsx'
 import PortfolioPageView     from './Views/PortfolioPageView.jsx'
 import DividendsPageView     from './Views/DividendsPageView.jsx'
+import CommunityRankingView from "./Views/CommunityRankingView.jsx";
 import ProfilePage           from './pages/ProfilePage'
 import RoadmapPage           from './pages/RoadmapPage'
 import Footer                from './components/Footer'
@@ -280,6 +281,11 @@ export default function App() {
         <div style={{ flex: 1, padding: '16px 20px', width: '100%', boxSizing: 'border-box' }}>
           {page === 'profile' && <ProfilePage appUser={appUser} />}
           {page === 'roadmap' && <RoadmapPage />}
+          {page === 'community-ranking' && (
+              <div style={{ maxWidth: 800, margin: '0 auto' }}>
+                <CommunityRankingView currentUserId={appUser?.id} />
+              </div>
+          )}
 
           {appMode === 'dividends' && (
               <>
