@@ -431,7 +431,8 @@ export default function HoldingDetailModal({
                                 </div>
                             </div>
                             {/* ETF-Beteiligung (Indirekt in ETFs enthalten) */}
-                            {indirectEtfHoldings.length > 0 && (
+                            {/* ETF-Beteiligung (Indirekt in ETFs enthalten) */}
+                            {!isSold && !isEtfName(holding.name || '') && (
                                 <div style={{
                                     background: '#0f1420',
                                     border: '1px solid #1e2a3a',
@@ -447,53 +448,60 @@ export default function HoldingDetailModal({
                                                 <span>📦</span> Indirekt in deinen ETFs enthalten
                                             </div>
                                             <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                                                Enthalten in {indirectEtfHoldings.length} {indirectEtfHoldings.length === 1 ? 'ETF' : 'ETFs'} deines Portfolios
+                                                {indirectEtfHoldings.length > 0
+                                                    ? `Enthalten in ${indirectEtfHoldings.length} ${indirectEtfHoldings.length === 1 ? 'ETF' : 'ETFs'} deines Portfolios`
+                                                    : 'In keinem deiner aktiven ETFs gefunden'
+                                                }
                                             </div>
                                         </div>
 
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: '#38bdf8' }}>
-                                                +{fmt(totalIndirectValue)}
+                                        {indirectEtfHoldings.length > 0 && (
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={{ fontSize: 14, fontWeight: 700, color: '#38bdf8' }}>
+                                                    +{fmt(totalIndirectValue)}
+                                                </div>
+                                                <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
+                                                    Gesamt-Exposure: <strong style={{ color: '#e0e6f0' }}>{fmt(totalExposure)}</strong> {totalExposurePct && `(${totalExposurePct} %)`}
+                                                </div>
                                             </div>
-                                            <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
-                                                Gesamt-Exposure: <strong style={{ color: '#e0e6f0' }}>{fmt(totalExposure)}</strong> {totalExposurePct && `(${totalExposurePct} %)`}
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
 
                                     {/* Aufschlüsselung nach einzelnen ETFs */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        {indirectEtfHoldings.map((item, idx) => (
-                                            <div
-                                                key={idx}
-                                                style={{
-                                                    background: '#161b27',
-                                                    border: '1px solid #1e2a3a',
-                                                    borderRadius: 8,
-                                                    padding: '8px 12px',
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    gap: 10
-                                                }}
-                                            >
-                                                <div style={{ minWidth: 0, flex: 1 }}>
-                                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {item.etfName}
+                                    {indirectEtfHoldings.length > 0 && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {indirectEtfHoldings.map((item, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    style={{
+                                                        background: '#161b27',
+                                                        border: '1px solid #1e2a3a',
+                                                        borderRadius: 8,
+                                                        padding: '8px 12px',
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        gap: 10
+                                                    }}
+                                                >
+                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {item.etfName}
+                                                        </div>
+                                                        <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
+                                                            Gewichtung im ETF: <strong style={{ color: '#94a3b8' }}>{item.weight.toFixed(2).replace('.', ',')} %</strong>
+                                                        </div>
                                                     </div>
-                                                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
-                                                        Gewichtung im ETF: <strong style={{ color: '#94a3b8' }}>{item.weight.toFixed(2).replace('.', ',')} %</strong>
-                                                    </div>
-                                                </div>
 
-                                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>
-                                                        {fmt(item.indirectValue)}
+                                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                        <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>
+                                                            {fmt(item.indirectValue)}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </>
