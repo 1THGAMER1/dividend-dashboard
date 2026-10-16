@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 
 const fmtEur = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0)
-const fmtPct = (n) => `${(Number(n) || 0).toFixed(2).replace('.', ',')} %`
+const fmtPct = (n) => (n == null ? '—' : `${Number(n).toFixed(2).replace('.', ',')} %`)
 
 export default function CommunityRankingView({ currentUserId }) {
     const [ranking, setRanking] = useState([])
@@ -32,9 +32,12 @@ export default function CommunityRankingView({ currentUserId }) {
     const sortedRanking = [...ranking].sort((a, b) => {
         if (sortBy === 'dividend') {
             return (b.annual_dividend || 0) - (a.annual_dividend || 0)
-        } else {
-            return (b.total_return_12m || 0) - (a.total_return_12m || 0)
         }
+        // Nach Rendite: Einträge ohne ermittelbaren Wert ans Ende, nicht als 0% einsortieren
+        if (a.total_return_12m == null && b.total_return_12m == null) return 0
+        if (a.total_return_12m == null) return 1
+        if (b.total_return_12m == null) return -1
+        return b.total_return_12m - a.total_return_12m
     })
 
     if (loading) {
@@ -115,8 +118,8 @@ export default function CommunityRankingView({ currentUserId }) {
                                     <div style={{ fontWeight: 700, color: sortBy === 'dividend' ? '#22c55e' : '#f1f5f9' }}>
                                         {fmtEur(row.annual_dividend)}
                                     </div>
-                                    <div style={{ fontSize: 11, color: sortBy === 'return' ? '#22c55e' : '#64748b', marginTop: 1 }}>
-                                        {fmtPct(row.total_return_12m)} Gesamtrendite
+                                    <div style={{ fontSize: 11, color: row.total_return_12m == null ? '#64748b' : (sortBy === 'return' ? '#22c55e' : '#64748b'), marginTop: 1 }}>
+                                        {row.total_return_12m == null ? 'Rendite noch nicht ermittelt' : `${fmtPct(row.total_return_12m)} Gesamtrendite`}
                                     </div>
                                 </div>
                             </div>
