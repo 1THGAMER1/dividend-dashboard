@@ -115,12 +115,15 @@ export default function CommunityRankingView({ currentUserId }) {
                                     </span>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontWeight: 700, color: sortBy === 'dividend' ? '#22c55e' : '#f1f5f9' }}>
-                                        {fmtEur(row.annual_dividend)}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: row.total_return_12m == null ? '#64748b' : (sortBy === 'return' ? '#22c55e' : '#64748b'), marginTop: 1 }}>
-                                        {row.total_return_12m == null ? 'Rendite noch nicht ermittelt' : `${fmtPct(row.total_return_12m)} Gesamtrendite`}
-                                    </div>
+                                    {sortBy === 'dividend' ? (
+                                        <div style={{ fontSize: 15, fontWeight: 700, color: '#22c55e' }}>
+                                            {fmtEur(row.annual_dividend)}
+                                        </div>
+                                    ) : (
+                                        <div style={{ fontSize: 15, fontWeight: 700, color: row.total_return_12m == null ? '#64748b' : '#22c55e' }}>
+                                            {row.total_return_12m == null ? '—' : fmtPct(row.total_return_12m)}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )
