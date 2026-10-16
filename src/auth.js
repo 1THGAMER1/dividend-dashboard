@@ -2,9 +2,6 @@ import { supabase } from './supabaseClient'
 import { decrypt, encrypt, isEncrypted, clearCachedKey } from './utils/crypto.js'
 import { getPassword } from './passwordStore.js'
 
-// _clientIdPromise bleibt nach dem ersten Resolve stehen (aufgelöstes Promise)
-// damit alle späteren Aufrufe sofort dasselbe resolved Promise zurückbekommen
-// und kein zweiter Supabase-Request entsteht.
 let _clientIdPromise = null
 let _refreshPromise = null
 
@@ -66,6 +63,32 @@ async function _fetchClientId() {
 
 export function clearCachedClientId() {
   _clientIdPromise = null
+}
+export async function saveClientId(newClientId) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Nicht eingeloggt')
+
+  const clean = newClientId.trim()
+  if (!clean) throw new Error('Client ID darf nicht leer sein')
+
+  // Verschlüsseln mit dem Passwort (oder vorhandenem Key aus IndexedDB)
+  const password = getPassword()
+  const encrypted = await encrypt(clean, password)
+
+  const { error } = await supabase
+      .from('profiles')
+      .update({
+        parqet_client_id: encrypted,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+
+  if (error) throw error
+
+  // Cache leeren und auf die neue ID setzen
+  clearCachedClientId()
+  _clientIdPromise = Promise.resolve(clean)
+  return clean
 }
 
 function generateCodeVerifier() {

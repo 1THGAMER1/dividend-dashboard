@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import useDividendData from '../hooks/useDividendData'
 import { computePortfolioXRay } from '../utils/portfolioXray'
 import { loadEtfHoldingsMapFor } from '../utils/etfHoldingsStore'
+import { getClientId, saveClientId } from '../auth'
 
 const RANDOM_NAMES = [
     'DividendHero', 'ZinseszinsKing', 'CashflowCaptain', 'DividendenFuchs',
@@ -45,7 +46,8 @@ export default function ProfilePage({ appUser, onNavigate }) {
                     .maybeSingle()
 
                 if (error) throw error
-                if (data?.parqet_client_id) setParqetId(data.parqet_client_id)
+                const decrypted = await getClientId().catch(() => null)
+                if (decrypted) setParqetId(decrypted)
                 if (data?.share_token) setexistingToken(data.share_token)
 
                 // Prüfen ob bereits im Community Ranking eingetragen
@@ -217,15 +219,7 @@ export default function ProfilePage({ appUser, onNavigate }) {
         setMessage(null)
 
         try {
-            const { error } = await supabase
-                .from('profiles')
-                .upsert({
-                    id: appUser.id,
-                    parqet_client_id: parqetId.trim(),
-                    updated_at: new Date().toISOString(),
-                })
-
-            if (error) throw error
+            await saveClientId(parqetId)
             setMessage({ type: 'success', text: 'Neue Parqet Client ID erfolgreich gespeichert!' })
         } catch (err) {
             setMessage({ type: 'error', text: err.message })
