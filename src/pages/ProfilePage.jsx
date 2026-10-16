@@ -21,7 +21,30 @@ export default function ProfilePage({ appUser, onNavigate }) {
     const [displayName, setDisplayName] = useState('')
 
     // Holen uns die Portfolio-Daten inklusive enrichedHoldings direkt aus dem Hook
-    const { currentValue, holdings, enrichedHoldings, monthly, kpi, byHolding } = useDividendData()
+    const { currentValue, holdings, enrichedHoldings, monthly, kpi, byHolding, performanceSeries } = useDividendData()
+
+    // Hilfsfunktion zur Berechnung der 12M Gesamtrendite aus der performanceSeries
+    const calculateTotalReturn12m = () => {
+        if (!performanceSeries || performanceSeries.length === 0) return 0
+        const sorted = [...performanceSeries].sort((a, b) => new Date(a.date || a[0]) - new Date(b.date || b[0]))
+        const latest = sorted[sorted.length - 1]
+        const latestVal = latest.value ?? latest[1] ?? 0
+
+        const oneYearAgo = new Date()
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+
+        const pastEntry = sorted.reduce((prev, curr) => {
+            const currDate = new Date(curr.date || curr[0])
+            const prevDate = new Date(prev.date || prev[0])
+            return Math.abs(currDate - oneYearAgo) < Math.abs(prevDate - oneYearAgo) ? curr : prev
+        }, sorted[0])
+
+        const pastVal = pastEntry.value ?? pastEntry[1] ?? 0
+        if (pastVal > 0) {
+            return +(((latestVal - pastVal) / pastVal) * 100).toFixed(2)
+        }
+        return 0
+    }
 
     // Lade bestehende Profildaten (Parqet ID, Share-Token sowie Ranking-Opt-in)
     useEffect(() => {
@@ -58,6 +81,7 @@ export default function ProfilePage({ appUser, onNavigate }) {
         }
         loadProfile()
     }, [appUser])
+
     // Automatischer Abgleich der Dividenden beim Laden der Profilseite
     useEffect(() => {
         async function autoUpdateRanking() {
@@ -66,8 +90,9 @@ export default function ProfilePage({ appUser, onNavigate }) {
             const annualDividend = kpi?.all?.net ||
                 kpi?.['12m']?.net ||
                 Object.values(monthly || {}).flatMap(m => m).reduce((a, b) => a + (b || 0), 0) || 0
-
             if (annualDividend <= 0) return
+
+            const totalReturn12m = calculateTotalReturn12m()
 
             try {
                 await supabase
@@ -76,6 +101,7 @@ export default function ProfilePage({ appUser, onNavigate }) {
                         user_id: appUser.id,
                         display_name: displayName.trim() || 'Anonym',
                         annual_dividend: annualDividend,
+                        total_return_12m: totalReturn12m,
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'user_id' })
             } catch (err) {
@@ -83,7 +109,7 @@ export default function ProfilePage({ appUser, onNavigate }) {
             }
         }
         autoUpdateRanking()
-    }, [appUser, participateRanking, kpi, monthly, displayName])
+    }, [appUser, participateRanking, kpi, monthly, displayName, performanceSeries])
 
     const generateRandomName = () => {
         const randomPrefix = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)]
@@ -102,12 +128,15 @@ export default function ProfilePage({ appUser, onNavigate }) {
                     kpi?.['12m']?.net ||
                     Object.values(monthly || {}).flatMap(m => m).reduce((a, b) => a + (b || 0), 0) || 0
 
+                const totalReturn12m = calculateTotalReturn12m()
+
                 const { error } = await supabase
                     .from('community_dividends')
                     .upsert({
                         user_id: appUser.id,
                         display_name: displayName.trim() || 'Anonym',
                         annual_dividend: annualDividend,
+                        total_return_12m: totalReturn12m,
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'user_id' })
 
@@ -263,7 +292,7 @@ export default function ProfilePage({ appUser, onNavigate }) {
                 </p>
 
                 <div style={{ background: '#0f1420', border: '1px solid #2a3a50', borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 12, color: '#cbd5e1', lineHeight: 1.4 }}>
-                    <strong style={{ color: '#38bdf8' }}>Was wird geteilt?</strong> Es wird ausschließlich dein gewählter <strong>Benutzername</strong> und die gerundete <strong>Summe deiner jährlichen Dividenden</strong> veröffentlicht. Es werden niemals deine E-Mail-Adresse, dein Realname, einzelne Aktienpositionen oder Kontodaten preisgegeben.
+                    <strong style={{ color: '#38bdf8' }}>Was wird geteilt?</strong> Es wird ausschließlich dein gewählter <strong>Benutzername</strong>, die gerundete <strong>Summe deiner jährlichen Dividenden</strong> sowie deine <strong>12M Gesamtrendite</strong> veröffentlicht. Es werden niemals deine E-Mail-Adresse, dein Realname, einzelne Aktienpositionen oder Kontodaten preisgegeben.
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
