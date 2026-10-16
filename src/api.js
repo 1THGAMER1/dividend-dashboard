@@ -628,6 +628,7 @@
       unrealizedReturn: unrealized?.returnGross ?? null,
       realizedGain: realized?.gainGross ?? null,
       ttwror: perf?.kpis?.inInterval?.ttwror ?? null,
+      xirr: perf?.kpis?.inInterval?.xirr ?? null,
       dividends: perf?.dividends?.inInterval?.gainNet ?? 0,
     })
 

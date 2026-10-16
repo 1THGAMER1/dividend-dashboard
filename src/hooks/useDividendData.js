@@ -11,6 +11,7 @@ import {
     fetchPurchaseValuePerHolding,
     fetchYahooDividendsForHoldings,
     fetchPerformance,
+    fetchPositionPerformance,
 } from '../api'
 import { readCache, writeCache, readStaleCache } from '../cache'
 
@@ -35,6 +36,20 @@ function applyParqetPositions(list, positions) {
             logo:         pos.logo || item.logo,
         }
     })
+}
+
+// Portfolioweiter IZF (XIRR) über 12 Monate, direkt von Parqet berechnet.
+// Schlägt der Abruf fehl, wird null zurückgegeben (kein harter Fehler für den gesamten Ladevorgang).
+async function fetchXirr12m() {
+    let xirr = null
+    try {
+        await fetchPositionPerformance('1Y', (summary) => {
+            xirr = summary?.xirr ?? null
+        })
+    } catch (e) {
+        console.warn('XIRR (1J) konnte nicht geladen werden:', e.message)
+    }
+    return xirr
 }
 
 export default function useDividendData() {
@@ -63,6 +78,7 @@ export default function useDividendData() {
     const [currentValue,      setCurrentValue]      = useState(0)
     const [cacheInfo,         setCacheInfo]         = useState(null)
     const [performanceSeries, setPerformanceSeries] = useState([])
+    const [xirr12m,           setXirr12m]           = useState(null)
 
     useEffect(() => {
         if (window.location.pathname !== '/callback') return
@@ -80,13 +96,15 @@ export default function useDividendData() {
             tickers = {}, purchaseValuePerHolding = [],
             yahooByIsin = {},
             performanceSeries: perfSeries = [],
-            parqetPositions = {}
+            parqetPositions = {},
+            xirr12m: xirr12mValue = null,
         } = payload;
 
         setMonthly(m);
         setCum(c);
         setCurrentValue(currentVal);
         setPerformanceSeries(perfSeries ?? []);
+        setXirr12m(xirr12mValue ?? null);
         setForecastCum(fc.cum);
         setForecastMonthly(fc.monthly);
         setByHolding(bh);
@@ -239,7 +257,7 @@ export default function useDividendData() {
     }, []);
 
     const fetchFromParqet = useCallback(async () => {
-        const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, perf] = await Promise.all([
+        const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, perf, xirr12mValue] = await Promise.all([
             fetchDividendActivities(),
             fetchBuyActivities(),
             fetchSellActivities(),
@@ -247,6 +265,7 @@ export default function useDividendData() {
             fetchPurchaseValue(),
             fetchPurchaseValuePerHolding(),
             fetchPerformance(),
+            fetchXirr12m(),
         ])
         const currentVal = perf.currentValue
 
@@ -268,6 +287,7 @@ export default function useDividendData() {
             purchaseValue, currentVal,
             performanceSeries: perf.series,
             parqetPositions: perf.positions,
+            xirr12m: xirr12mValue,
             buyActsData,
             sellActsData,
             rawActs: acts,
@@ -313,6 +333,18 @@ export default function useDividendData() {
         }
     }, [])
 
+    // Falls ein älterer Cache noch keinen XIRR-Wert enthält, einmalig im Hintergrund nachladen
+    const refreshXirrForCached = useCallback(async (cached) => {
+        try {
+            const xirr = await fetchXirr12m()
+            setXirr12m(xirr)
+            const updated = { ...cached.payload, xirr12m: xirr }
+            writeCache(updated).catch(() => {})
+        } catch (e) {
+            console.warn('XIRR-Nachladen aus Cache fehlgeschlagen:', e.message)
+        }
+    }, [])
+
     const loadData = useCallback(async (forceRefresh = false) => {
         if (!isLoggedIn()) return
         setLoading(true); setError(null)
@@ -341,6 +373,11 @@ export default function useDividendData() {
 
                     if (needsYahooRefresh) {
                         refreshYahooForCached(cached).catch(() => {})
+                    }
+
+                    // Älterer Cache ohne xirr12m-Feld: einmalig im Hintergrund nachholen
+                    if (cached.payload.xirr12m === undefined) {
+                        refreshXirrForCached(cached).catch(() => {})
                     }
                     return
                 }
@@ -377,7 +414,7 @@ export default function useDividendData() {
             setError(e.message)
             setDataSource(null)
         } finally { setLoading(false) }
-    }, [applyData, fetchFromParqet, refreshYahooForCached])
+    }, [applyData, fetchFromParqet, refreshYahooForCached, refreshXirrForCached])
 
     useEffect(() => { if (loggedIn) loadData() }, [loggedIn, loadData])
 
@@ -389,6 +426,7 @@ export default function useDividendData() {
         kpi, dividendYield,
         currentValue,
         performanceSeries,
+        xirr12m,
         buyActs, sellActs,
         holdings,
         enrichedHoldings,
