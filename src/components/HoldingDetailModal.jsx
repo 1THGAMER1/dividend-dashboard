@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import HoldingPriceChart from './HoldingPriceChart.jsx'
 import { etfKeyFor, loadCatalog, loadMySubmissions } from '../utils/etfHoldingsStore'
-import { isEtfName } from '../utils/portfolioXray'
+import { isEtfName, normalizeName, sameCompany } from '../utils/portfolioXray'
 
 const fmt = (n) => {
     const val = Number(n || 0)
@@ -37,6 +37,7 @@ export default function HoldingDetailModal({
     const sharesNum = parseFloat(holding.shares) || 0
     const isSold = sharesNum <= 0
     const val = holding.value || 0
+    const isNonEquity = /krypto|crypto|coin|commodity|rohstoff|cash|bargeld/i.test(String(holding.type || ''))
     // Alle aktiven ETFs aus dem Depot ermitteln
     const myEtfs = useMemo(() => {
         return (allHoldings || []).filter(h => {
@@ -68,58 +69,38 @@ export default function HoldingDetailModal({
             .finally(() => setEtfLoading(false))
     }, [myEtfs])
 
-    // Berechne, in welchen ETFs diese Aktie steckt
     const indirectEtfHoldings = useMemo(() => {
-        if (!holding || isSold || !myEtfs.length) return []
+        if (!holding || isSold || isNonEquity || !myEtfs.length) return []
         const isinUpper = (holding.isin || holding.id || '').trim().toUpperCase()
-        const nameLower = (holding.name || '').trim().toLowerCase()
+        const holdingKey = normalizeName(holding.name)
+        if (!holdingKey) return []
 
         const results = []
-
         myEtfs.forEach(etf => {
-            const key = etfKeyFor(etf)
-            const entry = etfCatalog[key]
+            const entry = etfCatalog[etfKeyFor(etf)]
             if (!entry || !Array.isArray(entry.rows)) return
 
-            // Bereinige Firmennamen um Rechtsformen und Zusätze wie (ADR), A/S, Class B etc.
-            const clean = (s) => (s || '').toLowerCase()
-                .replace(/\(adr\)|\(the\)|\(registered\)|a\/s|class [a-z]|cl [a-z]|inc\.?|corp\.?|ag|se|nv|plc/gi, '')
-                .replace(/[^a-z0-9]/g, ' ')
-                .trim()
-
-            const baseHoldingName = clean(nameLower)
-
-            // Position im ETF anhand von ISIN oder bereinigtem Namen finden
-            const match = entry.rows.find(r => {
+            // Alle Zeilen desselben Unternehmens zusammenzählen (z. B. mehrere Aktiengattungen)
+            const weight = entry.rows.reduce((sum, r) => {
                 const rIsin = (r.ISIN || r.isin || '').trim().toUpperCase()
-                if (isinUpper && rIsin && isinUpper === rIsin) return true
+                const same = (isinUpper && rIsin && isinUpper === rIsin)
+                    || sameCompany(holdingKey, normalizeName(r.Name || r.name || r.Holding))
+                return same ? sum + (parseFloat(String(r.Weight ?? r.weight ?? 0).replace(',', '.')) || 0) : sum
+            }, 0)
 
-                const rName = (r.Name || r.name || r.Holding || '').trim().toLowerCase()
-                if (!rName) return false
-                if (nameLower && (rName === nameLower || rName.includes(nameLower))) return true
-
-                // Robuster Abgleich für ADRs (z. B. "novo nordisk" matcht "novo nordisk class b")
-                const baseRName = clean(rName)
-                return !!(baseHoldingName.length >= 4 && (baseRName.includes(baseHoldingName) || baseHoldingName.includes(baseRName)));
-
-            })
-
-            if (match) {
-                const weight = parseFloat(String(match.Weight || match.weight || 0).replace(',', '.')) || 0
+            if (weight > 0) {
                 const etfVal = parseFloat(etf.value || 0)
-                const indirectValue = (etfVal * weight) / 100
-
                 results.push({
                     etfName: etf.name || etf.title || 'ETF',
                     etfValue: etfVal,
-                    weight: weight,
-                    indirectValue: indirectValue,
+                    weight,
+                    indirectValue: (etfVal * weight) / 100,
                 })
             }
         })
 
         return results.sort((a, b) => b.indirectValue - a.indirectValue)
-    }, [holding, isSold, myEtfs, etfCatalog])
+    }, [holding, isSold, isNonEquity, myEtfs, etfCatalog])
 
     const totalIndirectValue = useMemo(() => {
         return indirectEtfHoldings.reduce((sum, item) => sum + item.indirectValue, 0)
@@ -452,7 +433,7 @@ export default function HoldingDetailModal({
                             </div>
                             {/* ETF-Beteiligung (Indirekt in ETFs enthalten) */}
                             {/* ETF-Beteiligung (Indirekt in ETFs enthalten) */}
-                            {!isSold && !isEtfName(holding.name || '') && (
+                            {!isSold && !isNonEquity && !isEtfName(holding.name || '') && (
                                 <div style={{
                                     background: '#0f1420',
                                     border: '1px solid #1e2a3a',

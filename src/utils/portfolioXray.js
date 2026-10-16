@@ -28,6 +28,14 @@ export function parseWeight(val) {
     return parseFloat(s) || 0
 }
 
+export function sameCompany(a, b) {
+    if (!a || !b) return false
+    if (a === b) return true
+    const [short, long] = a.length <= b.length ? [a, b] : [b, a]
+    if (short.length < 4) return false
+    return long.startsWith(short + ' ')
+}
+
 export function isEtfName(name = '') {
     return /\betf\b|ucits|msci|stoxx|ftse|ishares|xtrackers|vanguard|vaneck|amundi|spdr/.test(String(name).toLowerCase())
 }
