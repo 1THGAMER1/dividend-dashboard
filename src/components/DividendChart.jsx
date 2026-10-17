@@ -144,9 +144,11 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
         if (!isFuture) rawMonthTotals.push(monthSum)
         return pt
     })
+    const firstActiveIdx = rawMonthTotals.findIndex(v => v > 0)
+    const activeHistoricalMonths = firstActiveIdx >= 0 ? rawMonthTotals.slice(firstActiveIdx) : []
 
-    const intervalAvg = rawMonthTotals.length > 0
-        ? +(rawMonthTotals.reduce((a, b) => a + b, 0) / rawMonthTotals.length).toFixed(2)
+    const intervalAvg = activeHistoricalMonths.length > 0
+        ? +(activeHistoricalMonths.reduce((a, b) => a + b, 0) / activeHistoricalMonths.length).toFixed(2)
         : null
 
     const stackedData = stackedDataRaw.map((pt, i) => {
