@@ -324,8 +324,9 @@ export default function DividendDashboardView({
                 <DividendChart
                     monthly={chartMonthly}
                     forecastMonthly={forecastMonthly}
-                    byHolding={byHolding}
+                    byHolding={filteredByHolding}
                     forecastByHolding={forecastByHolding}
+                    kpiRange={kpiRange}
                 />
                 <CumulativeDividendChart
                     monthly={chartMonthly}

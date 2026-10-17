@@ -40,7 +40,7 @@ function calcXInterval(totalPoints) {
     return Math.ceil(totalPoints / 12) - 1
 }
 
-export default function DividendChart({ monthly, forecastMonthly, byHolding, forecastByHolding }) {
+export default function DividendChart({ monthly, forecastMonthly, byHolding, forecastByHolding, kpiRange = 'all' }) {
     const [mode, setMode] = useState('monthly') // 'monthly' | 'stacked'
     const [showGross, setShowGross] = useState(false)
 
@@ -100,13 +100,24 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
         })
     }, [byHolding, forecastByHolding])
 
-    // 2. NACH AKTIE (STACKED)
-    const allYears  = isins.flatMap(isin => Object.keys(byHolding?.[isin]?.monthly || {}).map(Number))
-    const minYear   = allYears.length ? Math.min(...allYears) : cy
-    const startDate = new Date(minYear, 0, 1)
-    const endDate   = new Date(cy, cm + 12, 1)
-    const totalMonths = (endDate.getFullYear() - startDate.getFullYear()) * 12
-        + endDate.getMonth() - startDate.getMonth()
+    // 2. NACH AKTIE (STACKED) - Dynamisch nach kpiRange
+    const { startDate, endDate, totalMonths } = useMemo(() => {
+        const allYears = isins.flatMap(isin => Object.keys(byHolding?.[isin]?.monthly || {}).map(Number))
+        const minYear = allYears.length ? Math.min(...allYears) : cy
+        const end = new Date(cy, cm + 12, 1) // Prognose nächste 12M
+
+        let start = new Date(minYear, 0, 1)
+        if (kpiRange === 'ytd') {
+            start = new Date(cy, 0, 1) // 1. Jan dieses Jahres
+        } else if (kpiRange === '12m') {
+            start = new Date(cy, cm - 11, 1) // Letzte 12 Monate
+        } else if (kpiRange === '3y') {
+            start = new Date(cy, cm - 35, 1) // Letzte 36 Monate
+        }
+
+        const count = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1
+        return { startDate: start, endDate: end, totalMonths: Math.max(1, count) }
+    }, [kpiRange, isins, byHolding, cy, cm])
 
     const rawMonthTotals = []
 
