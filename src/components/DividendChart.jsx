@@ -84,15 +84,24 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
         return pt
     })
 
-    const isins = Object.keys(byHolding || {}).filter(isin => {
-        const h = byHolding[isin]
-        return Object.values(h.monthly || {}).some(months =>
-            Object.values(months).some(v => v > 0)
-        )
-    })
+    // Alle ISINs erfassen, die entweder historische Dividenden ODER Prognosewerte haben
+    const isins = useMemo(() => {
+        const all = new Set([
+            ...Object.keys(byHolding || {}),
+            ...Object.keys(forecastByHolding || {})
+        ])
+        return [...all].filter(isin => {
+            const h = byHolding?.[isin]
+            const hasHistory = h && Object.values(h.monthly || {}).some(months =>
+                Object.values(months).some(v => v > 0)
+            )
+            const hasForecast = forecastByHolding?.[isin] && Object.values(forecastByHolding[isin]).some(v => v > 0)
+            return hasHistory || hasForecast
+        })
+    }, [byHolding, forecastByHolding])
 
-    // 2. NACH AKTIE (STACKED) INKL. PARQET DURCHSCHNITTSLINIEN
-    const allYears  = isins.flatMap(isin => Object.keys(byHolding[isin].monthly || {}).map(Number))
+    // 2. NACH AKTIE (STACKED)
+    const allYears  = isins.flatMap(isin => Object.keys(byHolding?.[isin]?.monthly || {}).map(Number))
     const minYear   = allYears.length ? Math.min(...allYears) : cy
     const startDate = new Date(minYear, 0, 1)
     const endDate   = new Date(cy, cm + 12, 1)
@@ -107,17 +116,26 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
         const month    = date.getMonth()
         const isFuture = date >= new Date(cy, cm, 1)
         const isJan    = month === 0
-        const label    = isJan
-            ? `Jan '${String(year).slice(2)}`
-            : MONTHS[month].slice(0, 3)
-        const pt       = { name: label, _future: isFuture }
+
+        // Eindeutiger Key pro Monat/Jahr verhindert Vertauschungen in Recharts
+        const key = `${year}-${String(month + 1).padStart(2, '0')}`
+        const label = isJan ? `Jan '${String(year).slice(2)}` : MONTHS[month].slice(0, 3)
+        const fullLabel = `${MONTHS[month]} ${year}`
+
+        const pt = {
+            key,
+            name: key,
+            displayLabel: label,
+            fullLabel,
+            _future: isFuture
+        }
 
         let monthSum = 0
         for (const isin of isins) {
-            const h   = byHolding[isin]
+            const h   = byHolding?.[isin]
             const raw = isFuture
                 ? (forecastByHolding?.[isin]?.[month] || 0)
-                : (h.monthly[year]?.[month] || 0)
+                : (h?.monthly?.[year]?.[month] || 0)
             const val = +scaleIsin(raw, isin).toFixed(2)
             pt[isin] = val
             monthSum += val
@@ -127,12 +145,10 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
         return pt
     })
 
-    // Parqet Durchschnitt 1: Ø Dividende im Intervall (horizontal)
     const intervalAvg = rawMonthTotals.length > 0
         ? +(rawMonthTotals.reduce((a, b) => a + b, 0) / rawMonthTotals.length).toFixed(2)
         : null
 
-    // Parqet Durchschnitt 2: Ø monatl. Einkommen TTM (gleitender 12-Monats-Schnitt)
     const stackedData = stackedDataRaw.map((pt, i) => {
         let ttm = null
         if (!pt._future) {
@@ -228,32 +244,55 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                     >
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e2a3a" vertical={false} />
                         <XAxis
-                            dataKey="name"
+                            dataKey="key"
                             tick={{ fill:'#7a8ba0', fontSize:10 }}
                             tickLine={false}
                             axisLine={{ stroke:'#1e2a3a' }}
                             interval={stackedXInterval}
+                            tickFormatter={(k) => {
+                                const pt = stackedData.find(d => d.key === k)
+                                return pt?.displayLabel || k
+                            }}
                         />
                         <YAxis tick={{ fill:'#7a8ba0', fontSize:11 }} tickFormatter={v => v.toFixed(0) + '€'} width={48} axisLine={false} tickLine={false} />
                         <Tooltip
                             contentStyle={{ background:'#161b27', border:'1px solid #2a3a50', borderRadius:8 }}
-                            content={({ active, payload, label: tipLabel }) => {
-                                if (!active || !payload) return null
+                            content={({ active, payload }) => {
+                                if (!active || !payload || !payload.length) return null
+                                const pt = payload[0]?.payload
                                 const filtered = payload.filter(p => p.value > 0 && p.dataKey !== 'intervalAvg' && p.dataKey !== 'ttmAvg')
                                 const ttmPt = payload.find(p => p.dataKey === 'ttmAvg')
+                                const monthTotal = filtered.reduce((s, p) => s + (+p.value || 0), 0)
+
                                 return (
-                                    <div style={{ background:'#161b27', border: '1px solid #2a3a50', borderRadius:8, padding:'10px 14px', fontSize:12 }}>
-                                        <p style={{ color:'#f1f5f9', marginBottom:6, fontWeight:600 }}>{tipLabel}</p>
+                                    <div style={{ background:'#161b27', border: '1px solid #2a3a50', borderRadius:8, padding:'10px 14px', fontSize:12, minWidth:160 }}>
+                                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:6, borderBottom:'1px solid #1e2a3a', paddingBottom:4 }}>
+                                            <span style={{ color:'#f1f5f9', fontWeight:700, fontSize:13 }}>{pt?.fullLabel}</span>
+                                            {monthTotal > 0 && (
+                                                <span style={{ color:'#22c55e', fontWeight:700 }}>{monthTotal.toFixed(2)} €</span>
+                                            )}
+                                        </div>
+
                                         {ttmPt && ttmPt.value != null && (
-                                            <p style={{ color:'#38bdf8', margin:'0 0 6px', fontWeight:600, borderBottom:'1px solid #1e2a3a', paddingBottom:4 }}>
+                                            <p style={{ color:'#38bdf8', margin:'0 0 6px', fontWeight:600 }}>
                                                 Ø monatl. Einkommen (TTM): {(+ttmPt.value).toFixed(2)} €
                                             </p>
                                         )}
-                                        {filtered.map(p => (
-                                            <p key={p.dataKey} style={{ color: p.fill, margin:'2px 0' }}>
-                                                {byHolding[p.dataKey]?.name || p.dataKey}: {(+p.value).toFixed(2)} € ({label})
-                                            </p>
-                                        ))}
+
+                                        {filtered.length === 0 ? (
+                                            <p style={{ color:'#64748b', margin:'2px 0', fontSize:11 }}>Keine Ausschüttungen</p>
+                                        ) : (
+                                            filtered.map(p => (
+                                                <div key={p.dataKey} style={{ display:'flex', justifyContent:'space-between', gap:10, margin:'3px 0' }}>
+                                                    <span style={{ color: p.fill, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:220 }}>
+                                                        {byHolding?.[p.dataKey]?.name || p.dataKey}
+                                                    </span>
+                                                    <span style={{ color:'#f1f5f9', fontWeight:600, flexShrink:0 }}>
+                                                        {(+p.value).toFixed(2)} €
+                                                    </span>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
                                 )
                             }}
@@ -264,11 +303,11 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                             formatter={val => {
                                 if (val === 'intervalAvg') return <span style={{ color:'#94a3b8' }}>---- Ø Dividende im Intervall</span>
                                 if (val === 'ttmAvg') return <span style={{ color:'#38bdf8' }}>— Ø monatl. Einkommen (TTM)</span>
-                                return <span style={{ color:'#94a3b8' }}>{byHolding[val]?.name || val}</span>
+                                return <span style={{ color:'#94a3b8' }}>{byHolding?.[val]?.name || val}</span>
                             }}
                         />
                         {isins.map((isin, idx) => {
-                            const color     = byHolding[isin]?.color || '#94a3b8'
+                            const color     = byHolding?.[isin]?.color || '#94a3b8'
                             const isTopmost = idx === isins.length - 1
                             return (
                                 <Bar key={isin} dataKey={isin} stackId="a"
@@ -292,7 +331,6 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                             )
                         })}
 
-                        {/* Parqet Linien: Horizontale Durchschnittslinie & TTM-Trendlinie */}
                         <Line
                             type="monotone"
                             dataKey="intervalAvg"
