@@ -49,15 +49,13 @@ export default function DividendDashboardView({
 
     const cm = new Date().getMonth()
 
-    // ── 1. GLOBALER DATENFILTER NACH ZEITRAUM ─────────────────────────────────
-    // Filtert sowohl byHolding als auch monthly synchron für die gesamte Seite
-    const { filteredByHolding, filteredMonthly, filteredCum, rangeTotals } = useMemo(() => {
+    // ── 1. ZEITRAUMFILTER FÜR TABELLE, DONUT, HEATMAP & KPIS ─────────────────
+    const { filteredByHolding, filteredMonthlyForHeatmap, rangeTotals } = useMemo(() => {
         let net = 0
         let gross = 0
         let tax = 0
         let countMonths = 0
 
-        // Prüffunktion: Liegt das Monat (y, m) im gewählten Zeitraum?
         const isInRange = (y, m) => {
             if (kpiRange === 'all') return true
             if (kpiRange === 'ytd') return y === cy && m <= cm
@@ -72,13 +70,12 @@ export default function DividendDashboardView({
             return true
         }
 
-        // a) byHolding filtern
+        // byHolding filtern
         const resByHolding = {}
         Object.entries(byHolding || {}).forEach(([isin, h]) => {
             const newM = {}
             const newG = {}
             const newT = {}
-            let hasAny = false
 
             Object.keys(h.monthly || {}).forEach(yStr => {
                 const y = Number(yStr)
@@ -95,8 +92,6 @@ export default function DividendDashboardView({
                         newM[y][m] = nVal
                         newG[y][m] = gVal
                         newT[y][m] = tVal
-
-                        if (nVal > 0) hasAny = true
                     }
                 }
             })
@@ -109,7 +104,7 @@ export default function DividendDashboardView({
             }
         })
 
-        // b) monthly filtern
+        // monthly filtern (für Heatmap & Totals)
         const resMonthly = {}
         Object.keys(monthly || {}).forEach(yStr => {
             const y = Number(yStr)
@@ -120,7 +115,6 @@ export default function DividendDashboardView({
                     resMonthly[y][m] = val
 
                     net += val
-                    // Steuern & Brutto aus byHolding summieren
                     Object.values(byHolding || {}).forEach(h => {
                         const g = h.gross?.[y]?.[m] || 0
                         const t = h.tax?.[y]?.[m] || 0
@@ -132,21 +126,12 @@ export default function DividendDashboardView({
             }
         })
 
-        // c) cum neu berechnen aus dem gefilterten monthly
-        const resCum = {}
-        Object.entries(resMonthly).forEach(([yStr, months]) => {
-            let running = 0
-            resCum[yStr] = months.map(v => +(running += (v || 0)).toFixed(2))
-        })
-
-        // Monatsdurchschnitt berechnen
         const monthsDivisor = kpiRange === 'ytd' ? (cm + 1) : kpiRange === '12m' ? 12 : kpiRange === '3y' ? 36 : Math.max(1, countMonths)
         const avg = net / Math.max(1, monthsDivisor)
 
         return {
             filteredByHolding: resByHolding,
-            filteredMonthly: resMonthly,
-            filteredCum: resCum,
+            filteredMonthlyForHeatmap: resMonthly,
             rangeTotals: {
                 net,
                 gross: gross > 0 ? gross : net,
@@ -156,7 +141,34 @@ export default function DividendDashboardView({
         }
     }, [byHolding, monthly, kpiRange, cy, cm])
 
-    // ── 2. KPI WERTE FÜR DEN GEWÄHLTEN ZEITRAUM ──────────────────────────────
+    // ── 2. DATEN FÜR DIE CHARTS (JAHRESBASIERT, DAMIT DIE LINIEN NICHT ABREISSEN) ─
+    const { chartMonthly, chartCum } = useMemo(() => {
+        // Bestimme, welche Kalenderjahre im Chart geplottet werden
+        const allYears = Object.keys(monthly || {}).map(Number).sort()
+        let keepYears = allYears
+
+        if (kpiRange === '3y') {
+            keepYears = allYears.filter(y => y >= cy - 2)
+        } else if (kpiRange === '12m' || kpiRange === 'ytd') {
+            keepYears = allYears.filter(y => y >= cy - 1)
+        }
+
+        const resM = {}
+        const resC = {}
+
+        keepYears.forEach(y => {
+            if (monthly?.[y]) resM[y] = monthly[y]
+            if (cum?.[y])     resC[y] = cum[y]
+        })
+
+        // Aktuelles Jahr immer dabei haben
+        if (monthly?.[cy] && !resM[cy]) resM[cy] = monthly[cy]
+        if (cum?.[cy] && !resC[cy])     resC[cy] = cum[cy]
+
+        return { chartMonthly: resM, chartCum: resC }
+    }, [monthly, cum, kpiRange, cy])
+
+    // ── 3. KPI-WERTE ─────────────────────────────────────────────────────────
     const activeK = useMemo(() => {
         if (kpiRange === 'all' && k) return k
         return {
@@ -193,17 +205,6 @@ export default function DividendDashboardView({
 
     return (
         <div>
-            <div style={{ marginBottom: 14 }}>
-                <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
-                <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Portfolio-Übersicht · Nettowerte</p>
-            </div>
-
-            {error && (
-                <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'10px 14px', borderRadius:8, marginBottom:14, fontSize:12 }}>
-                    ⚠ {error}
-                </div>
-            )}
-
             {/* ZEITRAUM-SCHALTER */}
             <div style={{
                 display: 'inline-flex',
@@ -235,6 +236,16 @@ export default function DividendDashboardView({
                     </button>
                 ))}
             </div>
+            <div style={{ marginBottom: 14 }}>
+                <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
+                <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Portfolio-Übersicht · Nettowerte</p>
+            </div>
+
+            {error && (
+                <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'10px 14px', borderRadius:8, marginBottom:14, fontSize:12 }}>
+                    ⚠ {error}
+                </div>
+            )}
 
             {/* 1. KPI-REIHE */}
             <div className="kpi-grid">
@@ -302,7 +313,7 @@ export default function DividendDashboardView({
                 />
             </div>
 
-            {/* 2 CHARTS: NEBENEINANDER (50/50) AUF PC, SYNCHRON GEFILTERT */}
+            {/* 2 CHARTS: NEBENEINANDER (50/50), MIT VOLLSTÄNDIGER 2026 & 2027 PROGNOSE */}
             <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))',
@@ -311,25 +322,25 @@ export default function DividendDashboardView({
                 alignItems: 'stretch'
             }}>
                 <DividendChart
-                    monthly={filteredMonthly}
-                    forecastMonthly={kpiRange === 'all' || kpiRange === 'ytd' ? forecastMonthly : {}}
-                    byHolding={filteredByHolding}
-                    forecastByHolding={kpiRange === 'all' || kpiRange === 'ytd' ? forecastByHolding : {}}
+                    monthly={chartMonthly}
+                    forecastMonthly={forecastMonthly}
+                    byHolding={byHolding}
+                    forecastByHolding={forecastByHolding}
                 />
                 <CumulativeDividendChart
-                    monthly={filteredMonthly}
-                    cum={filteredCum}
-                    forecastCum={kpiRange === 'all' || kpiRange === 'ytd' ? forecastCum : {}}
-                    byHolding={filteredByHolding}
+                    monthly={chartMonthly}
+                    cum={chartCum}
+                    forecastCum={forecastCum}
+                    byHolding={byHolding}
                 />
             </div>
 
-            {/* HEATMAP (SYNCHRON GEFILTERT) */}
+            {/* HEATMAP */}
             <div style={{ marginTop: 16 }}>
-                <DividendHeatmap monthly={filteredMonthly} />
+                <DividendHeatmap monthly={filteredMonthlyForHeatmap} />
             </div>
 
-            {/* DONUT & TABELLE (SYNCHRON GEFILTERT) */}
+            {/* DONUT & TABELLE */}
             <div id="dividends-table" style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <DividendDonut byHolding={filteredByHolding} kpiRange={kpiRange} />
                 <PositionsTable byHolding={filteredByHolding} kpiRange={kpiRange} />
