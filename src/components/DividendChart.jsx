@@ -126,11 +126,18 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
         const year     = date.getFullYear()
         const month    = date.getMonth()
         const isFuture = date >= new Date(cy, cm, 1)
-        const isJan    = month === 0
+        const isJan = month === 0
+        const isFirst = i === 0
 
         // Eindeutiger Key pro Monat/Jahr verhindert Vertauschungen in Recharts
         const key = `${year}-${String(month + 1).padStart(2, '0')}`
-        const label = isJan ? `Jan '${String(year).slice(2)}` : MONTHS[month].slice(0, 3)
+
+        // Jahreszahl anzeigen, wenn es Januar ist ODER der allererste Monat der Skala
+        const yearSuffix = ` '${String(year).slice(2)}`
+        const label = (isJan || isFirst)
+            ? `${MONTHS[month].slice(0, 3)}${yearSuffix}`
+            : MONTHS[month].slice(0, 3)
+
         const fullLabel = `${MONTHS[month]} ${year}`
 
         const pt = {
@@ -264,7 +271,11 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                             interval={stackedXInterval}
                             tickFormatter={(k) => {
                                 const pt = stackedData.find(d => d.key === k)
-                                return pt?.displayLabel || k
+                                if (!pt) return k
+                                const [y, mStr] = k.split('-')
+                                const mIdx = parseInt(mStr, 10) - 1
+                                if (mIdx === 0) return `Jan '${y.slice(2)}`
+                                return pt.displayLabel || MONTHS[mIdx]?.slice(0, 3)
                             }}
                         />
                         <YAxis tick={{ fill:'#7a8ba0', fontSize:11 }} tickFormatter={v => v.toFixed(0) + '€'} width={48} axisLine={false} tickLine={false} />
