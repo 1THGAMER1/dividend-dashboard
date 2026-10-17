@@ -274,8 +274,13 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                                         </div>
 
                                         {ttmPt && ttmPt.value != null && (
-                                            <p style={{ color:'#38bdf8', margin:'0 0 6px', fontWeight:600 }}>
+                                            <p style={{ color:'#38bdf8', margin:'0 0 2px', fontWeight:600 }}>
                                                 Ø monatl. Einkommen (TTM): {(+ttmPt.value).toFixed(2)} €
+                                            </p>
+                                        )}
+                                        {pt?.intervalAvg != null && (
+                                            <p style={{ color:'#94a3b8', margin:'0 0 6px', fontSize:11 }}>
+                                                Ø Dividende im Intervall: {(+pt.intervalAvg).toFixed(2)} €
                                             </p>
                                         )}
 
@@ -301,7 +306,13 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                         <Legend
                             wrapperStyle={{ fontSize:11, maxHeight:50, overflowY:'auto', paddingTop:8 }}
                             formatter={val => {
-                                if (val === 'intervalAvg') return <span style={{ color:'#94a3b8' }}>---- Ø Dividende im Intervall</span>
+                                if (val === 'intervalAvg') {
+                                    return (
+                                        <span style={{ color:'#94a3b8', fontWeight:600 }}>
+                                            ---- Ø Dividende im Intervall {intervalAvg != null ? `(${intervalAvg.toFixed(2)} €)` : ''}
+                                        </span>
+                                    )
+                                }
                                 if (val === 'ttmAvg') return <span style={{ color:'#38bdf8' }}>— Ø monatl. Einkommen (TTM)</span>
                                 return <span style={{ color:'#94a3b8' }}>{byHolding?.[val]?.name || val}</span>
                             }}
@@ -357,7 +368,7 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
 
             {mode === 'stacked' && (
                 <p style={{ color:'#64748b', fontSize:11, marginTop:8, marginBottom:0 }}>
-                    <span style={{ color:'#38bdf8' }}>— TTM:</span> Rollierender 12-Monats-Schnitt · <span style={{ color:'#94a3b8' }}>---- Intervall:</span> Gesamtdurchschnitt aller Monate · Halbtransparent = Prognose
+                    <span style={{ color:'#38bdf8' }}>— TTM:</span> Rollierender 12-Monats-Schnitt · <span style={{ color:'#94a3b8' }}>---- Intervall:</span> {intervalAvg != null ? `${intervalAvg.toFixed(2)} € / Monat` : '–'} · Halbtransparent = Prognose
                 </p>
             )}
         </div>
