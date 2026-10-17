@@ -432,7 +432,6 @@ export default function HoldingDetailModal({
                                 </div>
                             </div>
                             {/* ETF-Beteiligung (Indirekt in ETFs enthalten) */}
-                            {/* ETF-Beteiligung (Indirekt in ETFs enthalten) */}
                             {!isSold && !isNonEquity && !isEtfName(holding.name || '') && (
                                 <div style={{
                                     background: '#0f1420',

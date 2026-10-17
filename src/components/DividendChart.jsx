@@ -1,16 +1,9 @@
 import { useState, useMemo } from 'react'
 import {
-    BarChart, Bar, LineChart, Line,
-    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+    BarChart, Bar,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { MONTHS, YEAR_COLORS } from '../utils/dataUtils.js'
-import { cumulativeInflationFactor, inflationRate } from '../inflation'
-
-const MODES = [
-    { key: 'monthly',    label: 'Monatlich' },
-    { key: 'stacked',    label: 'Nach Aktie' },
-    { key: 'cumulative', label: 'Akkumuliert' },
-]
 
 function taxRateForHolding(holding) {
     if (!holding) return 0
@@ -47,27 +40,14 @@ function calcXInterval(totalPoints) {
     return Math.ceil(totalPoints / 12) - 1
 }
 
-function forwardFill(arr) {
-    let last = null
-    return arr.map(v => {
-        if (v !== null && v !== undefined) { last = v; return v }
-        return last
-    })
-}
-
-export default function DividendChart({ monthly, cum, forecastCum, forecastMonthly, byHolding, forecastByHolding }) {
-    const [mode,      setMode]      = useState('monthly')
+export default function DividendChart({ monthly, forecastMonthly, byHolding, forecastByHolding }) {
+    const [mode, setMode] = useState('monthly') // 'monthly' | 'stacked'
     const [showGross, setShowGross] = useState(false)
-    const [showInflation, setShowInflation] = useState(false)
 
-    const cy    = new Date().getFullYear()
-    const ny    = cy + 1
-    const cm    = new Date().getMonth()
-    const years = Object.keys(monthly).map(Number).sort()
-    const baseYear = years[0] ?? cy
+    const cy = new Date().getFullYear()
+    const cm = new Date().getMonth()
+    const years = Object.keys(monthly || {}).map(Number).sort()
 
-    const fcCy = forecastCum?.[cy]     || Array(12).fill(null)
-    const fcNy = forecastCum?.[ny]     || Array(12).fill(null)
     const fmCy = forecastMonthly?.[cy] || Array(12).fill(0)
 
     const globalTaxRate = useMemo(() => {
@@ -91,29 +71,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
     const scaleNet  = (v)       => showGross ? toGross(v, globalTaxRate) : v
     const scaleIsin = (v, isin) => showGross ? toGross(v, taxRates[isin] ?? globalTaxRate) : v
 
-    // ── Kaufkraftziel-Linie für Akkumuliert-Modus ─────────────────────────────
-    // Zeigt: Wie hoch müsste die kumulierte Dividende sein, um die Kaufkraft
-    // seit dem Startjahr zu erhalten? (Benchmark auf Basis Destatis VPI)
-    // HINWEIS: Für das laufende Jahr ist dies eine Schätzung (linearer Jahresanteil).
-    const inflationLineData = useMemo(() => {
-        if (!years.length || years.length < 2) return null
-        const firstYearTotal = (monthly[baseYear] || []).reduce((s, v) => s + (v || 0), 0)
-        if (firstYearTotal <= 0) return null
-        const yearTargets = {}
-        years.forEach(y => {
-            yearTargets[y] = firstYearTotal * cumulativeInflationFactor(baseYear, y)
-        })
-        let cumTarget = 0
-        const cumTargets = {}
-        years.forEach(y => {
-            cumTarget += yearTargets[y]
-            cumTargets[y] = cumTarget
-        })
-        return cumTargets
-    }, [monthly, years, baseYear])
-
-    const inflationRefValue = inflationLineData?.[cy] ?? null
-
+    // Daten für monatlichen Balkenvergleich
     const monthlyBarData = MONTHS.map((name, i) => {
         const pt = { name }
         years.forEach(y => {
@@ -126,53 +84,6 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         return pt
     })
 
-    const cumLineDataRaw = MONTHS.map((name, i) => {
-        const pt = { name }
-        years.filter(y => y < cy).forEach(y => {
-            pt[String(y)] = +scaleNet(cum[y]?.[i] || 0).toFixed(2)
-        })
-        pt[`${cy}_real`]     = i <= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
-        pt[`${cy}_forecast`] = i >= cm - 1 ? +scaleNet(fcCy[i] ?? 0).toFixed(2) : null
-        pt[`${ny}_forecast`] = fcNy[i] != null ? +scaleNet(fcNy[i]).toFixed(2) : null
-        if (showInflation && inflationLineData && years.length >= 2) {
-            const yearKeys = years.filter(y => y <= cy)
-            let runningInflation = 0
-            yearKeys.forEach((y, yIdx) => {
-                const yearTarget = inflationLineData[y] ?? 0
-                if (y < cy) {
-                    runningInflation += yearTarget - (yIdx > 0 ? (inflationLineData[years[yIdx - 1]] ?? 0) : 0)
-                } else {
-                    const prevCum = yIdx > 0 ? (inflationLineData[years[yIdx - 1]] ?? 0) : 0
-                    const curTarget = inflationLineData[y] ?? 0
-                    const monthShare = i <= cm - 1 ? (i + 1) / 12 : (cm) / 12
-                    runningInflation += (curTarget - prevCum) * monthShare
-                }
-            })
-            pt['inflation_target'] = i <= cm - 1 ? +runningInflation.toFixed(2) : null
-        }
-        return pt
-    })
-
-    const cumLineData = (() => {
-        const fillKeys = [
-            ...years.filter(y => y < cy).map(String),
-            `${cy}_forecast`,
-            `${ny}_forecast`,
-            ...(showInflation ? ['inflation_target'] : []),
-        ]
-        const noFillKeys = [`${cy}_real`]
-        const filled = fillKeys.reduce((acc, key) => {
-            acc[key] = forwardFill(cumLineDataRaw.map(pt => pt[key] ?? null))
-            return acc
-        }, {})
-        return cumLineDataRaw.map((pt, i) => {
-            const newPt = { name: pt.name }
-            fillKeys.forEach(key => { newPt[key] = filled[key][i] })
-            noFillKeys.forEach(key => { newPt[key] = pt[key] ?? null })
-            return newPt
-        })
-    })()
-
     const isins = Object.keys(byHolding || {}).filter(isin => {
         const h = byHolding[isin]
         return Object.values(h.monthly || {}).some(months =>
@@ -180,6 +91,7 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
         )
     })
 
+    // Daten für Stacked-Balken (nach Aktie)
     const allYears  = isins.flatMap(isin => Object.keys(byHolding[isin].monthly || {}).map(Number))
     const minYear   = allYears.length ? Math.min(...allYears) : cy
     const startDate = new Date(minYear, 0, 1)
@@ -219,69 +131,56 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
     const label = showGross ? 'Brutto' : 'Netto'
     const fmtTip = v => `${(+v).toFixed(2)} € (${label})`
 
-    const renderLineLegend = value => {
-        if (value === 'inflation_target') return <span style={{ color: '#f97316' }}>Kaufkraftziel (VPI)</span>
-        const color = value === `${cy}_real`     ? YEAR_COLORS[cy] || '#c0397a'
-            : value === `${cy}_forecast` ? YEAR_COLORS[cy] || '#c0397a'
-                : value === `${ny}_forecast` ? '#34d399'
-                    : YEAR_COLORS[+value]        || '#94a3b8'
-        const lbl = value === `${cy}_real`     ? String(cy)
-            : value === `${cy}_forecast` ? 'Prognose'
-                : value === `${ny}_forecast` ? `${ny} Prognose`
-                    : value
-        return <span style={{ color }}>{lbl}</span>
-    }
-
-    const pillBase    = { padding:'5px 14px', borderRadius:20, fontSize:12, cursor:'pointer', border:'1px solid #2a3a50', background:'transparent', color:'#7a8ba0' }
-    const pillActive  = { ...pillBase, background:'#1e3a5f', color:'#93c5fd' }
-    const grossActive = { ...pillBase, background:'rgba(251,146,60,0.12)', border:'1px solid #fb923c', color:'#fb923c' }
-    const inflActive  = { ...pillBase, background:'rgba(249,115,22,0.12)', border:'1px solid #f97316', color:'#f97316' }
-
-    const canShowInflation = mode === 'cumulative' && years.length >= 2 && inflationLineData !== null
+    const pillBase   = { padding:'5px 12px', borderRadius:20, fontSize:12, cursor:'pointer', border:'1px solid #2a3a50', background:'transparent', color:'#7a8ba0', fontWeight:600 }
+    const pillActive = { ...pillBase, background:'#1e3a5f', color:'#93c5fd' }
+    const grossActive= { ...pillBase, background:'rgba(251,146,60,0.12)', border:'1px solid #fb923c', color:'#fb923c' }
 
     return (
-        <div style={{ background:'#161b27', borderRadius:12, padding:20, border:'1px solid #222d3d', marginBottom:20 }}>
+        <div style={{ background:'#161b27', borderRadius:16, padding:20, border:'1px solid #1e2a3a', marginBottom:20 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:8 }}>
-                <h2 style={{ fontSize:15, fontWeight:600, color:'#c8d4e0' }}>Jahresverlauf</h2>
+                <div>
+                    <h3 style={{ fontSize:16, fontWeight:600, color:'#f1f5f9', margin:0 }}>
+                        📊 {mode === 'monthly' ? 'Monatliche Dividenden' : 'Dividenden nach Einzelwerten'}
+                    </h3>
+                    <p style={{ color:'#64748b', fontSize:12, margin:'2px 0 0 0' }}>
+                        {mode === 'monthly' ? 'Vergleich der Monate im Jahresverlauf' : 'Historische & prognostizierte Cashflows je Aktie'}
+                    </p>
+                </div>
+
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-                    <div style={{ display:'flex', gap:4, padding:'2px', background:'#0f1420', borderRadius:22, border:'1px solid #1e2a3a' }}>
+                    {/* Netto / Brutto */}
+                    <div style={{ display:'flex', gap:3, padding:'2px', background:'#0f1420', borderRadius:22, border:'1px solid #1e2a3a' }}>
                         <button onClick={() => setShowGross(false)} style={!showGross ? pillActive : pillBase}>Netto</button>
                         <button onClick={() => setShowGross(true)}  style={ showGross ? grossActive : pillBase}>Brutto</button>
                     </div>
-                    <div style={{ display:'flex', gap:4 }}>
-                        {MODES.map(({ key }) => (
-                            <button key={key} onClick={() => setMode(key)} style={mode === key ? pillActive : pillBase}>
-                                {key === 'monthly' ? 'Monatlich' : key === 'stacked' ? 'Nach Aktie' : 'Akkumuliert'}
-                            </button>
-                        ))}
+
+                    {/* Modus: Monatlich vs Nach Aktie */}
+                    <div style={{ display:'flex', gap:4, background:'#0f1420', padding:'2px', borderRadius:22, border:'1px solid #1e2a3a' }}>
+                        <button onClick={() => setMode('monthly')} style={mode === 'monthly' ? pillActive : pillBase}>Monatlich</button>
+                        <button onClick={() => setMode('stacked')} style={mode === 'stacked' ? pillActive : pillBase}>Nach Aktie</button>
                     </div>
-                    {canShowInflation && (
-                        <button onClick={() => setShowInflation(v => !v)} style={showInflation ? inflActive : pillBase}>
-                            📉 Kaufkraftziel
-                        </button>
-                    )}
                 </div>
             </div>
 
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={290}>
                 {mode === 'monthly' ? (
                     <BarChart data={monthlyBarData} margin={{ top:8, right:16, left:0, bottom:0 }} barCategoryGap="20%" barGap={2}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1a2233" />
-                        <XAxis dataKey="name" tick={{ fill:'#7a8ba0', fontSize:12 }} tickLine={{ stroke:'#2a3a50' }} dx={-12} />
-                        <YAxis tick={{ fill:'#7a8ba0', fontSize:12 }} tickFormatter={v => v.toFixed(0) + '€'} width={52} domain={[0, maxVal]} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e2a3a" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fill:'#7a8ba0', fontSize:11 }} tickLine={false} axisLine={{ stroke:'#1e2a3a' }} />
+                        <YAxis tick={{ fill:'#7a8ba0', fontSize:11 }} tickFormatter={v => v.toFixed(0) + '€'} width={48} domain={[0, maxVal]} axisLine={false} tickLine={false} />
                         <Tooltip
-                            contentStyle={{ background:'#1a2233', border:'1px solid #222d3d', borderRadius:8 }}
-                            labelStyle={{ color:'#c8d4e0' }}
+                            contentStyle={{ background:'#161b27', border:'1px solid #2a3a50', borderRadius:8, fontSize:12 }}
+                            labelStyle={{ color:'#f1f5f9', fontWeight:600 }}
                             formatter={(v, n) => [fmtTip(v), n === 'prognose' ? 'Prognose' : n]}
-                            cursor={{ fill:'rgba(255,255,255,0.04)' }}
+                            cursor={{ fill:'rgba(255,255,255,0.03)' }}
                         />
-                        <Legend wrapperStyle={{ fontSize:13, color:'#c8d4e0' }} />
+                        <Legend wrapperStyle={{ fontSize:12, paddingTop:8 }} />
                         {years.map(y => (
                             <Bar key={y} dataKey={String(y)} fill={YEAR_COLORS[y] || '#94a3b8'}
-                                 radius={[3,3,0,0]} maxBarSize={20} name={String(y)} />
+                                 radius={[3,3,0,0]} maxBarSize={22} name={String(y)} />
                         ))}
                         <Bar dataKey="prognose" name="Prognose"
-                             fill={YEAR_COLORS[cy] || '#c0397a'} maxBarSize={20}
+                             fill={YEAR_COLORS[cy] || '#c0397a'} maxBarSize={22}
                              shape={(props) => {
                                  const { x, y, width, height } = props
                                  if (!height || height <= 0) return null
@@ -293,45 +192,44 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                              }}
                         />
                     </BarChart>
-
-                ) : mode === 'stacked' ? (
+                ) : (
                     <BarChart
                         data={stackedData}
                         margin={{ top:8, right:16, left:0, bottom:0 }}
                         barCategoryGap="15%"
                         barSize={stackedBarSize}
                     >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1a2233" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e2a3a" vertical={false} />
                         <XAxis
                             dataKey="name"
                             tick={{ fill:'#7a8ba0', fontSize:10 }}
                             tickLine={false}
+                            axisLine={{ stroke:'#1e2a3a' }}
                             interval={stackedXInterval}
                         />
-                        <YAxis tick={{ fill:'#7a8ba0', fontSize:12 }} tickFormatter={v => v.toFixed(0) + '€'} width={52} />
+                        <YAxis tick={{ fill:'#7a8ba0', fontSize:11 }} tickFormatter={v => v.toFixed(0) + '€'} width={48} axisLine={false} tickLine={false} />
                         <Tooltip
-                            contentStyle={{ background:'#1a2233', border:'1px solid #222d3d', borderRadius:8 }}
-                            labelStyle={{ color:'#c8d4e0' }}
+                            contentStyle={{ background:'#161b27', border:'1px solid #2a3a50', borderRadius:8 }}
                             content={({ active, payload, label: tipLabel }) => {
                                 if (!active || !payload) return null
                                 const filtered = payload.filter(p => p.value > 0)
                                 if (!filtered.length) return null
                                 return (
-                                    <div style={{ background:'#1a2233', border:'1px solid #222d3d', borderRadius:8, padding:'10px 14px' }}>
-                                        <p style={{ color:'#c8d4e0', marginBottom:6, fontWeight:600 }}>{tipLabel}</p>
+                                    <div style={{ background:'#161b27', border:'1px solid #2a3a50', borderRadius:8, padding:'10px 14px', fontSize:12 }}>
+                                        <p style={{ color:'#f1f5f9', marginBottom:6, fontWeight:600 }}>{tipLabel}</p>
                                         {filtered.map(p => (
-                                            <p key={p.dataKey} style={{ color: p.fill, margin:'2px 0', fontSize:13 }}>
+                                            <p key={p.dataKey} style={{ color: p.fill, margin:'2px 0' }}>
                                                 {byHolding[p.dataKey]?.name || p.dataKey}: {(+p.value).toFixed(2)} € ({label})
                                             </p>
                                         ))}
                                     </div>
                                 )
                             }}
-                            cursor={{ fill:'rgba(255,255,255,0.04)' }}
+                            cursor={{ fill:'rgba(255,255,255,0.03)' }}
                         />
                         <Legend
-                            wrapperStyle={{ fontSize:11, maxHeight:60, overflowY:'auto' }}
-                            formatter={isin => <span style={{ color:'#c8d4e0' }}>{byHolding[isin]?.name || isin}</span>}
+                            wrapperStyle={{ fontSize:11, maxHeight:50, overflowY:'auto', paddingTop:8 }}
+                            formatter={isin => <span style={{ color:'#94a3b8' }}>{byHolding[isin]?.name || isin}</span>}
                         />
                         {isins.map((isin, idx) => {
                             const color     = byHolding[isin]?.color || '#94a3b8'
@@ -358,73 +256,17 @@ export default function DividendChart({ monthly, cum, forecastCum, forecastMonth
                             )
                         })}
                     </BarChart>
-
-                ) : (
-                    <LineChart data={cumLineData} margin={{ top:8, right:16, left:0, bottom:0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1a2233" />
-                        <XAxis dataKey="name" tick={{ fill:'#7a8ba0', fontSize:12 }} />
-                        <YAxis tick={{ fill:'#7a8ba0', fontSize:12 }} tickFormatter={v => v.toFixed(0) + '€'} width={52} />
-                        <Tooltip
-                            contentStyle={{ background:'#1a2233', border:'1px solid #222d3d', borderRadius:8 }}
-                            labelStyle={{ color:'#c8d4e0' }}
-                            formatter={(v, n) => {
-                                if (n === 'inflation_target') return [`${(+v).toFixed(2)} € (Ziel)`, '📉 Kaufkraftziel']
-                                const lbl = n === `${cy}_real` ? `${cy}` : n.endsWith('_forecast') ? 'Prognose' : n
-                                return [fmtTip(v), lbl]
-                            }}
-                            cursor={{ stroke:'#2a3a50', strokeWidth:1 }}
-                        />
-                        <Legend wrapperStyle={{ fontSize:13 }} formatter={renderLineLegend} />
-                        {years.filter(y => y < cy).map(y => (
-                            <Line key={y} type="monotone" dataKey={String(y)}
-                                  stroke={YEAR_COLORS[y] || '#94a3b8'} strokeWidth={2}
-                                  dot={{ r:2 }} activeDot={{ r:5 }}
-                            />
-                        ))}
-                        <Line type="monotone" dataKey={`${cy}_real`}
-                              stroke={YEAR_COLORS[cy] || '#c0397a'} strokeWidth={2}
-                              dot={{ r:2 }} activeDot={{ r:5 }}
-                              connectNulls={false}
-                        />
-                        <Line type="monotone" dataKey={`${cy}_forecast`}
-                              stroke={YEAR_COLORS[cy] || '#c0397a'} strokeWidth={2}
-                              strokeDasharray="6 4" dot={false}
-                        />
-                        <Line type="monotone" dataKey={`${ny}_forecast`}
-                              stroke="#34d399" strokeWidth={2}
-                              strokeDasharray="6 4" dot={false}
-                        />
-                        {showInflation && (
-                            <Line
-                                type="monotone"
-                                dataKey="inflation_target"
-                                stroke="#f97316"
-                                strokeWidth={1.5}
-                                strokeDasharray="5 3"
-                                dot={false}
-                                name="inflation_target"
-                            />
-                        )}
-                    </LineChart>
                 )}
             </ResponsiveContainer>
 
-            {mode === 'cumulative' && (
-                <p style={{ color:'#4a6080', fontSize:11, marginTop:10 }}>
-                    ⋯ Prognose = Ø Dividende pro Anteil × aktuelle Anteile · organisches DPS-Wachstum für {ny}
-                    {showInflation && <span style={{ color:'#f97316' }}> · 📉 Kaufkraftziel: wie viel kumulierte Dividende nötig wäre um Kaufkraft seit {baseYear} zu erhalten (Destatis VPI · laufendes Jahr = Schätzung)</span>}
-                    {showGross && <span style={{ color:'#fb923c' }}> · Brutto basiert auf ø Steuerquote je Aktie</span>}
-                </p>
-            )}
             {mode === 'stacked' && (
-                <p style={{ color:'#4a6080', fontSize:11, marginTop:10 }}>
+                <p style={{ color:'#64748b', fontSize:11, marginTop:8, marginBottom:0 }}>
                     ⋯ Halbtransparent = Prognose auf Basis Ø DPS der letzten 2 Jahre × aktuelle Anteile
-                    {showGross && <span style={{ color:'#fb923c' }}> · Brutto: individuelle Steuerquote je Aktie</span>}
                 </p>
             )}
-            {mode === 'monthly' && showGross && (
-                <p style={{ color:'#fb923c', fontSize:11, marginTop:10 }}>
-                    ⚠️ Brutto-Hochrechnung basiert auf der ø Steuerquote aller Positionen ({(globalTaxRate * 100).toFixed(1)} %)
+            {showGross && (
+                <p style={{ color:'#fb923c', fontSize:11, marginTop:8, marginBottom:0 }}>
+                    ⚠️ Brutto basiert auf der individuellen bzw. durchschnittlichen Steuerquote ({(globalTaxRate * 100).toFixed(1)} %)
                 </p>
             )}
         </div>

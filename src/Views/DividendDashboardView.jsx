@@ -1,6 +1,7 @@
 import React from 'react'
 import KpiCard from '../components/KpiCard.jsx'
 import DividendChart from '../components/DividendChart.jsx'
+import CumulativeDividendChart from '../components/CumulativeDividendChart.jsx'
 import DividendHeatmap from '../components/DividendHeatmap.jsx'
 import PositionsTable from '../components/PositionsTable.jsx'
 import DividendDonut from '../components/DividendDonut.jsx'
@@ -131,7 +132,18 @@ export default function DividendDashboardView({
             </div>
 
             <div style={{ marginTop: 16 }}>
-                <DividendChart monthly={monthly} cum={cum} forecastCum={forecastCum} forecastMonthly={forecastMonthly} byHolding={byHolding} forecastByHolding={forecastByHolding} />
+                <DividendChart
+                    monthly={monthly}
+                    forecastMonthly={forecastMonthly}
+                    byHolding={byHolding}
+                    forecastByHolding={forecastByHolding}
+                />
+                <CumulativeDividendChart
+                    monthly={monthly}
+                    cum={cum}
+                    forecastCum={forecastCum}
+                    byHolding={byHolding}
+                />
             </div>
             <div style={{ marginTop: 16 }}>
                 <DividendHeatmap monthly={monthly} />
