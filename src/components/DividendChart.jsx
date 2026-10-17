@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import {
-    BarChart, Bar,
+    ComposedChart, Bar, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { MONTHS, YEAR_COLORS } from '../utils/dataUtils.js'
@@ -71,7 +71,7 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
     const scaleNet  = (v)       => showGross ? toGross(v, globalTaxRate) : v
     const scaleIsin = (v, isin) => showGross ? toGross(v, taxRates[isin] ?? globalTaxRate) : v
 
-    // Daten für monatlichen Balkenvergleich
+    // 1. MONATLICHE BALKEN
     const monthlyBarData = MONTHS.map((name, i) => {
         const pt = { name }
         years.forEach(y => {
@@ -91,7 +91,7 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
         )
     })
 
-    // Daten für Stacked-Balken (nach Aktie)
+    // 2. NACH AKTIE (STACKED) INKL. PARQET DURCHSCHNITTSLINIEN
     const allYears  = isins.flatMap(isin => Object.keys(byHolding[isin].monthly || {}).map(Number))
     const minYear   = allYears.length ? Math.min(...allYears) : cy
     const startDate = new Date(minYear, 0, 1)
@@ -99,7 +99,9 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
     const totalMonths = (endDate.getFullYear() - startDate.getFullYear()) * 12
         + endDate.getMonth() - startDate.getMonth()
 
-    const stackedData = Array.from({ length: totalMonths }, (_, i) => {
+    const rawMonthTotals = []
+
+    const stackedDataRaw = Array.from({ length: totalMonths }, (_, i) => {
         const date     = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1)
         const year     = date.getFullYear()
         const month    = date.getMonth()
@@ -109,14 +111,41 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
             ? `Jan '${String(year).slice(2)}`
             : MONTHS[month].slice(0, 3)
         const pt       = { name: label, _future: isFuture }
+
+        let monthSum = 0
         for (const isin of isins) {
             const h   = byHolding[isin]
             const raw = isFuture
                 ? (forecastByHolding?.[isin]?.[month] || 0)
                 : (h.monthly[year]?.[month] || 0)
-            pt[isin] = +scaleIsin(raw, isin).toFixed(2)
+            const val = +scaleIsin(raw, isin).toFixed(2)
+            pt[isin] = val
+            monthSum += val
         }
+        pt._total = monthSum
+        if (!isFuture) rawMonthTotals.push(monthSum)
         return pt
+    })
+
+    // Parqet Durchschnitt 1: Ø Dividende im Intervall (horizontal)
+    const intervalAvg = rawMonthTotals.length > 0
+        ? +(rawMonthTotals.reduce((a, b) => a + b, 0) / rawMonthTotals.length).toFixed(2)
+        : null
+
+    // Parqet Durchschnitt 2: Ø monatl. Einkommen TTM (gleitender 12-Monats-Schnitt)
+    const stackedData = stackedDataRaw.map((pt, i) => {
+        let ttm = null
+        if (!pt._future) {
+            const startIdx = Math.max(0, i - 11)
+            const window = stackedDataRaw.slice(startIdx, i + 1).filter(p => !p._future)
+            const sum = window.reduce((s, p) => s + (p._total || 0), 0)
+            ttm = +(sum / Math.min(12, window.length)).toFixed(2)
+        }
+        return {
+            ...pt,
+            intervalAvg: intervalAvg,
+            ttmAvg: ttm,
+        }
     })
 
     const stackedBarSize = calcBarSize(totalMonths)
@@ -136,25 +165,23 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
     const grossActive= { ...pillBase, background:'rgba(251,146,60,0.12)', border:'1px solid #fb923c', color:'#fb923c' }
 
     return (
-        <div style={{ background:'#161b27', borderRadius:16, padding:20, border:'1px solid #1e2a3a', marginBottom:20 }}>
+        <div style={{ background:'#161b27', borderRadius:16, padding:20, border:'1px solid #1e2a3a' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:8 }}>
                 <div>
                     <h3 style={{ fontSize:16, fontWeight:600, color:'#f1f5f9', margin:0 }}>
                         📊 {mode === 'monthly' ? 'Monatliche Dividenden' : 'Dividenden nach Einzelwerten'}
                     </h3>
                     <p style={{ color:'#64748b', fontSize:12, margin:'2px 0 0 0' }}>
-                        {mode === 'monthly' ? 'Vergleich der Monate im Jahresverlauf' : 'Historische & prognostizierte Cashflows je Aktie'}
+                        {mode === 'monthly' ? 'Vergleich der Monate im Jahresverlauf' : 'Historische & prognostizierte Cashflows mit TTM-Durchschnitt'}
                     </p>
                 </div>
 
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-                    {/* Netto / Brutto */}
                     <div style={{ display:'flex', gap:3, padding:'2px', background:'#0f1420', borderRadius:22, border:'1px solid #1e2a3a' }}>
                         <button onClick={() => setShowGross(false)} style={!showGross ? pillActive : pillBase}>Netto</button>
                         <button onClick={() => setShowGross(true)}  style={ showGross ? grossActive : pillBase}>Brutto</button>
                     </div>
 
-                    {/* Modus: Monatlich vs Nach Aktie */}
                     <div style={{ display:'flex', gap:4, background:'#0f1420', padding:'2px', borderRadius:22, border:'1px solid #1e2a3a' }}>
                         <button onClick={() => setMode('monthly')} style={mode === 'monthly' ? pillActive : pillBase}>Monatlich</button>
                         <button onClick={() => setMode('stacked')} style={mode === 'stacked' ? pillActive : pillBase}>Nach Aktie</button>
@@ -164,7 +191,7 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
 
             <ResponsiveContainer width="100%" height={290}>
                 {mode === 'monthly' ? (
-                    <BarChart data={monthlyBarData} margin={{ top:8, right:16, left:0, bottom:0 }} barCategoryGap="20%" barGap={2}>
+                    <ComposedChart data={monthlyBarData} margin={{ top:8, right:16, left:0, bottom:0 }} barCategoryGap="20%" barGap={2}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e2a3a" vertical={false} />
                         <XAxis dataKey="name" tick={{ fill:'#7a8ba0', fontSize:11 }} tickLine={false} axisLine={{ stroke:'#1e2a3a' }} />
                         <YAxis tick={{ fill:'#7a8ba0', fontSize:11 }} tickFormatter={v => v.toFixed(0) + '€'} width={48} domain={[0, maxVal]} axisLine={false} tickLine={false} />
@@ -191,9 +218,9 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                                  )
                              }}
                         />
-                    </BarChart>
+                    </ComposedChart>
                 ) : (
-                    <BarChart
+                    <ComposedChart
                         data={stackedData}
                         margin={{ top:8, right:16, left:0, bottom:0 }}
                         barCategoryGap="15%"
@@ -212,11 +239,16 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                             contentStyle={{ background:'#161b27', border:'1px solid #2a3a50', borderRadius:8 }}
                             content={({ active, payload, label: tipLabel }) => {
                                 if (!active || !payload) return null
-                                const filtered = payload.filter(p => p.value > 0)
-                                if (!filtered.length) return null
+                                const filtered = payload.filter(p => p.value > 0 && p.dataKey !== 'intervalAvg' && p.dataKey !== 'ttmAvg')
+                                const ttmPt = payload.find(p => p.dataKey === 'ttmAvg')
                                 return (
-                                    <div style={{ background:'#161b27', border:'1px solid #2a3a50', borderRadius:8, padding:'10px 14px', fontSize:12 }}>
+                                    <div style={{ background:'#161b27', border: '1px solid #2a3a50', borderRadius:8, padding:'10px 14px', fontSize:12 }}>
                                         <p style={{ color:'#f1f5f9', marginBottom:6, fontWeight:600 }}>{tipLabel}</p>
+                                        {ttmPt && ttmPt.value != null && (
+                                            <p style={{ color:'#38bdf8', margin:'0 0 6px', fontWeight:600, borderBottom:'1px solid #1e2a3a', paddingBottom:4 }}>
+                                                Ø monatl. Einkommen (TTM): {(+ttmPt.value).toFixed(2)} €
+                                            </p>
+                                        )}
                                         {filtered.map(p => (
                                             <p key={p.dataKey} style={{ color: p.fill, margin:'2px 0' }}>
                                                 {byHolding[p.dataKey]?.name || p.dataKey}: {(+p.value).toFixed(2)} € ({label})
@@ -229,7 +261,11 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                         />
                         <Legend
                             wrapperStyle={{ fontSize:11, maxHeight:50, overflowY:'auto', paddingTop:8 }}
-                            formatter={isin => <span style={{ color:'#94a3b8' }}>{byHolding[isin]?.name || isin}</span>}
+                            formatter={val => {
+                                if (val === 'intervalAvg') return <span style={{ color:'#94a3b8' }}>---- Ø Dividende im Intervall</span>
+                                if (val === 'ttmAvg') return <span style={{ color:'#38bdf8' }}>— Ø monatl. Einkommen (TTM)</span>
+                                return <span style={{ color:'#94a3b8' }}>{byHolding[val]?.name || val}</span>
+                            }}
                         />
                         {isins.map((isin, idx) => {
                             const color     = byHolding[isin]?.color || '#94a3b8'
@@ -255,18 +291,35 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
                                 />
                             )
                         })}
-                    </BarChart>
+
+                        {/* Parqet Linien: Horizontale Durchschnittslinie & TTM-Trendlinie */}
+                        <Line
+                            type="monotone"
+                            dataKey="intervalAvg"
+                            stroke="#64748b"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 4"
+                            dot={false}
+                            name="intervalAvg"
+                            isAnimationActive={false}
+                        />
+                        <Line
+                            type="monotone"
+                            dataKey="ttmAvg"
+                            stroke="#38bdf8"
+                            strokeWidth={2}
+                            dot={false}
+                            name="ttmAvg"
+                            connectNulls
+                            isAnimationActive={false}
+                        />
+                    </ComposedChart>
                 )}
             </ResponsiveContainer>
 
             {mode === 'stacked' && (
                 <p style={{ color:'#64748b', fontSize:11, marginTop:8, marginBottom:0 }}>
-                    ⋯ Halbtransparent = Prognose auf Basis Ø DPS der letzten 2 Jahre × aktuelle Anteile
-                </p>
-            )}
-            {showGross && (
-                <p style={{ color:'#fb923c', fontSize:11, marginTop:8, marginBottom:0 }}>
-                    ⚠️ Brutto basiert auf der individuellen bzw. durchschnittlichen Steuerquote ({(globalTaxRate * 100).toFixed(1)} %)
+                    <span style={{ color:'#38bdf8' }}>— TTM:</span> Rollierender 12-Monats-Schnitt · <span style={{ color:'#94a3b8' }}>---- Intervall:</span> Gesamtdurchschnitt aller Monate · Halbtransparent = Prognose
                 </p>
             )}
         </div>
