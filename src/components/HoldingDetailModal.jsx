@@ -22,6 +22,7 @@ let _cachedEtfCatalog = null
 export default function HoldingDetailModal({
                                                holding,
                                                onClose,
+                                               onOpenFullDetail,
                                                allHoldings = [],
                                                buyActs = [],
                                                sellActs = [],
@@ -262,25 +263,57 @@ export default function HoldingDetailModal({
                         </div>
                     </div>
 
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: '#1e293b',
-                            border: 'none',
-                            color: '#94a3b8',
-                            fontSize: 16,
-                            width: 32,
-                            height: 32,
-                            borderRadius: 8,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                        }}
-                    >
-                        ✕
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {onOpenFullDetail && (
+                            <button
+                                onClick={() => onOpenFullDetail(holding)}
+                                style={{
+                                    background: 'rgba(56, 189, 248, 0.1)',
+                                    color: '#38bdf8',
+                                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                                    borderRadius: 8,
+                                    padding: '6px 12px',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    transition: 'all 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = 'rgba(56, 189, 248, 0.2)'
+                                    e.currentTarget.style.borderColor = '#38bdf8'
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'rgba(56, 189, 248, 0.1)'
+                                    e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.3)'
+                                }}
+                            >
+                                <span>Vollansicht</span>
+                                <span style={{ fontSize: 13 }}>↗</span>
+                            </button>
+                        )}
+
+                        <button
+                            onClick={onClose}
+                            style={{
+                                background: '#1e293b',
+                                border: 'none',
+                                color: '#94a3b8',
+                                fontSize: 16,
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            ✕
+                        </button>
+                    </div>
                 </div>
 
                 {/* 2. REITER-NAVIGATION */}

@@ -304,6 +304,23 @@
       return empty
     }
   }
+  // Detaildaten inkl. Kennzahlen und Kurshistorie für die Aktien-Einzelansicht
+  const stockDetailsCache = new Map()
+
+  export async function fetchStockDetails(symbol) {
+    if (!symbol) return null
+    if (stockDetailsCache.has(symbol)) return stockDetailsCache.get(symbol)
+    try {
+      const res = await fetch(`${YAHOO_FN}?ticker=${encodeURIComponent(symbol)}&range=5y&interval=1d&series=1&details=1`)
+      if (!res.ok) return null
+      const data = await res.json()
+      stockDetailsCache.set(symbol, data)
+      return data
+    } catch (err) {
+      console.warn(`[fetchStockDetails] Fehler für ${symbol}:`, err)
+      return null
+    }
+  }
   
   async function fetchCryptoPricesBatch(symbols = []) {
     if (symbols.length === 0) return {}

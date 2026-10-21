@@ -21,17 +21,14 @@ export const handler = async function(event, context) {
             };
         }
 
-        // Direktes Mapping für bekannte Problem-ISINs
         const ISIN_MAPPING = {
-            'JE00B588CD74': 'SGBS.MI', // WisdomTree Physical Swiss Gold
+            'JE00B588CD74': 'SGBS.MI',
         };
 
         if (ISIN_MAPPING[symbol]) {
             symbol = ISIN_MAPPING[symbol];
         } else {
-            // Automatischer ISIN-zu-Ticker-Fallback
             const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/;
-
             if (ISIN_REGEX.test(symbol)) {
                 try {
                     const searchRes = await fetch(
@@ -45,11 +42,8 @@ export const handler = async function(event, context) {
 
                     if (searchRes.ok) {
                         const searchData = await searchRes.json();
-
                         if (searchData.quotes && searchData.quotes.length > 0) {
                             const quotes = searchData.quotes;
-
-                            // Keine Indizes zulassen
                             const validQuotes = quotes.filter(q => {
                                 const type = (q.quoteType || '').toUpperCase();
                                 return type === 'ETF' || type === 'EQUITY' || type === 'MUTUALFUND';
@@ -62,21 +56,13 @@ export const handler = async function(event, context) {
                                 q.symbol?.endsWith('.AS')
                             );
 
-                            if (!bestMatch && validQuotes.length > 0) {
-                                bestMatch = validQuotes[0];
-                            }
-
-                            if (!bestMatch) {
-                                bestMatch = quotes[0];
-                            }
-
-                            if (bestMatch?.symbol) {
-                                symbol = bestMatch.symbol;
-                            }
+                            if (!bestMatch && validQuotes.length > 0) bestMatch = validQuotes[0];
+                            if (!bestMatch) bestMatch = quotes[0];
+                            if (bestMatch?.symbol) symbol = bestMatch.symbol;
                         }
                     }
                 } catch (e) {
-                    console.warn('ISIN-Suche in Netlify-Function fehlgeschlagen:', e.message);
+                    console.warn('ISIN-Suche fehlgeschlagen:', e.message);
                 }
             }
         }
@@ -89,19 +75,16 @@ export const handler = async function(event, context) {
             };
         }
 
-        // "max" ist wichtig, damit auch ältere Splits gefunden werden.
-        // range und interval können weiterhin als URL-Parameter überschrieben werden.
         const range = event.queryStringParameters?.range || 'max';
         const interval = event.queryStringParameters?.interval || '1mo';
 
-        // Dividenden und Aktiensplits gemeinsam abfragen
-        const url =
+        const chartUrl =
             `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
             `?range=${encodeURIComponent(range)}` +
             `&interval=${encodeURIComponent(interval)}` +
             '&events=div%7Csplit';
 
-        const response = await fetch(url, {
+        const response = await fetch(chartUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
@@ -112,7 +95,6 @@ export const handler = async function(event, context) {
         }
 
         const data = await response.json();
-
         if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
             return {
                 statusCode: 404,
@@ -128,9 +110,7 @@ export const handler = async function(event, context) {
         let marketPrice = meta.regularMarketPrice ?? null;
         let currency = (meta.currency || 'EUR').toUpperCase();
 
-        // Dividenden extrahieren
         let dividends = [];
-
         if (events.dividends) {
             dividends = Object.values(events.dividends)
                 .map(div => ({
@@ -141,107 +121,105 @@ export const handler = async function(event, context) {
                 .sort((a, b) => b.timestamp - a.timestamp);
         }
 
-        // Aktiensplits extrahieren.
-        // Yahoo liefert normalerweise numerator / denominator, zum Beispiel 10 / 1.
-        // splitRatio ist ein zusätzlicher Fallback, falls Yahoo das Verhältnis als Text liefert.
         const splits = Object.values(events.splits || {})
             .map(split => {
                 let ratio = null;
-
                 const numerator = Number(split.numerator);
                 const denominator = Number(split.denominator);
-
                 if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
                     ratio = numerator / denominator;
                 } else if (typeof split.splitRatio === 'string') {
                     const match = split.splitRatio.match(/([\d.]+)\s*:\s*([\d.]+)/);
-                    if (match) {
-                        const left = Number(match[1]);
-                        const right = Number(match[2]);
-                        if (Number.isFinite(left) && Number.isFinite(right) && right !== 0) {
-                            ratio = left / right;
-                        }
+                    if (match && Number(match[2]) !== 0) {
+                        ratio = Number(match[1]) / Number(match[2]);
                     }
                 }
-
                 return {
-                    date: split.date
-                        ? new Date(split.date * 1000).toISOString().split('T')[0]
-                        : null,
+                    date: split.date ? new Date(split.date * 1000).toISOString().split('T')[0] : null,
                     ratio
                 };
             })
-            .filter(split =>
-                split.date &&
-                Number.isFinite(split.ratio) &&
-                split.ratio > 0 &&
-                split.ratio !== 1
-            )
+            .filter(split => split.date && Number.isFinite(split.ratio) && split.ratio > 0 && split.ratio !== 1)
             .sort((a, b) => a.date.localeCompare(b.date));
-        // Optional: Kursverlauf für Charts (nur mit ?series=1)
-        const wantSeries = event.queryStringParameters?.series === '1';
+
+        // Kurshistorie
         let history = [];
-        if (wantSeries) {
-            const timestamps = result.timestamp || [];
-            const closes = result.indicators?.quote?.[0]?.close || [];
-            history = timestamps
-                .map((t, i) => ({ d: new Date(t * 1000).toISOString().slice(0, 10), close: closes[i] }))
-                .filter(p => p.close != null && Number.isFinite(p.close));
+        const timestamps = result.timestamp || [];
+        const closes = result.indicators?.quote?.[0]?.close || [];
+        history = timestamps
+            .map((t, i) => ({ d: new Date(t * 1000).toISOString().slice(0, 10), close: closes[i] }))
+            .filter(p => p.close != null && Number.isFinite(p.close));
+
+        // Optionale Fundamental-Kennzahlen über quoteSummary
+        let fundamentals = {};
+        const wantDetails = event.queryStringParameters?.details === '1';
+        if (wantDetails) {
+            try {
+                const summaryUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,assetProfile`;
+                const sumRes = await fetch(summaryUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+                });
+                if (sumRes.ok) {
+                    const sumData = await sumRes.json();
+                    const qRes = sumData?.quoteSummary?.result?.[0] || {};
+                    const sd = qRes.summaryDetail || {};
+                    const ks = qRes.defaultKeyStatistics || {};
+                    const ap = qRes.assetProfile || {};
+
+                    fundamentals = {
+                        peRatio: sd.trailingPE?.raw ?? null,
+                        forwardPE: sd.forwardPE?.raw ?? null,
+                        marketCap: sd.marketCap?.raw ?? null,
+                        dividendYield: sd.dividendYield?.raw ?? null,
+                        payoutRatio: sd.payoutRatio?.raw ?? null,
+                        beta: sd.beta?.raw ?? ks.beta?.raw ?? null,
+                        fiftyTwoWeekHigh: sd.fiftyTwoWeekHigh?.raw ?? meta.fiftyTwoWeekHigh ?? null,
+                        fiftyTwoWeekLow: sd.fiftyTwoWeekLow?.raw ?? meta.fiftyTwoWeekLow ?? null,
+                        previousClose: sd.previousClose?.raw ?? meta.chartPreviousClose ?? null,
+                        sector: ap.sector || null,
+                        industry: ap.industry || null,
+                        summary: ap.longBusinessSummary || null,
+                    };
+                }
+            } catch (err) {
+                console.warn('Fundamentals konnten nicht geladen werden:', err.message);
+            }
         }
 
-        // Jahresdividenden berechnen
+        // Jahresdividenden
         const yearlyTotals = {};
-
         dividends.forEach(div => {
             const year = new Date(div.timestamp * 1000).getFullYear();
             yearlyTotals[year] = (yearlyTotals[year] || 0) + div.amount;
         });
 
-        // Fremdwährung nach EUR umrechnen (Kurs und Dividendenbeträge)
+        // Währungsumrechnung
         if (currency !== 'EUR') {
             try {
-                let fxSymbol = `${currency}EUR=X`;
-
-                // Yahoo notiert EURUSD als US-Dollar pro Euro.
-                if (currency === 'USD') {
-                    fxSymbol = 'EURUSD=X';
-                }
-
-                const fxUrl =
-                    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(fxSymbol)}` +
-                    '?range=1d&interval=1d';
-
+                const fxSymbol = currency === 'USD' ? 'EURUSD=X' : `${currency}EUR=X`;
+                const fxUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(fxSymbol)}?range=1d&interval=1d`;
                 const fxRes = await fetch(fxUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    }
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
                 });
 
                 if (fxRes.ok) {
                     const fxData = await fxRes.json();
                     const fxRate = fxData.chart?.result?.[0]?.meta?.regularMarketPrice;
-
                     if (fxRate && fxRate > 0) {
                         const conversionRate = currency === 'USD' ? 1 / fxRate : fxRate;
-
-                        if (marketPrice != null) {
-                            marketPrice *= conversionRate;
-                        }
-
-                        dividends = dividends.map(div => ({
-                            ...div,
-                            amount: div.amount * conversionRate
-                        }));
-
-                        for (const year of Object.keys(yearlyTotals)) {
-                            yearlyTotals[year] *= conversionRate;
-                        }
-                        currency = 'EUR';
+                        if (marketPrice != null) marketPrice *= conversionRate;
+                        dividends = dividends.map(div => ({ ...div, amount: div.amount * conversionRate }));
                         history = history.map(p => ({ ...p, close: p.close * conversionRate }));
+                        for (const year of Object.keys(yearlyTotals)) yearlyTotals[year] *= conversionRate;
+                        if (fundamentals.marketCap) fundamentals.marketCap *= conversionRate;
+                        if (fundamentals.fiftyTwoWeekHigh) fundamentals.fiftyTwoWeekHigh *= conversionRate;
+                        if (fundamentals.fiftyTwoWeekLow) fundamentals.fiftyTwoWeekLow *= conversionRate;
+                        if (fundamentals.previousClose) fundamentals.previousClose *= conversionRate;
+                        currency = 'EUR';
                     }
                 }
             } catch (e) {
-                console.warn(`Wechselkurs-Abfrage für ${currency} fehlgeschlagen:`, e.message);
+                console.warn(`FX-Umrechnung für ${currency} fehlgeschlagen:`, e.message);
             }
         }
 
@@ -251,32 +229,25 @@ export const handler = async function(event, context) {
             currency,
             instrumentType: meta.instrumentType,
             regularMarketPrice: marketPrice,
-            fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
-            fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+            fiftyTwoWeekHigh: fundamentals.fiftyTwoWeekHigh ?? meta.fiftyTwoWeekHigh ?? null,
+            fiftyTwoWeekLow: fundamentals.fiftyTwoWeekLow ?? meta.fiftyTwoWeekLow ?? null,
+            previousClose: fundamentals.previousClose ?? meta.chartPreviousClose ?? null,
             dividends,
-            history,
             splits,
+            history,
             yearlyTotals,
+            fundamentals,
             totalDividendsCount: dividends.length,
             lastDividend: dividends.length > 0 ? dividends[0] : null
         };
 
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify(responseData)
-        };
-
+        return { statusCode: 200, headers, body: JSON.stringify(responseData) };
     } catch (error) {
         console.error('Error in yahoo-dividends function:', error);
-
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({
-                error: 'Failed to fetch dividend data',
-                details: error.message
-            })
+            body: JSON.stringify({ error: 'Failed to fetch dividend data', details: error.message })
         };
     }
 };

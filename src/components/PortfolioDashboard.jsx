@@ -40,6 +40,7 @@ export default function PortfolioDashboard({
                                                sellActs = [],
                                                byHolding = {},
                                                forecastByHolding = {},
+                                               onOpenFullDetail,
                                            }) {
     const displayValue = currentValue ?? currentVal ?? 0
     const [range, setRange] = useState('MAX')
@@ -573,6 +574,10 @@ export default function PortfolioDashboard({
                     range={range}
                     perfByRange={perfByRange}
                     totalPortfolioValue={displayValue}
+                    onOpenFullDetail={(item) => {
+                        setSelectedHolding(null)
+                        onOpenFullDetail?.(item)
+                    }}
                 />
             )}
         </div>
