@@ -39,9 +39,12 @@ export default function HoldingDetailModal({
     const isSold = sharesNum <= 0
     const val = holding.value || 0
     const isNonEquity = /krypto|crypto|coin|commodity|rohstoff|cash|bargeld/i.test(String(holding.type || ''))
-    // Alle aktiven ETFs aus dem Depot ermitteln
     const myEtfs = useMemo(() => {
         return (allHoldings || []).filter(h => {
+            const shares = parseFloat(h.shares) || 0
+            const val = parseFloat(h.value) || 0
+            if (shares <= 0.00001 || val <= 0) return false
+
             const t = (h.type || '').toLowerCase()
             return t.includes('etf') || t.includes('fonds') || isEtfName(h.name || '')
         })

@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react'
-import {
-    ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid
-} from 'recharts'
 import { fetchStockDetails } from '../api'
 import { etfKeyFor, loadCatalog, loadMySubmissions } from '../utils/etfHoldingsStore'
 import { isEtfName } from '../utils/portfolioXray'
+import HoldingPriceChart from '../components/HoldingPriceChart.jsx'
 
 const RANGES = [
     { id: '1M', label: '1M', months: 1 },
@@ -25,6 +23,22 @@ const fmtPct = (n) =>
 
 const fmtDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+
+const SECTOR_TRANSLATIONS = {
+    'Technology': 'Technologie',
+    'Financial Services': 'Finanzdienstleistungen',
+    'Healthcare': 'Gesundheitswesen',
+    'Consumer Cyclical': 'Zyklischer Konsum',
+    'Consumer Defensive': 'Basiskonsumgüter',
+    'Industrials': 'Industrie',
+    'Communication Services': 'Kommunikation',
+    'Energy': 'Energie',
+    'Utilities': 'Versorger',
+    'Real Estate': 'Immobilien',
+    'Basic Materials': 'Grundstoffe',
+}
+
+const translateSector = (sec) => SECTOR_TRANSLATIONS[sec] || sec
 
 const formatMarketCap = (num) => {
     if (!num) return '—'
@@ -91,10 +105,13 @@ export default function StockDetailView({
         return () => { active = false }
     }, [lookupSymbol])
 
-    // ETF-Katalogdaten nur für Einzelaktien laden
     const myEtfs = useMemo(() => {
         if (assetKind !== 'EQUITY') return []
         return (allHoldings || []).filter(h => {
+            const shares = parseFloat(h.shares) || 0
+            const val = parseFloat(h.value) || 0
+            if (shares <= 0.0001 || val <= 0) return false
+
             const t = (h.type || '').toLowerCase()
             return t.includes('etf') || t.includes('fonds') || isEtfName(h.name || '')
         })
@@ -112,7 +129,7 @@ export default function StockDetailView({
             .catch(() => {})
     }, [myEtfs])
 
-    // Indirekte ETF-Anteile berechnen (NUR FÜR AKTIEN)
+    // Indirekte ETF-Anteile berechnen
     const indirectEtfHoldings = useMemo(() => {
         if (assetKind !== 'EQUITY' || !myEtfs.length) return []
         const isinUpper = isin.trim().toUpperCase()
@@ -141,11 +158,15 @@ export default function StockDetailView({
             if (match) {
                 const weight = parseFloat(String(match.Weight || match.weight || 0).replace(',', '.')) || 0
                 const etfVal = parseFloat(etf.value || 0)
-                results.push({
-                    etfName: etf.name || etf.title || 'ETF',
-                    weight,
-                    indirectValue: (etfVal * weight) / 100,
-                })
+                const indirectValue = (etfVal * weight) / 100
+
+                if (indirectValue >= 0.01) {
+                    results.push({
+                        etfName: etf.name || etf.title || 'ETF',
+                        weight,
+                        indirectValue: indirectValue,
+                    })
+                }
             }
         })
         return results.sort((a, b) => b.indirectValue - a.indirectValue)
@@ -266,7 +287,7 @@ export default function StockDetailView({
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {f.sector && (
                         <span style={{ background: '#1e293b', color: '#94a3b8', fontSize: 11, padding: '3px 8px', borderRadius: 6 }}>
-                            {f.sector}
+                            {translateSector(f.sector)}
                         </span>
                     )}
                     <span style={{
@@ -334,79 +355,12 @@ export default function StockDetailView({
                     </div>
                 )}
             </div>
-
             {/* 3. KURS- & DEPOTWERT-CHART */}
-            <div style={cardStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-                    <div>
-                        <h3 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', margin: 0 }}>
-                            📈 {chartMode === 'price' ? 'Kursverlauf' : 'Positionswert & Einstand'}
-                        </h3>
-                        <p style={{ color: '#64748b', fontSize: 11, margin: '2px 0 0' }}>
-                            {chartMode === 'price' ? 'Historischer Kurs in EUR' : 'Entwicklung deines gehaltenen Bestands'}
-                        </p>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', background: '#0f1420', padding: 3, borderRadius: 8, border: '1px solid #1e2a3a' }}>
-                            <button onClick={() => setChartMode('price')} style={btnStyle(chartMode === 'price')}>Kurs</button>
-                            <button onClick={() => setChartMode('value')} style={btnStyle(chartMode === 'value')}>Depotwert</button>
-                        </div>
-                    </div>
-                </div>
-
-                {loading ? (
-                    <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 12 }}>
-                        Lade Kursdaten von Yahoo Finance…
-                    </div>
-                ) : chartPoints.length < 2 ? (
-                    <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 12 }}>
-                        Keine historischen Kursdaten verfügbar.
-                    </div>
-                ) : (
-                    <ResponsiveContainer width="100%" height={260}>
-                        <ComposedChart data={chartPoints} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="stockPriceFill" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.35} />
-                                    <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid stroke="#1e2a3a" vertical={false} />
-                            <XAxis dataKey="d" tickFormatter={(d) => d.slice(5)} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                            <YAxis width={56} domain={['auto', 'auto']} tickFormatter={(v) => `${Math.round(v)}€`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                            <Tooltip
-                                contentStyle={{ background: '#161b27', border: '1px solid #2a3a50', borderRadius: 8, fontSize: 12 }}
-                                labelStyle={{ color: '#94a3b8' }}
-                                labelFormatter={fmtDate}
-                                formatter={(val, name) => [fmtEur(val), name === 'price' ? 'Kurs' : name === 'value' ? 'Depotwert' : name === 'buyIn' ? 'Dein Buy-In' : 'Einstand']}
-                            />
-                            {chartMode === 'price' ? (
-                                <>
-                                    <Area type="monotone" dataKey="price" stroke="#38bdf8" strokeWidth={2} fill="url(#stockPriceFill)" dot={false} isAnimationActive={false} />
-                                    {avgBuyPrice && (
-                                        <Line type="monotone" dataKey="buyIn" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    <Area type="monotone" dataKey="value" stroke="#22c55e" strokeWidth={2} fill="url(#stockPriceFill)" dot={false} isAnimationActive={false} />
-                                    {cost > 0 && (
-                                        <Line type="monotone" dataKey="totalCost" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
-                                    )}
-                                </>
-                            )}
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                )}
-
-                <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-                    {RANGES.map(r => (
-                        <button key={r.id} onClick={() => setChartRange(r.id)} style={btnStyle(chartRange === r.id)}>
-                            {r.label}
-                        </button>
-                    ))}
-                </div>
+            <div>
+                <HoldingPriceChart
+                    symbol={lookupSymbol}
+                    activities={allActivities}
+                />
             </div>
 
             {/* 4. DYNAMISCHE KENNZAHLEN JE NACH ASSET-KLASSE */}
