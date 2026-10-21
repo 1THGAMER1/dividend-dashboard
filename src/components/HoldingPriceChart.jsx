@@ -93,8 +93,19 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
     const gain = last.value - last.cost
     const gainPct = last.cost > 0 ? (gain / last.cost) * 100 : null
     const headline = mode === 'price' ? priceChange : gainPct
-    const color = (headline ?? 0) >= 0 ? '#22c55e' : '#ef4444'
+    const headlineColor = (headline ?? 0) >= 0 ? '#22c55e' : '#ef4444'
     const key = mode === 'price' ? 'price' : 'value'
+    const off = useMemo(() => {
+        if (!shown.length) return 0
+        const values = shown.map(p => mode === 'price' ? p.price : p.value).filter(v => v != null)
+        const max = Math.max(...values)
+        const min = Math.min(...values)
+        const zero = mode === 'price' ? (first.price ?? 0) : (last.cost > 0 ? last.cost : (first.value ?? 0))
+
+        if (max <= zero) return 0
+        if (min >= zero) return 1
+        return (max - zero) / (max - min)
+    }, [shown, mode, first, last])
 
     return (
         <div style={card}>
@@ -118,9 +129,15 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
             <ResponsiveContainer width="100%" height={200}>
                 <ComposedChart data={shown} margin={{ top: 6, right: 4, left: 0, bottom: 0 }}>
                     <defs>
-                        <linearGradient id="holdingFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-                            <stop offset="100%" stopColor={color} stopOpacity={0} />
+                        <linearGradient id="holdingLineGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset={off} stopColor="#22c55e" />
+                            <stop offset={off} stopColor="#ef4444" />
+                        </linearGradient>
+                        <linearGradient id="holdingFillGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
+                            <stop offset={off} stopColor="#22c55e" stopOpacity={0.02} />
+                            <stop offset={off} stopColor="#ef4444" stopOpacity={0.02} />
+                            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.35} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid stroke="#1e2a3a" vertical={false} />
@@ -142,8 +159,8 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
                             return [`${eur(val)} (${diff >= 0 ? '+' : ''}${eur(diff)})${tag}`, 'Wert']
                         }}
                     />
-                    <Area type="monotone" dataKey={key} stroke={color} strokeWidth={2}
-                          fill="url(#holdingFill)" dot={markerDot} activeDot={{ r: 4 }} isAnimationActive={false} />
+                    <Area type="monotone" dataKey={key} stroke="url(#holdingLineGrad)" strokeWidth={2}
+                          fill="url(#holdingFillGrad)" dot={markerDot} activeDot={{ r: 4 }} isAnimationActive={false} />
                     {mode === 'value' && (
                         <Line type="stepAfter" dataKey="cost" stroke="#94a3b8" strokeWidth={1.5}
                               strokeDasharray="4 4" dot={false} isAnimationActive={false} />
