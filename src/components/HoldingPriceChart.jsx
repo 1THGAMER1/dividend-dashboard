@@ -81,6 +81,17 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
         const sub = data.filter(p => p.d >= cut)
         return sub.length >= 2 ? sub : data.slice(-2)
     }, [data, range])
+    const off = useMemo(() => {
+        if (!shown.length) return 0
+        const values = shown.map(p => mode === 'price' ? p.price : p.value).filter(v => v != null)
+        const max = Math.max(...values)
+        const min = Math.min(...values)
+        const zero = mode === 'price' ? (first.price ?? 0) : (last.cost > 0 ? last.cost : (first.value ?? 0))
+
+        if (max <= zero) return 0
+        if (min >= zero) return 1
+        return (max - zero) / (max - min)
+    }, [shown, mode, first, last])
 
     const card = { background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 12, padding: 14 }
 
@@ -95,17 +106,6 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
     const headline = mode === 'price' ? priceChange : gainPct
     const headlineColor = (headline ?? 0) >= 0 ? '#22c55e' : '#ef4444'
     const key = mode === 'price' ? 'price' : 'value'
-    const off = useMemo(() => {
-        if (!shown.length) return 0
-        const values = shown.map(p => mode === 'price' ? p.price : p.value).filter(v => v != null)
-        const max = Math.max(...values)
-        const min = Math.min(...values)
-        const zero = mode === 'price' ? (first.price ?? 0) : (last.cost > 0 ? last.cost : (first.value ?? 0))
-
-        if (max <= zero) return 0
-        if (min >= zero) return 1
-        return (max - zero) / (max - min)
-    }, [shown, mode, first, last])
 
     return (
         <div style={card}>
