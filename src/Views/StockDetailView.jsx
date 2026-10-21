@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { fetchStockDetails } from '../api'
 import { etfKeyFor, loadCatalog, loadMySubmissions } from '../utils/etfHoldingsStore'
-import { isEtfName } from '../utils/portfolioXray'
 import HoldingPriceChart from '../components/HoldingPriceChart.jsx'
+import { normalizeName, sameCompany, isEtfName } from '../utils/portfolioXray'
 
 const RANGES = [
     { id: '1M', label: '1M', months: 1 },
@@ -137,39 +137,31 @@ export default function StockDetailView({
     // Indirekte ETF-Anteile berechnen
     const indirectEtfHoldings = useMemo(() => {
         if (assetKind !== 'EQUITY' || !myEtfs.length) return []
-        const isinUpper = isin.trim().toUpperCase()
-        const nameLower = (stock.name || '').trim().toLowerCase()
-
-        const clean = (s) => (s || '').toLowerCase()
-            .replace(/\(adr\)|\(the\)|\(registered\)|a\/s|class [a-z]|cl [a-z]|inc\.?|corp\.?|ag|se|nv|plc/gi, '')
-            .replace(/[^a-z0-9]/g, ' ').trim()
-        const baseHoldingName = clean(nameLower)
+        const isinUpper = (isin || '').trim().toUpperCase()
+        const stockKey = normalizeName(stock.name)
+        if (!stockKey) return []
 
         const results = []
         myEtfs.forEach(etf => {
             const entry = etfCatalog[etfKeyFor(etf)]
             if (!entry || !Array.isArray(entry.rows)) return
 
-            const match = entry.rows.find(r => {
+            // Alle Zeilen desselben Unternehmens zusammenzählen (z. B. mehrere Aktiengattungen)
+            const weight = entry.rows.reduce((sum, r) => {
                 const rIsin = (r.ISIN || r.isin || '').trim().toUpperCase()
-                if (isinUpper && rIsin && isinUpper === rIsin) return true
-                const rName = (r.Name || r.name || r.Holding || '').trim().toLowerCase()
-                if (!rName) return false
-                if (nameLower && (rName === nameLower || rName.includes(nameLower))) return true
-                const baseR = clean(rName)
-                return baseHoldingName.length >= 4 && (baseR.includes(baseHoldingName) || baseHoldingName.includes(baseR))
-            })
+                const same = (isinUpper && rIsin && isinUpper === rIsin)
+                    || sameCompany(stockKey, normalizeName(r.Name || r.name || r.Holding))
+                return same ? sum + (parseFloat(String(r.Weight ?? r.weight ?? 0).replace(',', '.')) || 0) : sum
+            }, 0)
 
-            if (match) {
-                const weight = parseFloat(String(match.Weight || match.weight || 0).replace(',', '.')) || 0
+            if (weight > 0) {
                 const etfVal = parseFloat(etf.value || 0)
                 const indirectValue = (etfVal * weight) / 100
-
                 if (indirectValue >= 0.01) {
                     results.push({
                         etfName: etf.name || etf.title || 'ETF',
                         weight,
-                        indirectValue: indirectValue,
+                        indirectValue,
                     })
                 }
             }
