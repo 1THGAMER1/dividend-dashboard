@@ -41,7 +41,6 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
         if (!history.length) return []
 
         const day = (a) => String(a.datetime || '').slice(0, 10)
-        // Yahoo-Kurse sind splitbereinigt → Stückzahlen vor einem Split ebenfalls umrechnen
         const adjShares = (a) => num(a.shares ?? a.quantity) * splits.reduce(
             (f, s) => (s?.date && s.ratio > 0 && day(a) < s.date ? f * s.ratio : f), 1)
 
@@ -54,14 +53,6 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
         const firstBuy = acts[0]?.d
         let i = 0, shares = 0, cost = 0
         const out = []
-        const first = shown[0]
-        const last = shown[shown.length - 1]
-        const priceChange = first.price > 0 ? (last.price / first.price - 1) * 100 : null
-        const gain = last.value - last.cost
-        const gainPct = last.cost > 0 ? (gain / last.cost) * 100 : null
-        const headline = mode === 'price' ? priceChange : gainPct
-        const headlineColor = (headline ?? 0) >= 0 ? '#22c55e' : '#ef4444'
-        const key = mode === 'price' ? 'price' : 'value'
 
         for (const p of history) {
             let buy = false, sell = false
@@ -90,22 +81,39 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
         return sub.length >= 2 ? sub : data.slice(-2)
     }, [data, range])
 
+    // Alle Hooks stehen strikt ganz oben (keine Zugriffe auf Variablen von weiter unten!)
     const off = useMemo(() => {
-        if (!shown.length) return 0
+        if (!shown || shown.length < 2) return 0
+        const firstPt = shown[0]
+        const lastPt = shown[shown.length - 1]
         const values = shown.map(p => mode === 'price' ? p.price : p.value).filter(v => v != null)
+        if (!values.length) return 0
+
         const max = Math.max(...values)
         const min = Math.min(...values)
-        const zero = mode === 'price' ? (first.price ?? 0) : (last.cost > 0 ? last.cost : (first.value ?? 0))
+        const zero = mode === 'price'
+            ? (firstPt?.price ?? 0)
+            : (lastPt?.cost > 0 ? lastPt.cost : (firstPt?.value ?? 0))
 
         if (max <= zero) return 0
         if (min >= zero) return 1
         return (max - zero) / (max - min)
-    }, [shown, mode, first, last])
+    }, [shown, mode])
 
     const card = { background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 12, padding: 14 }
 
+    // Vorzeitige Ladezustände erst NACH den Hooks
     if (loaded === null) return <div style={{ ...card, color: '#64748b', fontSize: 12 }}>Kursverlauf wird geladen…</div>
     if (shown.length < 2) return <div style={{ ...card, color: '#64748b', fontSize: 12 }}>Für diesen Wert sind keine Kursdaten verfügbar.</div>
+
+    const first = shown[0]
+    const last = shown[shown.length - 1]
+    const priceChange = first.price > 0 ? (last.price / first.price - 1) * 100 : null
+    const gain = last.value - last.cost
+    const gainPct = last.cost > 0 ? (gain / last.cost) * 100 : null
+    const headline = mode === 'price' ? priceChange : gainPct
+    const color = (headline ?? 0) >= 0 ? '#22c55e' : '#ef4444'
+    const key = mode === 'price' ? 'price' : 'value'
 
     return (
         <div style={card}>
@@ -129,10 +137,13 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
             <ResponsiveContainer width="100%" height={200}>
                 <ComposedChart data={shown} margin={{ top: 6, right: 4, left: 0, bottom: 0 }}>
                     <defs>
+                        {/* Linienverlauf: Oben grün, unter der Referenzlinie rot */}
                         <linearGradient id="holdingLineGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset={off} stopColor="#22c55e" />
                             <stop offset={off} stopColor="#ef4444" />
                         </linearGradient>
+
+                        {/* Flächenverlauf: Grün nach oben, rot nach unten */}
                         <linearGradient id="holdingFillGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
                             <stop offset={off} stopColor="#22c55e" stopOpacity={0.02} />
