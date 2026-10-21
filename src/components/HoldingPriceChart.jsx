@@ -111,8 +111,8 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
     const priceChange = first.price > 0 ? (last.price / first.price - 1) * 100 : null
     const gain = last.value - last.cost
     const gainPct = last.cost > 0 ? (gain / last.cost) * 100 : null
-    const headline = mode === 'price' ? priceChange : gainPct
-    const color = (headline ?? 0) >= 0 ? '#22c55e' : '#ef4444'
+    const isPositive = mode === 'price' ? (priceChange ?? 0) >= 0 : (gain ?? 0) >= 0
+    const color = isPositive ? '#22c55e' : '#ef4444'
     const key = mode === 'price' ? 'price' : 'value'
 
     return (
@@ -145,10 +145,8 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
 
                         {/* Flächenverlauf: Grün nach oben, rot nach unten */}
                         <linearGradient id="holdingFillGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
-                            <stop offset={off} stopColor="#22c55e" stopOpacity={0.02} />
-                            <stop offset={off} stopColor="#ef4444" stopOpacity={0.02} />
-                            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.35} />
+                            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+                            <stop offset="100%" stopColor={color} stopOpacity={0.2} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid stroke="#1e2a3a" vertical={false} />
@@ -170,7 +168,7 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
                             return [`${eur(val)} (${diff >= 0 ? '+' : ''}${eur(diff)})${tag}`, 'Wert']
                         }}
                     />
-                    <Area type="monotone" dataKey={key} stroke="url(#holdingLineGrad)" strokeWidth={2}
+                    <Area type="monotone" dataKey={key} stroke={color} strokeWidth={2}
                           fill="url(#holdingFillGrad)" dot={markerDot} activeDot={{ r: 4 }} isAnimationActive={false} />
                     {mode === 'value' && (
                         <Line type="stepAfter" dataKey="cost" stroke="#94a3b8" strokeWidth={1.5}
