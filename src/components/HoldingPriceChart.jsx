@@ -54,6 +54,14 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
         const firstBuy = acts[0]?.d
         let i = 0, shares = 0, cost = 0
         const out = []
+        const first = shown[0]
+        const last = shown[shown.length - 1]
+        const priceChange = first.price > 0 ? (last.price / first.price - 1) * 100 : null
+        const gain = last.value - last.cost
+        const gainPct = last.cost > 0 ? (gain / last.cost) * 100 : null
+        const headline = mode === 'price' ? priceChange : gainPct
+        const headlineColor = (headline ?? 0) >= 0 ? '#22c55e' : '#ef4444'
+        const key = mode === 'price' ? 'price' : 'value'
 
         for (const p of history) {
             let buy = false, sell = false
@@ -81,6 +89,7 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
         const sub = data.filter(p => p.d >= cut)
         return sub.length >= 2 ? sub : data.slice(-2)
     }, [data, range])
+
     const off = useMemo(() => {
         if (!shown.length) return 0
         const values = shown.map(p => mode === 'price' ? p.price : p.value).filter(v => v != null)
@@ -97,15 +106,6 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
 
     if (loaded === null) return <div style={{ ...card, color: '#64748b', fontSize: 12 }}>Kursverlauf wird geladen…</div>
     if (shown.length < 2) return <div style={{ ...card, color: '#64748b', fontSize: 12 }}>Für diesen Wert sind keine Kursdaten verfügbar.</div>
-
-    const first = shown[0]
-    const last = shown[shown.length - 1]
-    const priceChange = first.price > 0 ? (last.price / first.price - 1) * 100 : null
-    const gain = last.value - last.cost
-    const gainPct = last.cost > 0 ? (gain / last.cost) * 100 : null
-    const headline = mode === 'price' ? priceChange : gainPct
-    const headlineColor = (headline ?? 0) >= 0 ? '#22c55e' : '#ef4444'
-    const key = mode === 'price' ? 'price' : 'value'
 
     return (
         <div style={card}>
