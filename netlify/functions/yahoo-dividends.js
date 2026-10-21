@@ -1,3 +1,48 @@
+// Globaler Cache für das Yahoo-Sitzungsticket (überlebt mehrere Aufrufe)
+let cachedCookie = null;
+let cachedCrumb = null;
+let crumbExpiry = 0;
+
+async function getYahooAuth() {
+    if (cachedCookie && cachedCrumb && Date.now() < crumbExpiry) {
+        return { cookie: cachedCookie, crumb: cachedCrumb };
+    }
+
+    try {
+        // 1. Session-Cookie von Yahoo anfordern
+        const cookieRes = await fetch('https://fc.yahoo.com', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+            }
+        });
+        const setCookie = cookieRes.headers.get('set-cookie');
+        if (!setCookie) return null;
+
+        const cookie = setCookie.split(';')[0];
+
+        // 2. Passenden Crumb-Schlüssel abholen
+        const crumbRes = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Cookie': cookie
+            }
+        });
+
+        if (!crumbRes.ok) return null;
+        const crumb = await crumbRes.text();
+        if (!crumb || crumb.includes('<html') || crumb.length > 60) return null;
+
+        cachedCookie = cookie;
+        cachedCrumb = crumb.trim();
+        crumbExpiry = Date.now() + 3600 * 1000; // 1 Stunde zwischenspeichern
+
+        return { cookie: cachedCookie, crumb: cachedCrumb };
+    } catch (err) {
+        console.warn('Yahoo Auth fehlgeschlagen:', err.message);
+        return null;
+    }
+}
+
 export const handler = async function(event, context) {
     const headers = {
         'Access-Control-Allow-Origin': '*',
@@ -150,44 +195,74 @@ export const handler = async function(event, context) {
             .map((t, i) => ({ d: new Date(t * 1000).toISOString().slice(0, 10), close: closes[i] }))
             .filter(p => p.close != null && Number.isFinite(p.close));
 
-        // Optionale Fundamental-Kennzahlen über quoteSummary
-        // Optionale Fundamental-Kennzahlen über quoteSummary
-        let fundamentals = {};
+        // ── FUNDAMENTALDATEN MIT AUTH-CRUMB ABFRAGEN ─────────────────────────
+        let fundamentals = {
+            peRatio: meta.trailingPE ?? null,
+            forwardPE: meta.forwardPE ?? null,
+            marketCap: meta.marketCap ?? null,
+            dividendYield: null,
+            payoutRatio: null,
+            beta: null,
+            fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh ?? null,
+            fiftyTwoWeekLow: meta.fiftyTwoWeekLow ?? null,
+            previousClose: meta.chartPreviousClose ?? null,
+            sector: null,
+            industry: null,
+            summary: null,
+        };
+
         const wantDetails = event.queryStringParameters?.details === '1';
         if (wantDetails) {
-            try {
-                const summaryUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,assetProfile`;
-                const sumRes = await fetch(summaryUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-                });
-                if (sumRes.ok) {
-                    const sumData = await sumRes.json();
-                    const qRes = sumData?.quoteSummary?.result?.[0] || {};
-                    const sd = qRes.summaryDetail || {};
-                    const ks = qRes.defaultKeyStatistics || {};
-                    const ap = qRes.assetProfile || {};
+            const auth = await getYahooAuth();
+            if (auth) {
+                try {
+                    const summaryUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=summaryDetail,defaultKeyStatistics,assetProfile&crumb=${encodeURIComponent(auth.crumb)}`;
+                    const sumRes = await fetch(summaryUrl, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                            'Cookie': auth.cookie,
+                            'Accept': 'application/json'
+                        }
+                    });
 
-                    fundamentals = {
-                        peRatio: sd.trailingPE?.raw ?? null,
-                        forwardPE: sd.forwardPE?.raw ?? null,
-                        marketCap: sd.marketCap?.raw ?? null,
-                        dividendYield: sd.dividendYield?.raw ?? null,
-                        payoutRatio: sd.payoutRatio?.raw ?? null,
-                        beta: sd.beta?.raw ?? ks.beta?.raw ?? null,
-                        fiftyTwoWeekHigh: sd.fiftyTwoWeekHigh?.raw ?? meta.fiftyTwoWeekHigh ?? null,
-                        fiftyTwoWeekLow: sd.fiftyTwoWeekLow?.raw ?? meta.fiftyTwoWeekLow ?? null,
-                        previousClose: sd.previousClose?.raw ?? meta.chartPreviousClose ?? null,
-                        sector: ap.sector || null,
-                        industry: ap.industry || null,
-                        summary: ap.longBusinessSummary || null,
-                    };
+                    if (sumRes.ok) {
+                        const sumData = await sumRes.json();
+                        const qRes = sumData?.quoteSummary?.result?.[0] || {};
+                        const sd = qRes.summaryDetail || {};
+                        const ks = qRes.defaultKeyStatistics || {};
+                        const ap = qRes.assetProfile || {};
+
+                        fundamentals = {
+                            peRatio: sd.trailingPE?.raw ?? fundamentals.peRatio,
+                            forwardPE: sd.forwardPE?.raw ?? fundamentals.forwardPE,
+                            marketCap: sd.marketCap?.raw ?? fundamentals.marketCap,
+                            dividendYield: sd.dividendYield?.raw ?? null,
+                            payoutRatio: sd.payoutRatio?.raw ?? null,
+                            beta: sd.beta?.raw ?? ks.beta?.raw ?? null,
+                            fiftyTwoWeekHigh: sd.fiftyTwoWeekHigh?.raw ?? fundamentals.fiftyTwoWeekHigh,
+                            fiftyTwoWeekLow: sd.fiftyTwoWeekLow?.raw ?? fundamentals.fiftyTwoWeekLow,
+                            previousClose: sd.previousClose?.raw ?? fundamentals.previousClose,
+                            sector: ap.sector || null,
+                            industry: ap.industry || null,
+                            summary: ap.longBusinessSummary || null,
+                        };
+                    }
+                } catch (err) {
+                    console.warn('QuoteSummary Abruf fehlgeschlagen:', err.message);
                 }
-            } catch (err) {
-                console.warn('Fundamentals konnten nicht geladen werden:', err.message);
+            }
+
+            // Fallback: Dividendenrendite aus den letzten 12 Monaten berechnen, falls noch null
+            if (fundamentals.dividendYield == null && marketPrice) {
+                const oneYearAgo = (Date.now() / 1000) - (365 * 86400);
+                const last12mDivs = dividends.filter(d => d.timestamp >= oneYearAgo).reduce((s, d) => s + d.amount, 0);
+                if (last12mDivs > 0) {
+                    fundamentals.dividendYield = last12mDivs / marketPrice;
+                }
             }
         }
 
-        // Jahresdividenden
+        // Jahresdividenden berechnen
         const yearlyTotals = {};
         dividends.forEach(div => {
             const year = new Date(div.timestamp * 1000).getFullYear();
