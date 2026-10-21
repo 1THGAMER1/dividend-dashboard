@@ -151,6 +151,7 @@ export const handler = async function(event, context) {
             .filter(p => p.close != null && Number.isFinite(p.close));
 
         // Optionale Fundamental-Kennzahlen über quoteSummary
+        // Optionale Fundamental-Kennzahlen über quoteSummary
         let fundamentals = {};
         const wantDetails = event.queryStringParameters?.details === '1';
         if (wantDetails) {
