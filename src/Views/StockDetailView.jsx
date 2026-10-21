@@ -50,6 +50,7 @@ export default function StockDetailView({
     const [chartRange, setChartRange] = useState('1Y')
     const [chartMode, setChartMode] = useState('price') // 'price' | 'value'
     const [etfCatalog, setEtfCatalog] = useState(_cachedCatalog || {})
+    const [showAllActivities, setShowAllActivities] = useState(false)
 
     const isin = stock?.isin || stock?.id || ''
     const val = stock?.value || 0
@@ -59,13 +60,27 @@ export default function StockDetailView({
     const profitPct = cost > 0 ? (profit / cost) * 100 : 0
     const avgBuyPrice = sharesNum > 0 && cost > 0 ? cost / sharesNum : null
 
+    // ── ASSET-KLASSIFIZIERUNG ─────────────────────────────────────────────────
+    const assetKind = useMemo(() => {
+        const t = (stock?.type || '').toLowerCase()
+        const n = (stock?.name || '').toLowerCase()
+        if (t.includes('crypto') || t.includes('krypto') || isin.includes('BTC') || isin.includes('ETH')) {
+            return 'CRYPTO'
+        }
+        if (t.includes('etf') || t.includes('fonds') || isEtfName(n)) {
+            return 'ETF'
+        }
+        return 'EQUITY' // Einzelaktie
+    }, [stock, isin])
+
     // Symbol für Yahoo ermitteln
     const lookupSymbol = useMemo(() => {
-        if (/krypto|crypto/i.test(stock?.type || '')) {
-            return `${String(isin).toUpperCase()}-EUR`
+        if (assetKind === 'CRYPTO') {
+            const clean = isin.replace('-EUR', '').toUpperCase()
+            return `${clean}-EUR`
         }
         return isin
-    }, [isin, stock?.type])
+    }, [isin, assetKind])
 
     useEffect(() => {
         let active = true
@@ -76,13 +91,14 @@ export default function StockDetailView({
         return () => { active = false }
     }, [lookupSymbol])
 
-    // ETF-Katalogdaten laden (für die Durchdringungsanalyse)
+    // ETF-Katalogdaten nur für Einzelaktien laden
     const myEtfs = useMemo(() => {
+        if (assetKind !== 'EQUITY') return []
         return (allHoldings || []).filter(h => {
             const t = (h.type || '').toLowerCase()
             return t.includes('etf') || t.includes('fonds') || isEtfName(h.name || '')
         })
-    }, [allHoldings])
+    }, [allHoldings, assetKind])
 
     useEffect(() => {
         if (_cachedCatalog || !myEtfs.length) return
@@ -96,9 +112,9 @@ export default function StockDetailView({
             .catch(() => {})
     }, [myEtfs])
 
-    // Indirekte ETF-Anteile berechnen
+    // Indirekte ETF-Anteile berechnen (NUR FÜR AKTIEN)
     const indirectEtfHoldings = useMemo(() => {
-        if (!stock || !myEtfs.length) return []
+        if (assetKind !== 'EQUITY' || !myEtfs.length) return []
         const isinUpper = isin.trim().toUpperCase()
         const nameLower = (stock.name || '').trim().toLowerCase()
 
@@ -133,7 +149,7 @@ export default function StockDetailView({
             }
         })
         return results.sort((a, b) => b.indirectValue - a.indirectValue)
-    }, [stock, isin, myEtfs, etfCatalog])
+    }, [stock, isin, myEtfs, etfCatalog, assetKind])
 
     const totalIndirectValue = useMemo(() => {
         return indirectEtfHoldings.reduce((sum, item) => sum + item.indirectValue, 0)
@@ -142,7 +158,7 @@ export default function StockDetailView({
     const totalExposure = val + totalIndirectValue
     const totalExposurePct = totalPortfolioValue > 0 ? ((totalExposure / totalPortfolioValue) * 100).toFixed(1).replace('.', ',') : null
 
-    // Aktivitäten (Käufe, Verkäufe, Dividenden)
+    // Aktivitäten
     const isMyAct = (a) => {
         const aIsin = a.asset?.isin || a.asset?.symbol || a.holdingId || a.isin
         return aIsin === isin || aIsin === stock.id
@@ -169,7 +185,7 @@ export default function StockDetailView({
         (a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0)
     )
 
-    // Kurshistorie & Chartpunkte vorbereiten
+    // Chart-Punkte
     const chartPoints = useMemo(() => {
         const raw = data?.history || []
         if (!raw.length) return []
@@ -193,7 +209,6 @@ export default function StockDetailView({
         }))
     }, [data, chartRange, sharesNum, avgBuyPrice, cost])
 
-    // Kennzahlen & Live-Preise
     const currentPrice = data?.regularMarketPrice ?? (sharesNum > 0 ? val / sharesNum : null)
     const prevClose = data?.previousClose ?? null
     const dayChange = (currentPrice != null && prevClose != null && prevClose > 0) ? currentPrice - prevClose : null
@@ -227,7 +242,7 @@ export default function StockDetailView({
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, width: '100%', boxSizing: 'border-box' }}>
-            {/* 1. TOP HEADER MIT ZURÜCK-BUTTON */}
+            {/* 1. TOP HEADER MIT ZURÜCK-BUTTON & ASSET-BADGE */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                 <button
                     onClick={onBack}
@@ -254,13 +269,21 @@ export default function StockDetailView({
                             {f.sector}
                         </span>
                     )}
-                    <span style={{ background: '#1e293b', color: '#38bdf8', fontSize: 11, padding: '3px 8px', borderRadius: 6, fontWeight: 500 }}>
-                        {stock?.type || 'Asset'}
+                    <span style={{
+                        background: assetKind === 'CRYPTO' ? 'rgba(245, 158, 11, 0.15)' : assetKind === 'ETF' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+                        color: assetKind === 'CRYPTO' ? '#fbbf24' : assetKind === 'ETF' ? '#38bdf8' : '#22c55e',
+                        border: `1px solid ${assetKind === 'CRYPTO' ? '#fbbf2440' : assetKind === 'ETF' ? '#38bdf840' : '#22c55e40'}`,
+                        fontSize: 11,
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        fontWeight: 600
+                    }}>
+                        {assetKind === 'CRYPTO' ? '🪙 Krypto' : assetKind === 'ETF' ? '📁 ETF' : '📈 Aktie'}
                     </span>
                 </div>
             </div>
 
-            {/* 2. HERO-KARTE: LOGO, NAME, LIVE-KURS & TAGESPERFORMANCE */}
+            {/* 2. HERO-KARTE: LOGO, NAME, KURS & 52W-RANGE */}
             <div style={cardStyle}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -279,7 +302,7 @@ export default function StockDetailView({
                                 {stock?.name || isin}
                             </h1>
                             <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, display: 'flex', gap: 10 }}>
-                                <span>ISIN: <strong style={{ color: '#94a3b8' }}>{isin}</strong></span>
+                                <span>{assetKind === 'CRYPTO' ? 'Symbol:' : 'ISIN:'} <strong style={{ color: '#94a3b8' }}>{isin}</strong></span>
                                 {data?.symbol && <span>Ticker: <strong style={{ color: '#94a3b8' }}>{data.symbol}</strong></span>}
                             </div>
                         </div>
@@ -297,7 +320,7 @@ export default function StockDetailView({
                     </div>
                 </div>
 
-                {/* 52-WOCHEN-SPANNE */}
+                {/* 52-Wochen-Spanne */}
                 {high52 != null && low52 != null && high52Pct != null && (
                     <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #1e2a3a' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 6 }}>
@@ -312,15 +335,15 @@ export default function StockDetailView({
                 )}
             </div>
 
-            {/* 3. INTERAKTIVER KURS- & WERT-CHART */}
+            {/* 3. KURS- & DEPOTWERT-CHART */}
             <div style={cardStyle}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
                     <div>
                         <h3 style={{ fontSize: 16, fontWeight: 600, color: '#f1f5f9', margin: 0 }}>
-                            📈 {chartMode === 'price' ? 'Aktienkurs' : 'Positionswert & Einstand'}
+                            📈 {chartMode === 'price' ? 'Kursverlauf' : 'Positionswert & Einstand'}
                         </h3>
                         <p style={{ color: '#64748b', fontSize: 11, margin: '2px 0 0' }}>
-                            {chartMode === 'price' ? 'Historische Schlusskurse in EUR' : 'Entwicklung deines gehaltenen Bestands'}
+                            {chartMode === 'price' ? 'Historischer Kurs in EUR' : 'Entwicklung deines gehaltenen Bestands'}
                         </p>
                     </div>
 
@@ -356,7 +379,7 @@ export default function StockDetailView({
                                 contentStyle={{ background: '#161b27', border: '1px solid #2a3a50', borderRadius: 8, fontSize: 12 }}
                                 labelStyle={{ color: '#94a3b8' }}
                                 labelFormatter={fmtDate}
-                                formatter={(val, name) => [fmtEur(val), name === 'price' ? 'Aktienkurs' : name === 'value' ? 'Depotwert' : name === 'buyIn' ? 'Dein Buy-In' : 'Einstand']}
+                                formatter={(val, name) => [fmtEur(val), name === 'price' ? 'Kurs' : name === 'value' ? 'Depotwert' : name === 'buyIn' ? 'Dein Buy-In' : 'Einstand']}
                             />
                             {chartMode === 'price' ? (
                                 <>
@@ -386,46 +409,98 @@ export default function StockDetailView({
                 </div>
             </div>
 
-            {/* 4. ZWEI SPALTEN: LINKS KENNZAHLEN, RECHTS PORTFOLIO-POSITION */}
+            {/* 4. DYNAMISCHE KENNZAHLEN JE NACH ASSET-KLASSE */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 16 }}>
-                {/* FINANZ- & BEWERTUNGSKENNZAHLEN */}
+
+                {/* A) BEWERTUNG: Passend für Aktie vs. ETF vs. Krypto */}
                 <div style={cardStyle}>
                     <h3 style={{ fontSize: 15, fontWeight: 600, color: '#f1f5f9', margin: '0 0 14px' }}>
-                        📊 Fundamentaldaten & Bewertung
+                        {assetKind === 'CRYPTO' ? '🪙 Markt-Kennzahlen' : assetKind === 'ETF' ? '📁 Fonds-Kennzahlen' : '📊 Fundamentaldaten & Bewertung'}
                     </h3>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                        <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
-                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>KGV (P/E)</div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{fmtNum(f.peRatio)}</div>
-                        </div>
-                        <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
-                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Forward KGV</div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{fmtNum(f.forwardPE)}</div>
-                        </div>
-                        <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
-                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Marktkapitalisierung</div>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{formatMarketCap(f.marketCap)}</div>
-                        </div>
-                        <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
-                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Dividendenrendite</div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: '#22c55e', marginTop: 2 }}>
-                                {f.dividendYield != null ? fmtPct(f.dividendYield * 100) : '—'}
-                            </div>
-                        </div>
-                        <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
-                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Payout Ratio</div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>
-                                {f.payoutRatio != null ? fmtPct(f.payoutRatio * 100) : '—'}
-                            </div>
-                        </div>
-                        <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
-                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Beta (Volatilität)</div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{fmtNum(f.beta)}</div>
-                        </div>
+                        {assetKind === 'EQUITY' && (
+                            <>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>KGV (P/E)</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{fmtNum(f.peRatio)}</div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Forward KGV</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{fmtNum(f.forwardPE)}</div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Marktkapitalisierung</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{formatMarketCap(f.marketCap)}</div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Dividendenrendite</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#22c55e', marginTop: 2 }}>
+                                        {f.dividendYield != null ? fmtPct(f.dividendYield * 100) : '—'}
+                                    </div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Payout Ratio</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>
+                                        {f.payoutRatio != null ? fmtPct(f.payoutRatio * 100) : '—'}
+                                    </div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Beta (Volatilität)</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{fmtNum(f.beta)}</div>
+                                </div>
+                            </>
+                        )}
+
+                        {assetKind === 'ETF' && (
+                            <>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Fondsvolumen</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{formatMarketCap(f.marketCap)}</div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Ausschüttungsrendite</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#22c55e', marginTop: 2 }}>
+                                        {f.dividendYield != null ? fmtPct(f.dividendYield * 100) : '—'}
+                                    </div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Beta</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{fmtNum(f.beta)}</div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Vortagesschluss</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{prevClose ? fmtEur(prevClose) : '—'}</div>
+                                </div>
+                            </>
+                        )}
+
+                        {assetKind === 'CRYPTO' && (
+                            <>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Marktkapitalisierung</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{formatMarketCap(f.marketCap)}</div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>24h-Änderung</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: (dayChangePct ?? 0) >= 0 ? '#22c55e' : '#ef4444', marginTop: 2 }}>
+                                        {fmtPct(dayChangePct)}
+                                    </div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>52W Hoch</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{high52 ? fmtEur(high52) : '—'}</div>
+                                </div>
+                                <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
+                                    <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>52W Tief</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{low52 ? fmtEur(low52) : '—'}</div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
-                {/* DEINE POSITION IM PORTFOLIO */}
+                {/* B) DEINE POSITION IM PORTFOLIO */}
                 <div style={cardStyle}>
                     <h3 style={{ fontSize: 15, fontWeight: 600, color: '#f1f5f9', margin: '0 0 14px' }}>
                         💼 Deine Position
@@ -443,7 +518,9 @@ export default function StockDetailView({
                         </div>
                         <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
                             <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Anteile</div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', marginTop: 2 }}>{fmtNum(sharesNum, 4)}</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', marginTop: 2 }}>
+                                {fmtNum(sharesNum, assetKind === 'CRYPTO' ? 6 : 4)}
+                            </div>
                         </div>
                         <div style={{ background: '#0f1420', padding: '10px 12px', borderRadius: 10, border: '1px solid #1e2a3a' }}>
                             <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Ø Kaufkurs (Buy-In)</div>
@@ -463,8 +540,8 @@ export default function StockDetailView({
                 </div>
             </div>
 
-            {/* 5. ETF DURCHDRINGUNG (LOOK-THROUGH) */}
-            {indirectEtfHoldings.length > 0 && (
+            {/* 5. ETF-DURCHDRINGUNG (WIRD NUR BEI EINZELAKTIEN GERENDERT!) */}
+            {assetKind === 'EQUITY' && indirectEtfHoldings.length > 0 && (
                 <div style={cardStyle}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
                         <div>
@@ -500,53 +577,90 @@ export default function StockDetailView({
                 </div>
             )}
 
-            {/* 6. AKTIVITÄTEN-HISTORIE DIESES ASSETS */}
+            {/* 6. TRANSAKTIONSHISTORIE (KOMPAKT MIT "MEHR ANZEIGEN") */}
             <div style={cardStyle}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: '#f1f5f9', margin: '0 0 14px' }}>
-                    📜 Transaktionen & Ausschüttungen ({allActivities.length})
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, color: '#f1f5f9', margin: 0 }}>
+                        📜 Transaktionen & Aktivitäten ({allActivities.length})
+                    </h3>
+                    {allActivities.length > 5 && (
+                        <span style={{ fontSize: 11, color: '#64748b' }}>
+                            {showAllActivities ? `Alle ${allActivities.length}` : `Zuletzt 5 von ${allActivities.length}`}
+                        </span>
+                    )}
+                </div>
+
                 {allActivities.length === 0 ? (
                     <div style={{ color: '#64748b', fontSize: 12 }}>Keine Aktivitäten für dieses Wertpapier verzeichnet.</div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {allActivities.map((act, i) => {
-                            const isBuy = act._type === 'BUY'
-                            const isSell = act._type === 'SELL'
-                            const isDiv = act._type === 'DIVIDEND'
-                            const badgeColor = isBuy ? '#22c55e' : isSell ? '#ef4444' : '#fbbf24'
-                            const badgeBg = isBuy ? 'rgba(34, 197, 94, 0.15)' : isSell ? 'rgba(239, 68, 68, 0.15)' : 'rgba(251, 191, 36, 0.15)'
-                            const badgeLabel = isBuy ? 'KAUF' : isSell ? 'VERKAUF' : 'DIVIDENDE'
-                            const shares = parseFloat(act.shares || act.quantity || 0)
-                            const amount = parseFloat(act.amount || act.total || act.amountNet || 0)
+                    <>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {(showAllActivities ? allActivities : allActivities.slice(0, 5)).map((act, i) => {
+                                const isBuy = act._type === 'BUY'
+                                const isSell = act._type === 'SELL'
+                                const isDiv = act._type === 'DIVIDEND'
+                                const badgeColor = isBuy ? '#22c55e' : isSell ? '#ef4444' : '#fbbf24'
+                                const badgeBg = isBuy ? 'rgba(34, 197, 94, 0.15)' : isSell ? 'rgba(239, 68, 68, 0.15)' : 'rgba(251, 191, 36, 0.15)'
+                                const badgeLabel = isBuy ? 'KAUF' : isSell ? 'VERKAUF' : 'DIVIDENDE'
+                                const shares = parseFloat(act.shares || act.quantity || 0)
+                                const amount = parseFloat(act.amount || act.total || act.amountNet || 0)
 
-                            return (
-                                <div key={i} style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        <span style={{ background: badgeBg, color: badgeColor, border: `1px solid ${badgeColor}40`, borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700, minWidth: 65, textAlign: 'center' }}>
-                                            {badgeLabel}
-                                        </span>
-                                        <div>
-                                            <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>
-                                                {isDiv ? 'Ausschüttung erhalten' : `${fmtNum(shares, 4)} Anteile`}
+                                return (
+                                    <div key={i} style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                            <span style={{ background: badgeBg, color: badgeColor, border: `1px solid ${badgeColor}40`, borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700, minWidth: 65, textAlign: 'center' }}>
+                                                {badgeLabel}
+                                            </span>
+                                            <div>
+                                                <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>
+                                                    {isDiv ? 'Ausschüttung erhalten' : `${fmtNum(shares, assetKind === 'CRYPTO' ? 6 : 4)} Anteile`}
+                                                </div>
+                                                <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{fmtDate(act.datetime)}</div>
                                             </div>
-                                            <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{fmtDate(act.datetime)}</div>
+                                        </div>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: isDiv ? '#22c55e' : '#f1f5f9' }}>
+                                            {isDiv ? `+${fmtEur(amount)}` : fmtEur(amount)}
                                         </div>
                                     </div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: isDiv ? '#22c55e' : '#f1f5f9' }}>
-                                        {isDiv ? `+${fmtEur(amount)}` : fmtEur(amount)}
-                                    </div>
-                                </div>
-                            )
-                        })}
-                    </div>
+                                )
+                            })}
+                        </div>
+
+                        {allActivities.length > 10 && (
+                            <button
+                                onClick={() => setShowAllActivities(v => !v)}
+                                style={{
+                                    marginTop: 10,
+                                    background: '#0f1420',
+                                    border: '1px solid #1e2a3a',
+                                    borderRadius: 8,
+                                    padding: '8px 14px',
+                                    color: '#38bdf8',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    width: '100%',
+                                    textAlign: 'center',
+                                    transition: 'background 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = '#1a2233' }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = '#0f1420' }}
+                            >
+                                {showAllActivities
+                                    ? '▲ Weniger anzeigen'
+                                    : `▼ Alle ${allActivities.length} Aktivitäten anzeigen (${allActivities.length - 5} weitere)`
+                                }
+                            </button>
+                        )}
+                    </>
                 )}
             </div>
 
-            {/* 7. UNTERNEHMENSBESCHREIBUNG */}
+            {/* 7. UNTERNEHMENSBESCHREIBUNG (NUR WENN VORHANDEN) */}
             {f.summary && (
                 <div style={cardStyle}>
                     <h3 style={{ fontSize: 15, fontWeight: 600, color: '#f1f5f9', margin: '0 0 10px' }}>
-                        ℹ️ Über das Unternehmen
+                        ℹ️ Über {assetKind === 'ETF' ? 'den Fonds' : 'das Unternehmen'}
                     </h3>
                     <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>
                         {f.summary}
