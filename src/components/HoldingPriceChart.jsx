@@ -8,6 +8,8 @@ const eur = (n) => new Intl.NumberFormat('de-DE', { style: 'currency', currency:
 const pct = (n) => (n == null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(2).replace('.', ',')} %`)
 const fmtDate = (iso) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
 const num = (v) => parseFloat(String(v ?? 0).replace(',', '.')) || 0
+const GREEN = '#22c55e'
+const RED = '#ef4444'
 
 const btn = (active) => ({
     background: active ? '#009991' : 'transparent',
@@ -81,23 +83,25 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
         return sub.length >= 2 ? sub : data.slice(-2)
     }, [data, range])
 
-    // Alle Hooks stehen strikt ganz oben (keine Zugriffe auf Variablen von weiter unten!)
-    const off = useMemo(() => {
-        if (!shown || shown.length < 2) return 0
-        const firstPt = shown[0]
-        const lastPt = shown[shown.length - 1]
-        const values = shown.map(p => mode === 'price' ? p.price : p.value).filter(v => v != null)
-        if (!values.length) return 0
-
-        const max = Math.max(...values)
-        const min = Math.min(...values)
-        const zero = mode === 'price'
-            ? (firstPt?.price ?? 0)
-            : (lastPt?.cost > 0 ? lastPt.cost : (firstPt?.value ?? 0))
-
-        if (max <= zero) return 0
-        if (min >= zero) return 1
-        return (max - zero) / (max - min)
+    // Farbverlauf entlang der Zeitachse: grün, solange die Rendite >= 0 ist, sonst rot
+    const stops = useMemo(() => {
+        if (!shown || shown.length < 2) return null
+        const diff = shown.map(p => (mode === 'price'
+            ? p.price - shown[0].price
+            : (p.cost > 0 ? p.value - p.cost : 0)))
+        const col = (d) => (d >= 0 ? GREEN : RED)
+        const n = shown.length
+        const out = [{ o: 0, c: col(diff[0]) }]
+        for (let i = 1; i < n; i++) {
+            if (col(diff[i]) !== col(diff[i - 1])) {
+                // Schnittpunkt zwischen den beiden Tagen (0 bis 1)
+                const t = diff[i - 1] / (diff[i - 1] - diff[i])
+                const o = Math.min(1, Math.max(0, (i - 1 + t) / (n - 1)))
+                out.push({ o, c: col(diff[i - 1]) }, { o, c: col(diff[i]) })
+            }
+        }
+        out.push({ o: 1, c: col(diff[n - 1]) })
+        return out
     }, [shown, mode])
 
     const card = { background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 12, padding: 14 }
@@ -114,6 +118,7 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
     const isPositive = mode === 'price' ? (priceChange ?? 0) >= 0 : (gain ?? 0) >= 0
     const color = isPositive ? '#22c55e' : '#ef4444'
     const key = mode === 'price' ? 'price' : 'value'
+    const lineColor = stops && stops.length > 2 ? 'url(#holdingSignGrad)' : (stops?.[0]?.c ?? color)
 
     return (
         <div style={card}>
@@ -137,16 +142,10 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
             <ResponsiveContainer width="100%" height={200}>
                 <ComposedChart data={shown} margin={{ top: 6, right: 4, left: 0, bottom: 0 }}>
                     <defs>
-                        {/* Linienverlauf: Oben grün, unter der Referenzlinie rot */}
-                        <linearGradient id="holdingLineGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset={off} stopColor="#22c55e" />
-                            <stop offset={off} stopColor="#ef4444" />
-                        </linearGradient>
-
-                        {/* Flächenverlauf: Grün nach oben, rot nach unten */}
-                        <linearGradient id="holdingFillGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-                            <stop offset="100%" stopColor={color} stopOpacity={0.2} />
+                        <linearGradient id="holdingSignGrad" x1="0" y1="0" x2="1" y2="0">
+                            {(stops || []).map((s, i) => (
+                                <stop key={i} offset={s.o} stopColor={s.c} />
+                            ))}
                         </linearGradient>
                     </defs>
                     <CartesianGrid stroke="#1e2a3a" vertical={false} />
@@ -168,8 +167,8 @@ export default function HoldingPriceChart({ symbol, activities = [] }) {
                             return [`${eur(val)} (${diff >= 0 ? '+' : ''}${eur(diff)})${tag}`, 'Wert']
                         }}
                     />
-                    <Area type="monotone" dataKey={key} stroke={color} strokeWidth={2}
-                          fill="url(#holdingFillGrad)" dot={markerDot} activeDot={{ r: 4 }} isAnimationActive={false} />
+                    <Area type="monotone" dataKey={key} stroke={lineColor} strokeWidth={2}
+                          fill={lineColor} fillOpacity={0.18} dot={markerDot} activeDot={{ r: 4 }} isAnimationActive={false} />
                     {mode === 'value' && (
                         <Line type="stepAfter" dataKey="cost" stroke="#94a3b8" strokeWidth={1.5}
                               strokeDasharray="4 4" dot={false} isAnimationActive={false} />
