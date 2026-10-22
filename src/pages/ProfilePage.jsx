@@ -147,15 +147,13 @@ export default function ProfilePage({ appUser, onNavigate }) {
         }
     }
 
-    // Umschalten des wöchentlichen Newsletters
     const handleToggleNewsletter = async (active) => {
         setNewsletterActive(active)
         try {
             const { error } = await supabase
                 .from('profiles')
                 .update({
-                    newsletter_active: active,
-                    updated_at: new Date().toISOString()
+                    newsletter_active: active
                 })
                 .eq('id', appUser.id)
 
