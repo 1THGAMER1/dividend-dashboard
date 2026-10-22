@@ -36,12 +36,25 @@ async function getParqetAccessToken(clientId, refreshToken) {
 async function fetchParqetWeeklyData(accessToken) {
     // 1. Portfolio-ID holen
     const portRes = await fetch(`${PARQET_API_BASE}/portfolios`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Accept': 'application/json',
+            'User-Agent': 'DividendDashboard/1.0',
+        },
     })
-    if (!portRes.ok) throw new Error('Portfolios konnten nicht geladen werden')
+    if (!portRes.ok) {
+        const errText = await portRes.text().catch(() => '')
+        throw new Error(`Portfolios konnten nicht geladen werden (HTTP ${portRes.status}): ${errText.slice(0, 200)}`)
+    }
     const portData = await portRes.json()
-    const portfolio = portData.portfolios?.[0]
-    if (!portfolio?.id) throw new Error('Kein Portfolio gefunden')
+    // Parqet liefert manchmal ein Array direkt oder unter .portfolios / .data
+    const portfolio = Array.isArray(portData)
+        ? portData[0]
+        : (portData.portfolios?.[0] || portData.data?.[0] || portData.items?.[0])
+
+    if (!portfolio?.id) {
+        throw new Error(`Kein Portfolio gefunden. Antwort war: ${JSON.stringify(portData).slice(0, 150)}`)
+    }
 
     // 2. 7-Tage-Performance (1w) abholen
     const perfRes = await fetch(`${PARQET_API_BASE}/performance`, {
