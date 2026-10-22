@@ -38,6 +38,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Scheduled Functions (Cron Jobs)
 # ─────────────────────────────────────────────────────────────────────────────
-[functions."weekly-newsletter"]
+# [functions."weekly-newsletter"]
 # Läuft jeden Montag um 07:00 UTC (ca. 08:00 / 09:00 Uhr deutsche Zeit)
-schedule = "0 22 * * 4"
+# schedule = "0 7 * * 7"
