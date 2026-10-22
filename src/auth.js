@@ -13,21 +13,34 @@ function clearParqetTokens() {
 }
 
 // Speichert den aktuellen Parqet-Refresh-Token für den wöchentlichen Newsletter in Supabase
-async function syncRefreshTokenToSupabase(refreshToken) {
+export async function syncRefreshTokenToSupabase(tokenOverride) {
+  const refreshToken = tokenOverride || localStorage.getItem('parqet_refresh_token')
   if (!refreshToken) return
+
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    await supabase
+
+    const { error } = await supabase
         .from('profiles')
         .update({
-          parqet_refresh_token: refreshToken,
-          updated_at: new Date().toISOString()
+          parqet_refresh_token: refreshToken
         })
         .eq('id', user.id)
+
+    if (!error) {
+      console.log('[Newsletter] Parqet Refresh-Token erfolgreich mit Supabase synchronisiert!')
+    }
   } catch (err) {
     console.warn('[auth] Refresh-Token Sync fehlgeschlagen:', err.message)
   }
+}
+
+// Automatisch im Hintergrund ausführen, sobald die App im Browser startet
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    syncRefreshTokenToSupabase().catch(() => {})
+  }, 1000)
 }
 
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
