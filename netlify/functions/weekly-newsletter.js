@@ -291,17 +291,18 @@ export const handler = async function(event, context) {
                 // Frischen Access-Token von Parqet holen
                 const tokenData = await getParqetAccessToken(profile.parqet_client_id, profile.parqet_refresh_token)
 
-                // Falls Parqet einen rotierenden Refresh-Token zurückgibt, in Supabase aktualisieren
+                // WICHTIG: Neuen rotierenden Refresh-Token zwingend mit AWAIT in Supabase sichern!
                 if (tokenData.refresh_token && tokenData.refresh_token !== profile.parqet_refresh_token) {
-                    fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${profile.id}`, {
+                    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${profile.id}`, {
                         method: 'PATCH',
                         headers: {
                             apikey: SUPABASE_SERVICE_ROLE_KEY,
                             Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
                             'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal',
                         },
                         body: JSON.stringify({ parqet_refresh_token: tokenData.refresh_token }),
-                    }).catch(() => {})
+                    }).catch(e => console.warn('Token-Update in DB fehlgeschlagen:', e.message))
                 }
 
                 // Wochendaten von Parqet holen
