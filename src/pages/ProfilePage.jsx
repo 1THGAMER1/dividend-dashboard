@@ -28,20 +28,21 @@ export default function ProfilePage({ appUser, onNavigate }) {
     // Community Ranking States
     const [participateRanking, setParticipateRanking] = useState(false)
     const [displayName, setDisplayName] = useState('')
+    const [newsletterActive, setNewsletterActive] = useState(true)
 
     // Holen uns die Portfolio-Daten inklusive enrichedHoldings direkt aus dem Hook
     const { currentValue, holdings, enrichedHoldings, monthly, kpi, byHolding, xirr12m } = useDividendData()
 
     const totalReturn12m = clampReturn(xirr12m)
 
-    // Lade bestehende Profildaten (Parqet ID, Share-Token sowie Ranking-Opt-in)
+    // Lade bestehende Profildaten (Parqet ID, Share-Token, Newsletter sowie Ranking-Opt-in)
     useEffect(() => {
         async function loadProfile() {
             if (!appUser) return
             try {
                 const { data, error } = await supabase
                     .from('profiles')
-                    .select('parqet_client_id, share_token')
+                    .select('parqet_client_id, share_token, newsletter_active')
                     .eq('id', appUser.id)
                     .maybeSingle()
 
@@ -49,6 +50,9 @@ export default function ProfilePage({ appUser, onNavigate }) {
                 const decrypted = await getClientId().catch(() => null)
                 if (decrypted) setParqetId(decrypted)
                 if (data?.share_token) setexistingToken(data.share_token)
+                if (data?.newsletter_active !== undefined && data?.newsletter_active !== null) {
+                    setNewsletterActive(data.newsletter_active)
+                }
 
                 // Prüfen ob bereits im Community Ranking eingetragen
                 const { data: rankData } = await supabase
@@ -140,6 +144,28 @@ export default function ProfilePage({ appUser, onNavigate }) {
             setMessage({ type: 'error', text: 'Fehler beim Speichern: ' + err.message })
         } finally {
             setLoading(false)
+        }
+    }
+
+    // Umschalten des wöchentlichen Newsletters
+    const handleToggleNewsletter = async (active) => {
+        setNewsletterActive(active)
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    newsletter_active: active,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', appUser.id)
+
+            if (error) throw error
+            setMessage({
+                type: 'success',
+                text: active ? 'Wöchentlicher Portfolio-Report aktiviert!' : 'Portfolio-Report deaktiviert.'
+            })
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Fehler beim Speichern: ' + err.message })
         }
     }
 
@@ -346,6 +372,32 @@ export default function ProfilePage({ appUser, onNavigate }) {
                             Zum Community-Ranking →
                         </button>
                     )}
+                </div>
+            </div>
+
+            {/* WÖCHENTLICHER NEWSLETTER KARTE */}
+            <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24, marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                    <div>
+                        <h3 style={{ margin: '0 0 6px 0', fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            📧 Wöchentlicher Portfolio-Report
+                        </h3>
+                        <p style={{ margin: 0, fontSize: 13, color: '#94a3b8', lineHeight: 1.5, maxWidth: 500 }}>
+                            Erhalte jeden Montagmorgen deine 7-Tage-Performance, Wochen-Gewinner und die neuesten Dividenden direkt in dein Postfach.
+                        </p>
+                    </div>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', background: '#0f1420', padding: '8px 14px', borderRadius: 10, border: '1px solid #2a3a50' }}>
+                        <input
+                            type="checkbox"
+                            checked={newsletterActive}
+                            onChange={(e) => handleToggleNewsletter(e.target.checked)}
+                            style={{ width: 16, height: 16, accentColor: '#009991', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: newsletterActive ? '#22c55e' : '#64748b' }}>
+                            {newsletterActive ? 'Aktiviert' : 'Deaktiviert'}
+                        </span>
+                    </label>
                 </div>
             </div>
 

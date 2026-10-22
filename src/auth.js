@@ -12,6 +12,24 @@ function clearParqetTokens() {
   localStorage.removeItem('parqet_refresh_token')
 }
 
+// Speichert den aktuellen Parqet-Refresh-Token für den wöchentlichen Newsletter in Supabase
+async function syncRefreshTokenToSupabase(refreshToken) {
+  if (!refreshToken) return
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase
+        .from('profiles')
+        .update({
+          parqet_refresh_token: refreshToken,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+  } catch (err) {
+    console.warn('[auth] Refresh-Token Sync fehlgeschlagen:', err.message)
+  }
+}
+
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
 const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
 const TOKEN_URL    = '/oauth/token'
@@ -179,9 +197,11 @@ export async function handleCallback() {
 
   sessionStorage.setItem('parqet_access_token', tokens.access_token)
   sessionStorage.setItem('parqet_expires_at',   String(expiresAt))
-
   if (tokens.refresh_token) {
     localStorage.setItem('parqet_refresh_token', tokens.refresh_token)
+  }
+  if (tokens.refresh_token) {
+    syncRefreshTokenToSupabase(tokens.refresh_token).catch(() => {})
   }
 
   deleteCookie('pkce_verifier')
@@ -230,6 +250,9 @@ export async function getAccessToken() {
     sessionStorage.setItem('parqet_access_token', tokens.access_token)
     sessionStorage.setItem('parqet_expires_at',   String(Date.now() + (tokens.expires_in || 3600) * 1000))
     if (tokens.refresh_token) localStorage.setItem('parqet_refresh_token', tokens.refresh_token)
+    if (tokens.refresh_token) {
+      syncRefreshTokenToSupabase(tokens.refresh_token).catch(() => {})
+    }
     return tokens.access_token
   })()
 
