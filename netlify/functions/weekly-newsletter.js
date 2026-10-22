@@ -83,30 +83,51 @@ async function fetchParqetWeeklyData(accessToken) {
     return { portfolio, perfData, activities: actsData.activities || [] }
 }
 
-// ── 2. HTML-MAIL TEMPLATE ────────────────────────────────────────────────────
+// ── 2. HTML-MAIL TEMPLATE MIT GEWINNERN & VERLIERERN ─────────────────────────
 function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, topHoldings, recentDividends }) {
     const isPos = weekGain >= 0
     const gainColor = isPos ? '#22c55e' : '#ef4444'
 
-    const holdingsRows = (topHoldings || []).slice(0, 5).map(h => {
-        const val = Number(h.position?.currentValue || 0)
-        const gain = Number(h.performance?.unrealizedGains?.inInterval?.gainNet || 0)
-        const ret = Number(h.performance?.unrealizedGains?.inInterval?.returnNet || 0)
-        const hPos = gain >= 0
-        return `
-      <tr>
-        <td style="padding: 10px 0; border-bottom: 1px solid #1e2a3a; color: #f1f5f9; font-size: 13px; font-weight: 600;">
-          ${h.asset?.name || h.asset?.isin || 'Asset'}
-        </td>
-        <td style="padding: 10px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: #cbd5e1; font-size: 13px;">
-          ${fmtEur(val)}
-        </td>
-        <td style="padding: 10px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: ${hPos ? '#22c55e' : '#ef4444'}; font-size: 13px; font-weight: 600;">
-          ${hPos ? '+' : ''}${fmtEur(gain)} (${fmtPct(ret)})
-        </td>
-      </tr>
-    `
-    }).join('')
+    // Positionen nach Wochen-Performance sortieren
+    const validHoldings = (topHoldings || [])
+        .filter(h => (h.position?.currentValue || 0) > 0)
+        .map(h => {
+            const val = Number(h.position?.currentValue || 0)
+            const gain = Number(h.performance?.unrealizedGains?.inInterval?.gainGross || 0)
+            const ret = Number(h.performance?.unrealizedGains?.inInterval?.returnGross || 0)
+            return {
+                name: h.asset?.name || h.asset?.isin || 'Asset',
+                val,
+                gain,
+                ret,
+            }
+        })
+
+    // 1. ECHTE GEWINNER: Nur Werte mit Gewinn (> 0 €), absteigend sortiert (beste zuerst)
+    const winners = validHoldings
+        .filter(h => h.gain > 0)
+        .sort((a, b) => b.ret - a.ret)
+        .slice(0, 3)
+
+    // 2. ECHTE VERLIERER: Werte mit Verlust (< 0 €), aufsteigend sortiert (größtes Minus zuerst)
+    const losers = validHoldings
+        .filter(h => h.gain < 0)
+        .sort((a, b) => a.ret - b.ret)
+        .slice(0, 3)
+
+    const renderTableRows = (list, isWinner) => list.map(h => `
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; color: #f1f5f9; font-size: 13px; font-weight: 600;">
+        ${h.name}
+      </td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: #94a3b8; font-size: 12px;">
+        ${fmtEur(h.val)}
+      </td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: ${isWinner ? '#22c55e' : '#ef4444'}; font-size: 13px; font-weight: 700;">
+        ${h.gain >= 0 ? '+' : ''}${fmtEur(h.gain)} (${fmtPct(h.ret)})
+      </td>
+    </tr>
+  `).join('')
 
     const divRows = (recentDividends || []).slice(0, 4).map(a => `
     <li style="margin-bottom: 6px; color: #94a3b8; font-size: 12px;">
@@ -141,12 +162,26 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
         </div>
       </div>
 
-      <!-- TOP HOLDINGS -->
-      ${holdingsRows ? `
+      <!-- TOP GEWINNER -->
+      ${winners.length > 0 ? `
       <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
-        <h3 style="margin: 0 0 12px; font-size: 14px; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.4px;">Top Bestände der Woche</h3>
+        <h3 style="margin: 0 0 10px; font-size: 13px; color: #22c55e; text-transform: uppercase; letter-spacing: 0.4px;">
+          🏆 Top-Gewinner der Woche
+        </h3>
         <table style="width: 100%; border-collapse: collapse;">
-          ${holdingsRows}
+          ${renderTableRows(winners, true)}
+        </table>
+      </div>
+      ` : ''}
+
+      <!-- FLOP / VERLIERER -->
+      ${losers.length > 0 ? `
+      <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
+        <h3 style="margin: 0 0 10px; font-size: 13px; color: #ef4444; text-transform: uppercase; letter-spacing: 0.4px;">
+          📉 Schwächste Werte der Woche
+        </h3>
+        <table style="width: 100%; border-collapse: collapse;">
+          ${renderTableRows(losers, false)}
         </table>
       </div>
       ` : ''}
@@ -154,7 +189,9 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
       <!-- LETZTE DIVIDENDEN -->
       ${divRows ? `
       <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
-        <h3 style="margin: 0 0 12px; font-size: 14px; color: #22c55e; text-transform: uppercase; letter-spacing: 0.4px;">💰 Kürzliche Dividendeneingänge</h3>
+        <h3 style="margin: 0 0 12px; font-size: 13px; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.4px;">
+          💰 Kürzliche Dividendeneingänge (30 Tage)
+        </h3>
         <ul style="margin: 0; padding-left: 18px;">
           ${divRows}
         </ul>
