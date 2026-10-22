@@ -7,7 +7,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 
 const PARQET_TOKEN_URL = 'https://connect.parqet.com/oauth2/token'
-const PARQET_API_BASE = 'https://connect.parqet.com/v1'
+const PARQET_API_BASE = 'https://connect.parqet.com'
 
 const fmtEur = (n) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
