@@ -36,7 +36,6 @@ export async function syncRefreshTokenToSupabase(tokenOverride) {
   }
 }
 
-// Automatisch im Hintergrund ausführen, sobald die App im Browser startet
 if (typeof window !== 'undefined') {
   setTimeout(() => {
     syncRefreshTokenToSupabase().catch(() => {})
