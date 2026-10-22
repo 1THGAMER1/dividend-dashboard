@@ -183,7 +183,7 @@ async function sendEmailViaResend({ to, subject, html }) {
         },
         body: JSON.stringify({
             from: 'Portfolio Dashboard <onboarding@resend.dev>',
-            to: [to],
+            to: ['carminebe22@gmail.com'],
             subject,
             html,
         }),
