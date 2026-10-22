@@ -131,7 +131,7 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
 
     const divRows = (recentDividends || []).slice(0, 4).map(a => `
     <li style="margin-bottom: 6px; color: #94a3b8; font-size: 12px;">
-      <strong style="color: #f1f5f9;">${a.asset?.name || 'Wertpapier'}:</strong> 
+      <strong style="color: #f1f5f9;">${a.resolvedName || a.asset?.name || 'Ausschüttung'}:</strong> 
       <span style="color: #22c55e; font-weight: 600;">+${fmtEur(a.amountNet || a.amount || 0)}</span>
       <span style="color: #64748b;">(${new Date(a.datetime).toLocaleDateString('de-DE')})</span>
     </li>
@@ -186,8 +186,8 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
       </div>
       ` : ''}
 
-      <!-- LETZTE DIVIDENDEN -->
-      ${divRows ? `
+      <!-- LETZTE DIVIDENDEN (NUR WENN ECHTE DIVIDENDEN VORLIEGEN) -->
+      ${recentDividends && recentDividends.length > 0 ? `
       <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
         <h3 style="margin: 0 0 12px; font-size: 13px; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.4px;">
           💰 Kürzliche Dividendeneingänge (30 Tage)
@@ -198,10 +198,19 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
       </div>
       ` : ''}
 
-      <!-- FOOTER -->
-      <div style="padding: 20px; text-align: center; background: #0c1019; color: #64748b; font-size: 11px;">
-        <p style="margin: 0 0 8px;">Du erhältst diese E-Mail, weil du den wöchentlichen Portfolio-Newsletter aktiviert hast.</p>
-        <p style="margin: 0;">Einstellungen anpassen oder abmelden in deinem Profil.</p>
+      <!-- FOOTER MIT ABMELDE- / EINSTELLUNGS-LINK -->
+      <div style="padding: 24px 20px; text-align: center; background: #0c1019; color: #64748b; font-size: 11px; line-height: 1.6;">
+        <p style="margin: 0 0 10px;">
+          Du erhältst diese E-Mail, weil du den wöchentlichen Portfolio-Report auf <strong>DivTrack</strong> aktiviert hast.
+        </p>
+        <p style="margin: 0;">
+          Möchtest du den Report anpassen oder abbestellen? 
+          <br>
+          <a href="https://dividenddashboard.netlify.app/#profile" 
+             style="color: #38bdf8; text-decoration: underline; font-weight: 600; display: inline-block; margin-top: 6px;">
+            Hier Einstellungen anpassen oder abmelden
+          </a>
+        </p>
       </div>
 
     </div>
@@ -304,6 +313,22 @@ export const handler = async function(event, context) {
 
                 const holdings = perfData?.holdings || perfData?.performance?.holdings || []
 
+                // 1. Namens-Wörterbuch aus den Holdings aufbauen
+                const nameMap = {}
+                holdings.forEach(h => {
+                    const name = h.asset?.name || h.asset?.isin
+                    if (h.id && name) nameMap[h.id] = name
+                    if (h.asset?.isin && name) nameMap[h.asset.isin] = name
+                })
+
+                // 2. Streng auf ECHTE Dividenden filtern (Sparpläne und Käufe restlos ausschließen!)
+                const realDividends = (activities || [])
+                    .filter(a => a.type === 'dividend')
+                    .map(a => ({
+                        ...a,
+                        resolvedName: a.asset?.name || nameMap[a.holdingId] || nameMap[a.asset?.isin] || 'Dividende'
+                    }))
+
                 // HTML Mail erzeugen
                 const html = buildNewsletterHtml({
                     userEmail: email,
@@ -311,7 +336,7 @@ export const handler = async function(event, context) {
                     weekGain,
                     weekReturn,
                     topHoldings: holdings,
-                    recentDividends: activities,
+                    recentDividends: realDividends,
                 })
 
                 // Mail über Resend versenden
