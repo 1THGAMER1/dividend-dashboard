@@ -64,7 +64,7 @@ async function fetchParqetWeeklyData(accessToken) {
     let activitiesList = []
     try {
         const actsRes = await fetch(
-            `${PARQET_API_BASE}/portfolios/${portfolio.id}/activities?type=dividend&limit=50`,
+            `${PARQET_API_BASE}/portfolios/${portfolio.id}/activities?type=dividend&limit=50&order=desc`,
             { headers: { Authorization: `Bearer ${accessToken}` } }
         )
         if (actsRes.ok) {
@@ -73,7 +73,6 @@ async function fetchParqetWeeklyData(accessToken) {
         }
     } catch {}
 
-    // Neueste zuerst sortieren
     activitiesList.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0))
 
     return { portfolio, perfData, activities: activitiesList }
@@ -81,7 +80,6 @@ async function fetchParqetWeeklyData(accessToken) {
 
 // ── 2. SAUBERER FALLBACK: DATEN AUS DER TABELLE "parqet_cache" ─────────────────
 async function fetchParqetCacheData(userId) {
-    // Exakt deine Spalten: user_id, payload, cached_at
     const res = await fetch(
         `${SUPABASE_URL}/rest/v1/parqet_cache?user_id=eq.${userId}&select=payload,cached_at&order=cached_at.desc&limit=1`,
         {
@@ -119,20 +117,14 @@ async function fetchParqetCacheData(userId) {
         }
     }
 
-    // Top Holdings aus dem Cache
+    // Bestände aus dem Cache (für Fallback-Übersicht)
     const validHoldings = holdings
         .filter(h => (h.value || 0) > 0)
         .map(h => ({
             asset: { name: h.name || h.isin },
             position: { currentValue: h.value },
-            performance: {
-                unrealizedGains: {
-                    inInterval: {
-                        gainNet: (h.value || 0) - (h.costValue || 0),
-                        returnNet: h.costValue > 0 ? (((h.value - h.costValue) / h.costValue) * 100) : 0,
-                    }
-                }
-            }
+            costValue: h.costValue || 0,
+            gainTotal: (h.value || 0) - (h.costValue || 0),
         }))
 
     // Echte Dividenden aus rawActs
@@ -163,35 +155,90 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
     const isPos = weekGain >= 0
     const gainColor = isPos ? '#22c55e' : '#ef4444'
 
-    const validHoldings = (topHoldings || [])
-        .filter(h => (h.position?.currentValue || 0) > 0)
-        .map(h => {
-            const val = Number(h.position?.currentValue || 0)
-            const gain = Number(h.performance?.unrealizedGains?.inInterval?.gainGross || h.performance?.unrealizedGains?.inInterval?.gainNet || 0)
-            const ret = Number(h.performance?.unrealizedGains?.inInterval?.returnGross || h.performance?.unrealizedGains?.inInterval?.returnNet || 0)
-            return { name: h.asset?.name || h.asset?.isin || 'Asset', val, gain, ret }
-        })
+    let holdingsSectionHtml = ''
 
-    const winners = validHoldings.filter(h => h.gain > 0).sort((a, b) => b.ret - a.ret).slice(0, 3)
-    const losers = validHoldings.filter(h => h.gain < 0).sort((a, b) => a.ret - b.ret).slice(0, 3)
+    if (!isFallback) {
+        // ── LIVE PARQET: ECHTE 7-TAGE GEWINNER & VERLIERER ──
+        const validHoldings = (topHoldings || [])
+            .filter(h => (h.position?.currentValue || 0) > 0)
+            .map(h => {
+                const val = Number(h.position?.currentValue || 0)
+                const gain = Number(h.performance?.unrealizedGains?.inInterval?.gainGross || h.performance?.unrealizedGains?.inInterval?.gainNet || 0)
+                const ret = Number(h.performance?.unrealizedGains?.inInterval?.returnGross || h.performance?.unrealizedGains?.inInterval?.returnNet || 0)
+                return { name: h.asset?.name || h.asset?.isin || 'Asset', val, gain, ret }
+            })
 
-    const renderTableRows = (list, isWinner) => list.map(h => `
-    <tr>
-      <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; color: #f1f5f9; font-size: 13px; font-weight: 600;">${h.name}</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: #94a3b8; font-size: 12px;">${fmtEur(h.val)}</td>
-      <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: ${isWinner ? '#22c55e' : '#ef4444'}; font-size: 13px; font-weight: 700;">
-        ${h.gain >= 0 ? '+' : ''}${fmtEur(h.gain)} ${h.ret ? `(${fmtPct(h.ret)})` : ''}
-      </td>
-    </tr>
-  `).join('')
+        const winners = validHoldings.filter(h => h.gain > 0).sort((a, b) => b.ret - a.ret).slice(0, 3)
+        const losers = validHoldings.filter(h => h.gain < 0).sort((a, b) => a.ret - b.ret).slice(0, 3)
+
+        const renderTableRows = (list, isWinner) => list.map(h => `
+            <tr>
+              <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; color: #f1f5f9; font-size: 13px; font-weight: 600;">${h.name}</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: #94a3b8; font-size: 12px;">${fmtEur(h.val)}</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: ${isWinner ? '#22c55e' : '#ef4444'}; font-size: 13px; font-weight: 700;">
+                ${h.gain >= 0 ? '+' : ''}${fmtEur(h.gain)} ${h.ret ? `(${fmtPct(h.ret)})` : ''}
+              </td>
+            </tr>
+        `).join('')
+
+        holdingsSectionHtml = `
+          ${winners.length > 0 ? `
+          <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
+            <h3 style="margin: 0 0 10px; font-size: 13px; color: #22c55e; text-transform: uppercase; letter-spacing: 0.4px;">🏆 Top-Gewinner der Woche</h3>
+            <table style="width: 100%; border-collapse: collapse;">${renderTableRows(winners, true)}</table>
+          </div>` : ''}
+
+          ${losers.length > 0 ? `
+          <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
+            <h3 style="margin: 0 0 10px; font-size: 13px; color: #ef4444; text-transform: uppercase; letter-spacing: 0.4px;">📉 Schwächste Werte der Woche</h3>
+            <table style="width: 100%; border-collapse: collapse;">${renderTableRows(losers, false)}</table>
+          </div>` : ''}
+        `
+    } else {
+        // ── FALLBACK CACHE: GRÖSSTE POSITIONEN TRANSPARENT DARSTELLEN ──
+        const topByValue = [...(topHoldings || [])].sort((a, b) => (b.position?.currentValue || 0) - (a.position?.currentValue || 0)).slice(0, 5)
+        const rows = topByValue.map(h => {
+            const hVal = Number(h.position?.currentValue || 0)
+            const share = currentValue > 0 ? ((hVal / currentValue) * 100).toFixed(1).replace('.', ',') : '0'
+            const g = h.gainTotal || 0
+            const isGPos = g >= 0
+            return `
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; color: #f1f5f9; font-size: 13px; font-weight: 600;">${h.asset?.name || 'Asset'}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: #38bdf8; font-size: 12px;">${share} %</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: #94a3b8; font-size: 12px;">${fmtEur(hVal)}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #1e2a3a; text-align: right; color: ${isGPos ? '#22c55e' : '#ef4444'}; font-size: 12px; font-weight: 600;">
+                  ${isGPos ? '+' : ''}${fmtEur(g)}
+                </td>
+              </tr>
+            `
+        }).join('')
+
+        holdingsSectionHtml = `
+          <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
+            <h3 style="margin: 0 0 10px; font-size: 13px; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.4px;">💼 Größte Positionen im Portfolio</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="color: #64748b; font-size: 10px; text-transform: uppercase;">
+                  <th style="text-align: left; padding-bottom: 6px;">Asset</th>
+                  <th style="text-align: right; padding-bottom: 6px;">Anteil</th>
+                  <th style="text-align: right; padding-bottom: 6px;">Wert</th>
+                  <th style="text-align: right; padding-bottom: 6px;">G/V Gesamt</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `
+    }
 
     const divRows = (recentDividends || []).slice(0, 4).map(a => `
-    <li style="margin-bottom: 6px; color: #94a3b8; font-size: 12px;">
-      <strong style="color: #f1f5f9;">${a.resolvedName || a.asset?.name || 'Ausschüttung'}:</strong> 
-      <span style="color: #22c55e; font-weight: 600;">+${fmtEur(a.amountNet || a.amount || 0)}</span>
-      <span style="color: #64748b;">(${new Date(a.datetime).toLocaleDateString('de-DE')})</span>
-    </li>
-  `).join('')
+      <li style="margin-bottom: 6px; color: #94a3b8; font-size: 12px;">
+        <strong style="color: #f1f5f9;">${a.resolvedName || a.asset?.name || 'Ausschüttung'}:</strong> 
+        <span style="color: #22c55e; font-weight: 600;">+${fmtEur(a.amountNet || a.amount || 0)}</span>
+        <span style="color: #64748b;">(${new Date(a.datetime).toLocaleDateString('de-DE')})</span>
+      </li>
+    `).join('')
 
     return `
   <!DOCTYPE html>
@@ -204,7 +251,7 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
       <div style="padding: 24px; background: #10141f; border-bottom: 1px solid #1e2a3a; text-align: center;">
         <h1 style="margin: 0; font-size: 20px; color: #f1f5f9; font-weight: 700;">📊 Dein Wochen-Rückblick</h1>
         <p style="margin: 6px 0 0; color: #64748b; font-size: 12px;">
-          ${isFallback ? `Datenstand: ${cacheDate} (aus App-Cache)` : 'Live Parqet-Performance der letzten 7 Tage'}
+          ${isFallback ? `Datenstand: ${cacheDate} (App-Cache)` : 'Live Parqet-Performance der letzten 7 Tage'}
         </p>
       </div>
 
@@ -217,18 +264,10 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
         </div>
       </div>
 
-      ${winners.length > 0 ? `
-      <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
-        <h3 style="margin: 0 0 10px; font-size: 13px; color: #22c55e; text-transform: uppercase; letter-spacing: 0.4px;">🏆 Top-Gewinner</h3>
-        <table style="width: 100%; border-collapse: collapse;">${renderTableRows(winners, true)}</table>
-      </div>` : ''}
+      <!-- BESTÄNDE (LIVE ODER FALLBACK) -->
+      ${holdingsSectionHtml}
 
-      ${losers.length > 0 ? `
-      <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
-        <h3 style="margin: 0 0 10px; font-size: 13px; color: #ef4444; text-transform: uppercase; letter-spacing: 0.4px;">📉 Schwächste Werte</h3>
-        <table style="width: 100%; border-collapse: collapse;">${renderTableRows(losers, false)}</table>
-      </div>` : ''}
-
+      <!-- LETZTE DIVIDENDEN -->
       ${recentDividends && recentDividends.length > 0 ? `
       <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
         <h3 style="margin: 0 0 12px; font-size: 13px; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.4px;">💰 Kürzliche Dividendeneingänge</h3>
@@ -256,7 +295,7 @@ async function sendEmailViaResend({ to, subject, html }) {
         },
         body: JSON.stringify({
             from: 'Portfolio Dashboard <onboarding@resend.dev>',
-            to: ['carminebe22@gmail.com'],
+            to: ['carminebe22@gmail.com'], // Dein Zielpostfach
             subject,
             html,
         }),
@@ -310,9 +349,9 @@ export const handler = async function(event, context) {
                 try {
                     const tokenData = await getParqetAccessToken(profile.parqet_client_id, profile.parqet_refresh_token)
 
-                    // Neuen Token sofort in Supabase sichern
+                    // Neuen rotierenden Token ZWINGEND mit AWAIT in Supabase sichern
                     if (tokenData.refresh_token && tokenData.refresh_token !== profile.parqet_refresh_token) {
-                        await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${profile.id}`, {
+                        const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${profile.id}`, {
                             method: 'PATCH',
                             headers: {
                                 apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -321,7 +360,10 @@ export const handler = async function(event, context) {
                                 'Prefer': 'return=minimal',
                             },
                             body: JSON.stringify({ parqet_refresh_token: tokenData.refresh_token }),
-                        }).catch(() => {})
+                        })
+                        if (!patchRes.ok) {
+                            console.warn(`[Token-Save Failed for ${email}]: HTTP ${patchRes.status}`)
+                        }
                     }
 
                     const { perfData, activities } = await fetchParqetWeeklyData(tokenData.access_token)
