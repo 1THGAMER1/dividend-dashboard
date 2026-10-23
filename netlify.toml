@@ -40,4 +40,4 @@
 # ─────────────────────────────────────────────────────────────────────────────
 [functions."weekly-newsletter"]
  #Läuft jeden Sonntag um 07:00 UTC (ca. 08:00 / 09:00 Uhr deutsche Zeit)
-schedule = "0 8 * * 7"
+schedule = "0 8 * * 0"
