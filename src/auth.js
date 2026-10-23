@@ -36,6 +36,12 @@ export async function syncRefreshTokenToSupabase(tokenOverride) {
   }
 }
 
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    syncRefreshTokenToSupabase().catch(() => {})
+  }, 1000)
+}
+
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
 const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
 const TOKEN_URL    = '/oauth/token'
@@ -52,10 +58,10 @@ async function _fetchClientId() {
   if (!user) return null
 
   const { data, error } = await supabase
-    .from('profiles')
-    .select('parqet_client_id')
-    .eq('id', user.id)
-    .single()
+      .from('profiles')
+      .select('parqet_client_id')
+      .eq('id', user.id)
+      .single()
 
   if (error) throw error
 
@@ -68,9 +74,9 @@ async function _fetchClientId() {
       try {
         const encrypted = await encrypt(raw, password)
         await supabase
-          .from('profiles')
-          .update({ parqet_client_id: encrypted })
-          .eq('id', user.id)
+            .from('profiles')
+            .update({ parqet_client_id: encrypted })
+            .eq('id', user.id)
       } catch (e) {
         console.warn('Auto-migration of client ID failed:', e)
       }
@@ -286,5 +292,5 @@ export async function logout() {
 
 export function isLoggedIn() {
   return !!sessionStorage.getItem('parqet_access_token') ||
-         !!localStorage.getItem('parqet_refresh_token')
+      !!localStorage.getItem('parqet_refresh_token')
 }
