@@ -36,12 +36,6 @@ export async function syncRefreshTokenToSupabase(tokenOverride) {
   }
 }
 
-if (typeof window !== 'undefined') {
-  setTimeout(() => {
-    syncRefreshTokenToSupabase().catch(() => {})
-  }, 1000)
-}
-
 const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173/callback'
 const AUTH_URL     = 'https://connect.parqet.com/oauth2/authorize'
 const TOKEN_URL    = '/oauth/token'

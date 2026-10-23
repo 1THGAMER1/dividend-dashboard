@@ -1,4 +1,4 @@
-// Netlify Scheduled Function: Wöchentlicher Portfolio-Newsletter mit automatischem Snapshot-Fallback
+// Netlify Scheduled Function: Wöchentlicher Portfolio-Newsletter
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -12,7 +12,7 @@ const fmtEur = (n) =>
 const fmtPct = (n) =>
     `${(Number(n) || 0) >= 0 ? '+' : ''}${(Number(n) || 0).toFixed(2).replace('.', ',')} %`
 
-// ── 1. PARQET LIVE ABRUF ──────────────────────────────────────────────────────
+// ── 1. PARQET LIVE-ABRUF ──────────────────────────────────────────────────────
 async function getParqetAccessToken(clientId, refreshToken) {
     const res = await fetch(PARQET_TOKEN_URL, {
         method: 'POST',
@@ -25,21 +25,22 @@ async function getParqetAccessToken(clientId, refreshToken) {
     })
     if (!res.ok) {
         const txt = await res.text().catch(() => '')
-        throw new Error(`Token-Refresh fehlgeschlagen (${res.status}): ${txt}`)
+        throw new Error(`Token-Refresh abgelehnt (${res.status}): ${txt}`)
     }
     return res.json()
 }
 
 async function fetchParqetWeeklyData(accessToken) {
+    // 1. Portfolio laden
     const portRes = await fetch(`${PARQET_API_BASE}/portfolios`, {
         headers: { Authorization: `Bearer ${accessToken}` },
     })
-    if (!portRes.ok) throw new Error('Portfolios konnten nicht geladen werden')
+    if (!portRes.ok) throw new Error(`Portfolios HTTP ${portRes.status}`)
     const portData = await portRes.json()
     const portfolio = Array.isArray(portData) ? portData[0] : (portData.portfolios?.[0] || portData.data?.[0])
-    if (!portfolio?.id) throw new Error('Kein Portfolio gefunden')
+    if (!portfolio?.id) throw new Error('Kein Portfolio in Parqet gefunden')
 
-    // 7-Tage Performance
+    // 2. 7-Tage Performance
     const perfRes = await fetch(`${PARQET_API_BASE}/performance`, {
         method: 'POST',
         headers: {
@@ -51,24 +52,33 @@ async function fetchParqetWeeklyData(accessToken) {
             interval: { type: 'relative', value: '1w' },
         }),
     })
-    if (!perfRes.ok) throw new Error('Performance konnte nicht geladen werden')
+    if (!perfRes.ok) throw new Error(`Performance HTTP ${perfRes.status}`)
     const perfData = await perfRes.json()
 
-    // Kürzliche Dividenden
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
-    const actsRes = await fetch(
-        `${PARQET_API_BASE}/portfolios/${portfolio.id}/activities?types=dividend&from=${encodeURIComponent(thirtyDaysAgo)}&limit=10`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-    )
-    const actsData = actsRes.ok ? await actsRes.json() : { activities: [] }
+    // 3. Dividenden (neueste zuerst abrufen)
+    let activitiesList = []
+    try {
+        const actsRes = await fetch(
+            `${PARQET_API_BASE}/portfolios/${portfolio.id}/activities?type=dividend&limit=50`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+        )
+        if (actsRes.ok) {
+            const json = await actsRes.json()
+            activitiesList = json.activities || json.data || (Array.isArray(json) ? json : [])
+        }
+    } catch {}
 
-    return { portfolio, perfData, activities: actsData.activities || [] }
+    // Neueste zuerst sortieren
+    activitiesList.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0))
+
+    return { portfolio, perfData, activities: activitiesList }
 }
 
-// ── 2. FALLBACK: DATEN AUS SUPABASE SNAPSHOT HOLEN ────────────────────────────
-async function fetchSupabaseSnapshotData(userId) {
-    const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/shared_portfolios?user_id=eq.${userId}&select=portfolio_data,updated_at&order=updated_at.desc&limit=1`,
+// ── 2. SAUBERER FALLBACK: DATEN AUS DER TABELLE "parqet_cache" ─────────────────
+async function fetchParqetCacheData(userId) {
+    // Versuche parqet_cache über user_id oder id abzufragen
+    let res = await fetch(
+        `${SUPABASE_URL}/rest/v1/parqet_cache?user_id=eq.${userId}&select=payload,cached_at,updated_at&order=cached_at.desc&limit=1`,
         {
             headers: {
                 apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -76,16 +86,44 @@ async function fetchSupabaseSnapshotData(userId) {
             },
         }
     )
-    if (!res.ok) return null
-    const data = await res.json()
-    const row = data?.[0]
-    if (!row?.portfolio_data) return null
 
-    const pData = row.portfolio_data
-    const currentValue = pData.currentValue || 0
-    const holdings = pData.holdings || []
+    if (!res.ok) {
+        res = await fetch(
+            `${SUPABASE_URL}/rest/v1/parqet_cache?id=eq.${userId}&select=payload,cached_at,updated_at&limit=1`,
+            {
+                headers: {
+                    apikey: SUPABASE_SERVICE_ROLE_KEY,
+                    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                },
+            }
+        )
+    }
 
-    // Aus Snapshot simulieren
+    if (!res.ok) throw new Error(`Cache-Tabelle nicht erreichbar (${res.status})`)
+    const rows = await res.json()
+    const row = rows?.[0]
+    if (!row?.payload) throw new Error('Kein parqet_cache Eintrag für diesen Nutzer vorhanden')
+
+    const p = row.payload
+    const currentValue = p.currentVal || p.currentValue || 0
+    const series = Array.isArray(p.performanceSeries) ? p.performanceSeries : []
+    const rawActs = Array.isArray(p.rawActs) ? p.rawActs : []
+    const holdings = p.fc?.enrichedHoldings || p.holdings || []
+
+    // 7-Tage Veränderung aus der gespeicherten performanceSeries berechnen
+    let weekGain = 0
+    let weekReturn = 0
+    if (series.length >= 2) {
+        const last = series[series.length - 1]
+        const dCut = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+        const prev = [...series].reverse().find(pt => pt.d <= dCut) || series[0]
+        if (last && prev) {
+            weekGain = (last.v || 0) - (prev.v || 0)
+            weekReturn = prev.v > 0 ? ((weekGain / prev.v) * 100) : 0
+        }
+    }
+
+    // Top Holdings aus dem Cache
     const validHoldings = holdings
         .filter(h => (h.value || 0) > 0)
         .map(h => ({
@@ -95,25 +133,38 @@ async function fetchSupabaseSnapshotData(userId) {
                 unrealizedGains: {
                     inInterval: {
                         gainNet: (h.value || 0) - (h.costValue || 0),
-                        returnNet: (h.costValue > 0) ? (((h.value - h.costValue) / h.costValue) * 100) : 0,
+                        returnNet: h.costValue > 0 ? (((h.value - h.costValue) / h.costValue) * 100) : 0,
                     }
                 }
             }
         }))
 
+    // Echte Dividenden aus rawActs
+    const divActs = rawActs
+        .filter(a => (a.type || '').toLowerCase() === 'dividend')
+        .sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0))
+        .slice(0, 4)
+        .map(a => ({
+            ...a,
+            resolvedName: a.asset?.name || a.holdingName || p.names?.[a.holdingId] || 'Dividende'
+        }))
+
+    const cacheDateStr = row.cached_at || row.updated_at
+    const dateFormatted = cacheDateStr ? new Date(cacheDateStr).toLocaleDateString('de-DE') : 'kürzlich'
+
     return {
         isFallback: true,
-        snapshotDate: new Date(row.updated_at).toLocaleDateString('de-DE'),
+        cacheDate: dateFormatted,
         currentValue,
-        holdings: validHoldings,
-        weekGain: validHoldings.reduce((s, h) => s + (h.performance.unrealizedGains.inInterval.gainNet || 0), 0),
-        weekReturn: null,
-        activities: [],
+        weekGain,
+        weekReturn,
+        topHoldings: validHoldings,
+        recentDividends: divActs,
     }
 }
 
 // ── 3. HTML-TEMPLATE ─────────────────────────────────────────────────────────
-function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, topHoldings, recentDividends, isFallback, snapshotDate }) {
+function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, topHoldings, recentDividends, isFallback, cacheDate }) {
     const isPos = weekGain >= 0
     const gainColor = isPos ? '#22c55e' : '#ef4444'
 
@@ -158,7 +209,7 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
       <div style="padding: 24px; background: #10141f; border-bottom: 1px solid #1e2a3a; text-align: center;">
         <h1 style="margin: 0; font-size: 20px; color: #f1f5f9; font-weight: 700;">📊 Dein Wochen-Rückblick</h1>
         <p style="margin: 6px 0 0; color: #64748b; font-size: 12px;">
-          ${isFallback ? `Snapshot-Stand: ${snapshotDate} (Parqet-Verbindung erneuern)` : 'Live Parqet-Performance der letzten 7 Tage'}
+          ${isFallback ? `Datenstand: ${cacheDate} (aus App-Cache)` : 'Live Parqet-Performance der letzten 7 Tage'}
         </p>
       </div>
 
@@ -167,7 +218,7 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
         <div style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Portfoliowert</div>
         <div style="font-size: 32px; font-weight: 800; color: #f1f5f9; margin: 6px 0;">${fmtEur(currentValue)}</div>
         <div style="display: inline-block; padding: 4px 12px; border-radius: 20px; background: ${isPos ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'}; color: ${gainColor}; font-weight: 700; font-size: 13px;">
-          ${isPos ? '▲' : '▼'} ${isPos ? '+' : ''}${fmtEur(weekGain)} ${weekReturn != null ? `(${fmtPct(weekReturn)}) diese Woche` : 'Gesamtgewinn'}
+          ${isPos ? '▲' : '▼'} ${isPos ? '+' : ''}${fmtEur(weekGain)} (${fmtPct(weekReturn)}) diese Woche
         </div>
       </div>
 
@@ -185,13 +236,13 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
 
       ${recentDividends && recentDividends.length > 0 ? `
       <div style="padding: 20px 24px; border-bottom: 1px solid #1e2a3a;">
-        <h3 style="margin: 0 0 12px; font-size: 13px; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.4px;">💰 Dividendeneingänge</h3>
+        <h3 style="margin: 0 0 12px; font-size: 13px; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.4px;">💰 Kürzliche Dividendeneingänge</h3>
         <ul style="margin: 0; padding-left: 18px;">${divRows}</ul>
       </div>` : ''}
 
       <!-- FOOTER -->
       <div style="padding: 24px 20px; text-align: center; background: #0c1019; color: #64748b; font-size: 11px; line-height: 1.6;">
-        <p style="margin: 0 0 10px;">Du erhältst diese E-Mail, weil du den wöchentlichen Report auf <strong>DividendDashboard</strong> aktiviert hast.</p>
+        <p style="margin: 0 0 10px;">Du erhältst diese E-Mail, weil du den wöchentlichen Report auf <strong>DivTrack</strong> aktiviert hast.</p>
         <p style="margin: 0;"><a href="https://dividenddashboard.netlify.app/#profile" style="color: #38bdf8; text-decoration: underline; font-weight: 600;">Hier Einstellungen anpassen oder abmelden</a></p>
       </div>
 
@@ -257,13 +308,14 @@ export const handler = async function(event, context) {
             if (!email) continue
 
             let emailPayload = null
+            let parqetLiveError = null
 
             // VERSUCH 1: LIVE-ABRUF VON PARQET
             if (profile.parqet_client_id && profile.parqet_refresh_token) {
                 try {
                     const tokenData = await getParqetAccessToken(profile.parqet_client_id, profile.parqet_refresh_token)
 
-                    // Neuen Token sofort mit await sichern
+                    // Neuen Token sofort in Supabase sichern
                     if (tokenData.refresh_token && tokenData.refresh_token !== profile.parqet_refresh_token) {
                         await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${profile.id}`, {
                             method: 'PATCH',
@@ -289,7 +341,7 @@ export const handler = async function(event, context) {
                     })
 
                     const realDividends = (activities || [])
-                        .filter(a => a.type === 'dividend')
+                        .filter(a => (a.type || '').toLowerCase() === 'dividend')
                         .map(a => ({
                             ...a,
                             resolvedName: a.asset?.name || nameMap[a.holdingId] || nameMap[a.asset?.isin] || 'Dividende'
@@ -303,21 +355,26 @@ export const handler = async function(event, context) {
                         topHoldings: holdings,
                         recentDividends: realDividends,
                     }
-                } catch (parqetErr) {
-                    console.warn(`[Parqet Live fehlgeschlagen für ${email}]: ${parqetErr.message} -> Schalte auf Fallback`)
+                } catch (err) {
+                    parqetLiveError = err.message
+                    console.warn(`[Parqet Live Fehler für ${email}]:`, err.message)
                 }
+            } else {
+                parqetLiveError = 'Keine Client-ID oder kein Refresh-Token in profiles hinterlegt'
             }
 
-            // VERSUCH 2: FALLBACK AUF SUPABASE SNAPSHOT
+            // VERSUCH 2: FALLBACK AUF ECHTEN APP-CACHE (parqet_cache)
+            let cacheError = null
             if (!emailPayload) {
                 try {
-                    emailPayload = await fetchSupabaseSnapshotData(profile.id)
-                } catch (snapErr) {
-                    console.error(`[Snapshot Fallback fehlgeschlagen]: ${snapErr.message}`)
+                    emailPayload = await fetchParqetCacheData(profile.id)
+                } catch (err) {
+                    cacheError = err.message
+                    console.warn(`[Cache Fallback Fehler für ${email}]:`, err.message)
                 }
             }
 
-            // Wenn Daten da sind -> E-Mail senden!
+            // Senden oder Fehler loggen
             if (emailPayload) {
                 const html = buildNewsletterHtml({
                     userEmail: email,
@@ -334,10 +391,17 @@ export const handler = async function(event, context) {
                     userId: profile.id,
                     email,
                     status: 'sent',
-                    mode: emailPayload.isFallback ? 'fallback_snapshot' : 'live_parqet'
+                    mode: emailPayload.isFallback ? 'fallback_parqet_cache' : 'live_parqet',
+                    ...(parqetLiveError ? { parqetLiveError } : {})
                 })
             } else {
-                results.push({ userId: profile.id, email, status: 'error', reason: 'Weder Parqet noch Snapshot verfügbar' })
+                results.push({
+                    userId: profile.id,
+                    email,
+                    status: 'error',
+                    parqetLiveError,
+                    cacheError,
+                })
             }
         }
 
