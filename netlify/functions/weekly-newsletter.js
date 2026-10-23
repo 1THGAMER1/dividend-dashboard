@@ -37,8 +37,13 @@ async function fetchParqetWeeklyData(accessToken) {
     })
     if (!portRes.ok) throw new Error(`Portfolios HTTP ${portRes.status}`)
     const portData = await portRes.json()
-    const portfolio = Array.isArray(portData) ? portData[0] : (portData.portfolios?.[0] || portData.data?.[0])
-    if (!portfolio?.id) throw new Error('Kein Portfolio in Parqet gefunden')
+    const list = Array.isArray(portData)
+        ? portData
+        : (portData.portfolios || portData.data || portData.items || [])
+    const portfolio = list[0]
+    if (!portfolio?.id) {
+        throw new Error(`Kein Portfolio gefunden (Antwort: ${JSON.stringify(portData).slice(0, 100)})`)
+    }
 
     // 2. 7-Tage Performance
     const perfRes = await fetch(`${PARQET_API_BASE}/performance`, {
@@ -76,9 +81,9 @@ async function fetchParqetWeeklyData(accessToken) {
 
 // ── 2. SAUBERER FALLBACK: DATEN AUS DER TABELLE "parqet_cache" ─────────────────
 async function fetchParqetCacheData(userId) {
-    // Versuche parqet_cache über user_id oder id abzufragen
-    let res = await fetch(
-        `${SUPABASE_URL}/rest/v1/parqet_cache?user_id=eq.${userId}&select=payload,cached_at,updated_at&order=cached_at.desc&limit=1`,
+    // Exakt deine Spalten: user_id, payload, cached_at
+    const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/parqet_cache?user_id=eq.${userId}&select=payload,cached_at&order=cached_at.desc&limit=1`,
         {
             headers: {
                 apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -88,18 +93,9 @@ async function fetchParqetCacheData(userId) {
     )
 
     if (!res.ok) {
-        res = await fetch(
-            `${SUPABASE_URL}/rest/v1/parqet_cache?id=eq.${userId}&select=payload,cached_at,updated_at&limit=1`,
-            {
-                headers: {
-                    apikey: SUPABASE_SERVICE_ROLE_KEY,
-                    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                },
-            }
-        )
+        const txt = await res.text().catch(() => '')
+        throw new Error(`Cache-Tabelle Fehler (${res.status}): ${txt}`)
     }
-
-    if (!res.ok) throw new Error(`Cache-Tabelle nicht erreichbar (${res.status})`)
     const rows = await res.json()
     const row = rows?.[0]
     if (!row?.payload) throw new Error('Kein parqet_cache Eintrag für diesen Nutzer vorhanden')
@@ -110,7 +106,7 @@ async function fetchParqetCacheData(userId) {
     const rawActs = Array.isArray(p.rawActs) ? p.rawActs : []
     const holdings = p.fc?.enrichedHoldings || p.holdings || []
 
-    // 7-Tage Veränderung aus der gespeicherten performanceSeries berechnen
+    // 7-Tage Veränderung aus der im Cache gespeicherten performanceSeries
     let weekGain = 0
     let weekReturn = 0
     if (series.length >= 2) {
@@ -149,8 +145,7 @@ async function fetchParqetCacheData(userId) {
             resolvedName: a.asset?.name || a.holdingName || p.names?.[a.holdingId] || 'Dividende'
         }))
 
-    const cacheDateStr = row.cached_at || row.updated_at
-    const dateFormatted = cacheDateStr ? new Date(cacheDateStr).toLocaleDateString('de-DE') : 'kürzlich'
+    const dateFormatted = row.cached_at ? new Date(row.cached_at).toLocaleDateString('de-DE') : 'kürzlich'
 
     return {
         isFallback: true,
