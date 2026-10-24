@@ -37,7 +37,7 @@ export default function Footer({ onNavigate }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <DashLogo size={20} />
           <span style={{ fontSize: 12, color: '#2d4055', fontWeight: 500 }}>
-            Dividend Dashboard
+            KB Portfolio Tracker
           </span>
         </div>
 

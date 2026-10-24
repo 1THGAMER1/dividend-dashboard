@@ -56,7 +56,7 @@ const ROADMAP = [
     items: [
       { text: 'Portfolio-Snapshot teilen (anonymisiert)',          done: true },
       { text: 'Community-Vergleich (anonymisiertes Ranking)',      done: true },
-      { text: 'Einzel-Ansicht mit mehr Informationen für alle Assets',         done: false },
+      { text: 'Einzel-Ansicht mit mehr Informationen für alle Assets',         done: true },
       { text: 'Öffentliches Dividenden-Tagebuch (opt-in)',         done: false },
 
     ],

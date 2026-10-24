@@ -5,6 +5,7 @@ import AssetHoldingDonut from '../components/AssetHoldingDonut.jsx'
 import EtfUploadWidget from "../components/EtfUploadWidget.jsx"
 import HoldingDetailModal from "../components/HoldingDetailModal.jsx"
 import StockDetailView from './StockDetailView.jsx'
+import ActivitiesView from './ActivitiesView.jsx'
 
 export default function PortfolioPageView({
                                               page,
@@ -78,6 +79,16 @@ export default function PortfolioPageView({
                     currentValue={currentValue}
                     onSelectHolding={setSelectedHolding}
                 />
+            )}
+
+            {page === 'portfolio-activities' && (
+                <>
+                    <div style={{ marginBottom: 14 }}>
+                        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>📋 Aktivitäten</h1>
+                        <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Alle Käufe, Verkäufe, Dividenden und weitere Buchungen</p>
+                    </div>
+                    <ActivitiesView holdings={holdings} enrichedHoldings={enrichedHoldings} />
+                </>
             )}
 
             {/* Modal für X-Ray Aufrufe */}

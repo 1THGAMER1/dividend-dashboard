@@ -30,7 +30,8 @@ const DIVIDEND_TABS = [
 const PORTFOLIO_TABS = [
   { id: 'portfolio-overview', emoji: '💼', label: 'Bestände'    },
   { id: 'portfolio-assets',   emoji: '🍰', label: 'Allokation'  },
-  { id: 'portfolio-xray', emoji: '🔬', label: 'X-Ray'}
+  { id: 'portfolio-xray', emoji: '🔬', label: 'X-Ray'},
+  { id: 'portfolio-activities', emoji: '📝', label: 'Aktivitäten'}
 ]
 
 function yearTotal(monthly, year) {

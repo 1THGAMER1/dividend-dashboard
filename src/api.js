@@ -103,6 +103,19 @@
     } while (cursor)
     return all
   }
+
+  export async function fetchAllActivities() {
+    const PID = await getPortfolioId()
+    let all = [], cursor = null
+    do {
+      const params = new URLSearchParams({ limit: '200' })
+      if (cursor) params.set('cursor', cursor)
+      const data = await request(`/portfolios/${PID}/activities?${params}`)
+      all    = all.concat(data.activities || data.items || [])
+      cursor = data.cursor || null
+    } while (cursor)
+    return all
+  }
   
   export async function fetchPurchaseValue() {
     const all = await fetchBuyActivities()
