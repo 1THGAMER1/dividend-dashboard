@@ -56,6 +56,29 @@ export const handler = async function(event, context) {
     }
 
     try {
+        const searchQuery = event.queryStringParameters?.q || event.queryStringParameters?.search;
+        if (searchQuery) {
+            try {
+                const searchRes = await fetch(
+                    `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchQuery)}&quotesCount=8&newsCount=0&enableFuzzyQuery=false`,
+                    { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }
+                );
+                if (!searchRes.ok) throw new Error('Yahoo Search HTTP ' + searchRes.status);
+                const searchData = await searchRes.json();
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: JSON.stringify({ quotes: searchData.quotes || [] })
+                };
+            } catch (err) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: JSON.stringify({ error: err.message, quotes: [] })
+                };
+            }
+        }
+
         let symbol = event.queryStringParameters?.symbol || event.queryStringParameters?.ticker;
 
         if (!symbol) {

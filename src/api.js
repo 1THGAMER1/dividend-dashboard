@@ -687,15 +687,13 @@
     }
   }
 
-  // Live-Suche nach verifizierten Wertpapieren (Aktien, ETFs, Krypto)
+  // Live-Suche nach verifizierten Wertpapieren (über Netlify-Proxy zur Einhaltung der CSP)
   export async function searchAssets(query) {
     const q = String(query || '').trim()
     if (q.length < 2) return []
 
     try {
-      const res = await fetch(
-          `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0&enableFuzzyQuery=false`
-      )
+      const res = await fetch(`${YAHOO_FN}?q=${encodeURIComponent(q)}`)
       if (!res.ok) return []
       const data = await res.json()
       const quotes = data.quotes || []
