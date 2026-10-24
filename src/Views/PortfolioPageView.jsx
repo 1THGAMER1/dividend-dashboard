@@ -9,15 +9,15 @@ import ActivitiesView from './ActivitiesView.jsx'
 
 export default function PortfolioPageView({
                                               page,
-                                              onNavigate,
                                               currentValue,
                                               enrichedHoldings,
                                               holdings,
                                               byHolding,
                                               performanceSeries,
-                                              buyActs = [],
-                                              sellActs = [],
-                                              forecastByHolding = {},
+                                              activities,
+                                              activitiesComplete,
+                                              lastUpdated,
+                                              onRefreshActivities,
                                           }) {
     const activeHoldings = enrichedHoldings || holdings
     const [selectedHolding, setSelectedHolding] = useState(null)
