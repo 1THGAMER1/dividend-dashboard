@@ -16,6 +16,7 @@ import CommunityRankingView from "./Views/CommunityRankingView.jsx";
 import ProfilePage           from './pages/ProfilePage'
 import RoadmapPage           from './pages/RoadmapPage'
 import Footer                from './components/Footer'
+import AddActivityModal from './components/AddActivityModal.jsx'
 
 const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
@@ -139,6 +140,7 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(
       () => window.matchMedia('(max-width: 40rem)').matches
   )
+  const [showAddActivity, setShowAddActivity] = useState(false)
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 40rem)')
     const onChange = (e) => setIsMobile(e.matches)
@@ -255,6 +257,25 @@ export default function App() {
             <span className="desktop-only-timestamp" style={{ fontSize: 11, color: error ? '#fca5a5' : '#7a8ba0', whiteSpace: 'nowrap' }}>
               {error ? `⚠️ ${error}` : 'Stand: Aktuell'}
             </span>
+            <button
+                onClick={() => setShowAddActivity(true)}
+                style={{
+                  background: '#009991',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+            >
+              <span>+</span>
+              <span>Aktivität</span>
+            </button>
 
             <button
                 onClick={loadData}
@@ -328,6 +349,9 @@ export default function App() {
           )}
         </div>
         <Footer onNavigate={setPage} />
+        {showAddActivity && (
+            <AddActivityModal onClose={() => setShowAddActivity(false)} />
+        )}
       </div>
   )
 }
