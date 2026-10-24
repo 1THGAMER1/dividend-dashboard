@@ -17,7 +17,7 @@ const TYPES = {
     deposit:      { label: 'EINZAHLUNG',    color: '#38bdf8', sign: 1 },
     withdrawal:   { label: 'AUSZAHLUNG',    color: '#38bdf8', sign: -1 },
     transfer_in:  { label: 'EINBUCHUNG',  color: '#a78bfa', sign: 0 },
-    transfer_out: { label: 'AUSLIEFERUNG',  color: '#a78bfa', sign: 0 },
+    transfer_out: { label: 'AUSBUCHUNG',  color: '#a78bfa', sign: 0 },
     fees_taxes:   { label: 'GEBÜHR/STEUER', color: '#94a3b8', sign: -1 },
 }
 
@@ -32,7 +32,7 @@ const matchesFilter = (type, f) =>
     f === 'all' || type === f || (f === 'other' && !['buy', 'sell', 'dividend'].includes(type))
 
 const PAGE = 100
-let _cache = null // { items, at } bleibt beim Tab-Wechsel erhalten
+let _cache = null
 
 const chip = (active) => ({
     background: active ? '#009991' : '#0f1420',

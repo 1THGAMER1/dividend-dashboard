@@ -205,40 +205,51 @@ export default function DividendDashboardView({
 
     return (
         <div>
-            {/* ZEITRAUM-SCHALTER */}
+            {/* ZEITRAUM-SCHALTER & TITEL CONTAINER */}
             <div style={{
-                display: 'inline-flex',
-                gap: 4,
-                marginBottom: 14,
-                background: '#0f1420',
-                padding: 3,
-                borderRadius: 22,
-                border: '1px solid #1e2a3a',
-                flexWrap: 'wrap'
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 12,
+                marginBottom: 14
             }}>
-                {KPI_RANGES.map(({ key, label }) => (
-                    <button
-                        key={key}
-                        onClick={() => setKpiRange(key)}
-                        style={{
-                            padding: '4px 14px',
-                            borderRadius: 18,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            border: 'none',
-                            background: kpiRange === key ? '#009991' : 'transparent',
-                            color: kpiRange === key ? '#ffffff' : '#7a8ba0',
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
-            <div style={{ marginBottom: 14 }}>
-                <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>📈 Dividenden Dashboard</h1>
-                <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Portfolio-Übersicht · Nettowerte</p>
+                <div>
+                    <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>📈 Dividenden Dashboard</h1>
+                    <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2, marginBottom: 0 }}>Portfolio-Übersicht · Nettowerte</p>
+                </div>
+
+                <div style={{
+                    display: 'inline-flex',
+                    gap: 4,
+                    background: '#0f1420',
+                    padding: 3,
+                    borderRadius: 22,
+                    border: '1px solid #1e2a3a',
+                    flexWrap: 'wrap'
+                }}>
+                    {KPI_RANGES.map(({ key, label }) => (
+                        <button
+                            key={key}
+                            onClick={() => setKpiRange(key)}
+                            style={{
+                                padding: '4px 14px',
+                                borderRadius: 18,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                border: 'none',
+                                background: kpiRange === key ? '#009991' : 'transparent',
+                                color: kpiRange === key ? '#ffffff' : '#7a8ba0',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
+    <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Portfolio-Übersicht · Nettowerte</p>
             </div>
 
             {error && (
