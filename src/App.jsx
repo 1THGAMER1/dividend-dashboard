@@ -350,7 +350,8 @@ export default function App() {
         </div>
         <Footer onNavigate={setPage} />
         {showAddActivity && (
-            <AddActivityModal onClose={() => setShowAddActivity(false)} />
+            <AddActivityModal onClose={() => setShowAddActivity(false)}
+                              existingHoldings={enrichedHoldings || holdings || []}/>
         )}
       </div>
   )

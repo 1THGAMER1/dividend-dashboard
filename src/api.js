@@ -686,3 +686,42 @@
       return null
     }
   }
+
+  // Live-Suche nach verifizierten Wertpapieren (Aktien, ETFs, Krypto)
+  export async function searchAssets(query) {
+    const q = String(query || '').trim()
+    if (q.length < 2) return []
+
+    try {
+      const res = await fetch(
+          `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0&enableFuzzyQuery=false`
+      )
+      if (!res.ok) return []
+      const data = await res.json()
+      const quotes = data.quotes || []
+
+      return quotes
+          .filter(item => {
+            const type = (item.quoteType || '').toUpperCase()
+            return ['EQUITY', 'ETF', 'MUTUALFUND', 'CRYPTOCURRENCY'].includes(type)
+          })
+          .map(item => {
+            const typeMap = {
+              EQUITY: 'Aktie',
+              ETF: 'ETF',
+              MUTUALFUND: 'Fonds',
+              CRYPTOCURRENCY: 'Krypto'
+            }
+            return {
+              symbol: item.symbol,
+              name: item.shortname || item.longname || item.symbol,
+              exchange: item.exchDisp || item.exchange || '',
+              type: typeMap[item.quoteType] || 'Wertpapier',
+              rawType: item.quoteType === 'CRYPTOCURRENCY' ? 'Crypto' : 'Security'
+            }
+          })
+    } catch (err) {
+      console.warn('[searchAssets] Fehler bei der Suche:', err.message)
+      return []
+    }
+  }
