@@ -69,18 +69,6 @@ async function _fetchClientId() {
   if (!raw) return null
 
   if (!isEncrypted(raw)) {
-    const password = getPassword()
-    if (password) {
-      try {
-        const encrypted = await encrypt(raw, password)
-        await supabase
-            .from('profiles')
-            .update({ parqet_client_id: encrypted })
-            .eq('id', user.id)
-      } catch (e) {
-        console.warn('Auto-migration of client ID failed:', e)
-      }
-    }
     return raw
   }
 
@@ -100,22 +88,15 @@ export async function saveClientId(newClientId) {
 
   const clean = newClientId.trim()
   if (!clean) throw new Error('Client ID darf nicht leer sein')
-
-  // Verschlüsseln mit dem Passwort (oder vorhandenem Key aus IndexedDB)
-  const password = getPassword()
-  const encrypted = await encrypt(clean, password)
-
   const { error } = await supabase
       .from('profiles')
       .update({
-        parqet_client_id: encrypted,
-        updated_at: new Date().toISOString()
+        parqet_client_id: clean
       })
       .eq('id', user.id)
 
   if (error) throw error
 
-  // Cache leeren und auf die neue ID setzen
   clearCachedClientId()
   _clientIdPromise = Promise.resolve(clean)
   return clean
