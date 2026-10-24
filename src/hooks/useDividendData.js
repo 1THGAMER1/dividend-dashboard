@@ -2,9 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { handleCallback, isLoggedIn } from '../auth'
 import { groupByYearMonth, toCumulative, buildForecast, groupByHolding } from '../utils/dataUtils.js'
 import {
-    fetchDividendActivities,
-    fetchBuyActivities,
-    fetchSellActivities,
     calcKpiFromActivities,
     fetchHoldingNames,
     fetchPurchaseValue,
@@ -12,6 +9,7 @@ import {
     fetchYahooDividendsForHoldings,
     fetchPerformance,
     fetchPositionPerformance,
+    fetchAllActivities,
 } from '../api'
 import { readCache, writeCache, readStaleCache } from '../cache'
 
@@ -79,6 +77,8 @@ export default function useDividendData() {
     const [cacheInfo,         setCacheInfo]         = useState(null)
     const [performanceSeries, setPerformanceSeries] = useState([])
     const [xirr12m,           setXirr12m]           = useState(null)
+    const [allActivities,      setAllActivities]      = useState([])
+    const [activitiesComplete, setActivitiesComplete] = useState(false)
 
     useEffect(() => {
         if (window.location.pathname !== '/callback') return
@@ -95,6 +95,8 @@ export default function useDividendData() {
             sellActsData = [], names = {}, types = {},
             tickers = {}, purchaseValuePerHolding = [],
             yahooByIsin = {},
+            rawActs = [],
+            otherActs: otherActs = null,
             performanceSeries: perfSeries = [],
             parqetPositions = {},
             xirr12m: xirr12mValue = null,
@@ -110,6 +112,9 @@ export default function useDividendData() {
         setByHolding(bh);
         setForecastByHolding(fc.forecastByHolding);
         setBuyActs(buyActsData ?? []);
+        // Alle Aktivitäten für den Aktivitäten-Tab (ältere Cache-Einträge kennen otherActs noch nicht)
+        setAllActivities([...rawActs, ...(buyActsData || []), ...(sellActsData || []), ...(otherActs || [])]);
+        setActivitiesComplete(otherActs !== null);
         setSellActs(sellActsData ?? []);
 
         if (fc.enrichedHoldings) {
@@ -257,17 +262,22 @@ export default function useDividendData() {
     }, []);
 
     const fetchFromParqet = useCallback(async () => {
-        const [acts, buyActsData, sellActsData, holdingData, purchaseValue, purchaseValuePerHolding, perf, xirr12mValue] = await Promise.all([
-            fetchDividendActivities(),
-            fetchBuyActivities(),
-            fetchSellActivities(),
+        const [allActs, holdingData, perf, xirr12mValue] = await Promise.all([
+            fetchAllActivities(),
             fetchHoldingNames(),
-            fetchPurchaseValue(),
-            fetchPurchaseValuePerHolding(),
             fetchPerformance(),
             fetchXirr12m(),
         ])
         const currentVal = perf.currentValue
+
+        // Ein Abruf für alles, danach nach Typ aufteilen
+        const typeOf = (a) => String(a.type || '').toLowerCase()
+        const acts          = allActs.filter(a => typeOf(a) === 'dividend')
+        const buyActsData   = allActs.filter(a => typeOf(a) === 'buy')
+        const sellActsData  = allActs.filter(a => typeOf(a) === 'sell')
+        const otherActs     = allActs.filter(a => !['dividend', 'buy', 'sell'].includes(typeOf(a)))
+        const purchaseValue = await fetchPurchaseValue(buyActsData)
+        const purchaseValuePerHolding = await fetchPurchaseValuePerHolding(buyActsData)
 
         const { names, types, tickers } = holdingData
         const yahooByIsin = await fetchYahooDividendsForHoldings(tickers, types)
@@ -291,6 +301,7 @@ export default function useDividendData() {
             buyActsData,
             sellActsData,
             rawActs: acts,
+            otherActs,
             names,
             types,
             tickers,
@@ -434,5 +445,7 @@ export default function useDividendData() {
         lastUpdated, dataSource, error,
         cacheInfo,
         loadData: () => loadData(true),
+        allActivities,
+        activitiesComplete,
     }
 }

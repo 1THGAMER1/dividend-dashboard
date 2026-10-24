@@ -128,7 +128,7 @@ export default function App() {
     buyActs,
     sellActs,
     holdings, enrichedHoldings,
-    loading, authLoading, lastUpdated, dataSource, error, cacheInfo, loadData
+    loading, authLoading, lastUpdated, dataSource, error, cacheInfo, loadData, allActivities, activitiesComplete
   } = useDividendData()
 
   const [kpiRange, setKpiRange] = useState('all')
@@ -346,6 +346,7 @@ export default function App() {
                   buyActs={buyActs}
                   sellActs={sellActs}
                   forecastByHolding={forecastByHolding}
+                  activities={allActivities} activitiesComplete={activitiesComplete} lastUpdated={lastUpdated} onRefreshActivities={loadData}
               />
           )}
         </div>

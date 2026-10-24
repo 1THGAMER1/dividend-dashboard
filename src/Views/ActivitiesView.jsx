@@ -16,7 +16,7 @@ const TYPES = {
     interest:     { label: 'ZINSEN',        color: '#fbbf24', sign: 1 },
     deposit:      { label: 'EINZAHLUNG',    color: '#38bdf8', sign: 1 },
     withdrawal:   { label: 'AUSZAHLUNG',    color: '#38bdf8', sign: -1 },
-    transfer_in:  { label: 'EINLIEFERUNG',  color: '#a78bfa', sign: 0 },
+    transfer_in:  { label: 'EINBUCHUNG',  color: '#a78bfa', sign: 0 },
     transfer_out: { label: 'AUSLIEFERUNG',  color: '#a78bfa', sign: 0 },
     fees_taxes:   { label: 'GEBÜHR/STEUER', color: '#94a3b8', sign: -1 },
 }
@@ -42,17 +42,24 @@ const chip = (active) => ({
 })
 const card = { background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 'clamp(12px, 3vw, 20px)' }
 
-export default function ActivitiesView({ holdings = [], enrichedHoldings = [] }) {
+export default function ActivitiesView({ holdings = [], enrichedHoldings = [], activities = null, complete = false, lastUpdated = null, onRefresh }) {
+    // Die Daten kommen vom Hook (ein gemeinsamer Abruf für die ganze App).
+    // Nur bei alten Cache-Einträgen ohne die übrigen Typen lädt die Ansicht selbst nach.
+    const fromHook = complete && Array.isArray(activities)
+
     const [items, setItems] = useState(_cache?.items || [])
     const [loadedAt, setLoadedAt] = useState(_cache?.at || null)
-    const [loading, setLoading] = useState(!_cache)
+    const [loading, setLoading] = useState(!fromHook && !_cache)
     const [error, setError] = useState(null)
     const [filter, setFilter] = useState('all')
     const [query, setQuery] = useState('')
     const [visible, setVisible] = useState(PAGE)
 
+    const source = fromHook ? activities : items
+    const stand = fromHook ? lastUpdated : loadedAt
+
     const load = async (force = false) => {
-        if (_cache && !force) { setLoading(false); return }
+        if (_cache && !force) { setItems(_cache.items); setLoading(false); return }
         setLoading(true)
         setError(null)
         try {
@@ -68,7 +75,10 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
             setLoading(false)
         }
     }
-    useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (fromHook) { setLoading(false); setError(null) } else { load() }
+    }, [fromHook])
 
     // Namen der Positionen über ISIN/Symbol nachschlagen
     const names = useMemo(() => {
@@ -81,7 +91,7 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
         return m
     }, [holdings, enrichedHoldings])
 
-    const rows = useMemo(() => items.map((a, i) => {
+    const rows = useMemo(() => source.map((a, i) => {
         const type = String(a.type || '').toLowerCase()
         const key = a.asset?.isin || a.asset?.symbol || a.asset?.holding_id || ''
         const name = names[String(key).toUpperCase()]
@@ -97,7 +107,7 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
             : (num(a.amount ?? a.total ?? a.amountNet) || (type === 'fees_taxes' ? fee + tax : 0))
         const price = num(a.price) || (shares > 0 ? num(a.amount) / shares : 0)
         return { id: a.id || `${i}`, type, name, isin: String(key), date: a.datetime, shares, price, amount, fee, tax, gross: num(a.amount), desc: a.description || '' }
-    }), [items, names])
+    }), [source, names])
 
     const counts = useMemo(() => {
         const c = {}
@@ -141,7 +151,7 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                         </button>
                     ))}
                     <span style={{ flex: 1 }} />
-                    <button onClick={() => load(true)} style={chip(false)} title="Aktivitäten neu bei Parqet laden">↻ Aktualisieren</button>
+                    <button onClick={() => (fromHook ? onRefresh?.() : load(true))} style={chip(false)} title="Aktivitäten neu bei Parqet laden">↻ Aktualisieren</button>
                 </div>
 
                 <input
@@ -164,9 +174,9 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                         </div>
                     ))}
                 </div>
-                {loadedAt && (
+                {stand && (
                     <div style={{ fontSize: 10, color: '#475569', marginTop: 8 }}>
-                        Stand: {loadedAt.toLocaleString('de-DE')}
+                        Stand: {new Date(stand).toLocaleString('de-DE')}
                     </div>
                 )}
             </div>

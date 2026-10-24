@@ -87,7 +87,14 @@ export default function PortfolioPageView({
                         <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>📋 Aktivitäten</h1>
                         <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Alle Käufe, Verkäufe, Dividenden und weitere Buchungen</p>
                     </div>
-                    <ActivitiesView holdings={holdings} enrichedHoldings={enrichedHoldings} />
+                    <ActivitiesView
+                        holdings={holdings}
+                        enrichedHoldings={enrichedHoldings}
+                        activities={activities}
+                        complete={activitiesComplete}
+                        lastUpdated={lastUpdated}
+                        onRefresh={onRefreshActivities}
+                    />
                 </>
             )}
 

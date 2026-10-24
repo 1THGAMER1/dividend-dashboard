@@ -108,7 +108,7 @@
     const PID = await getPortfolioId()
     let all = [], cursor = null
     do {
-      const params = new URLSearchParams({ limit: '200' })
+      const params = new URLSearchParams({ limit: '500' })
       if (cursor) params.set('cursor', cursor)
       const data = await request(`/portfolios/${PID}/activities?${params}`)
       all    = all.concat(data.activities || data.items || [])
@@ -116,14 +116,14 @@
     } while (cursor)
     return all
   }
-  
-  export async function fetchPurchaseValue() {
-    const all = await fetchBuyActivities()
+
+  export async function fetchPurchaseValue(buys) {
+    const all = buys ?? await fetchBuyActivities()
     return all.reduce((s, a) => s + (a.amount ?? 0), 0)
   }
-  
-  export async function fetchPurchaseValuePerHolding() {
-    const all = await fetchBuyActivities()
+
+  export async function fetchPurchaseValuePerHolding(buys) {
+    const all = buys ?? await fetchBuyActivities()
     const map = {}
     for (const a of all) {
       const key = a.asset?.isin || a.asset?.symbol || 'unknown'
