@@ -334,6 +334,18 @@
       return {}
     }
   }
+  // Einzelkurs von CoinMarketCap in EUR abholen
+  export async function fetchSingleCryptoPrice(symbol) {
+    const clean = String(symbol || '').trim().toUpperCase().replace(/-EUR$/, '')
+    if (!clean) return null
+    try {
+      const coins = await fetchCryptoPricesBatch([clean])
+      return coins[clean]?.regularMarketPrice || null
+    } catch (err) {
+      console.warn(`[fetchSingleCryptoPrice] Fehler für ${clean}:`, err.message)
+      return null
+    }
+  }
   
   export async function fetchYahooDividendsForHoldings(tickers = {}, types = {}) {
     const allIsins = Object.keys(tickers)
@@ -687,39 +699,68 @@
     }
   }
 
-  // Live-Suche nach verifizierten Wertpapieren (über Netlify-Proxy zur Einhaltung der CSP)
+  // Liste gängiger Kryptowährungen für Sofort-Treffer ohne Yahoo
+  const POPULAR_CRYPTOS = [
+    { symbol: 'BTC', name: 'Bitcoin' },
+    { symbol: 'ETH', name: 'Ethereum' },
+    { symbol: 'SOL', name: 'Solana' },
+    { symbol: 'XRP', name: 'XRP (Ripple)' },
+    { symbol: 'ADA', name: 'Cardano' },
+    { symbol: 'DOGE', name: 'Dogecoin' },
+    { symbol: 'AVAX', name: 'Avalanche' },
+    { symbol: 'DOT', name: 'Polkadot' },
+    { symbol: 'LINK', name: 'Chainlink' },
+    { symbol: 'BNB', name: 'Binance Coin' },
+    { symbol: 'SUI', name: 'Sui' },
+    { symbol: 'NEAR', name: 'NEAR Protocol' },
+    { symbol: 'PEPE', name: 'Pepe' },
+  ]
+
   export async function searchAssets(query) {
     const q = String(query || '').trim()
     if (q.length < 2) return []
 
+    const qUpper = q.toUpperCase()
+    const qLower = q.toLowerCase()
+
+    // 1. Zuerst prüfen, ob es ein bekanntes Krypto-Asset ist
+    const cryptoMatches = POPULAR_CRYPTOS.filter(
+        c => c.symbol.includes(qUpper) || c.name.toLowerCase().includes(qLower)
+    ).map(c => ({
+      symbol: c.symbol,
+      name: c.name,
+      exchange: 'CoinMarketCap',
+      type: 'Krypto',
+      rawType: 'Crypto',
+    }))
+
+    // 2. Parallel Yahoo für Aktien & ETFs anfragen
+    let stockMatches = []
     try {
       const res = await fetch(`${YAHOO_FN}?q=${encodeURIComponent(q)}`)
-      if (!res.ok) return []
-      const data = await res.json()
-      const quotes = data.quotes || []
+      if (res.ok) {
+        const data = await res.json()
+        const quotes = data.quotes || []
+        const typeMap = {
+          EQUITY: 'Aktie',
+          ETF: 'ETF',
+          MUTUALFUND: 'Fonds',
+        }
 
-      return quotes
-          .filter(item => {
-            const type = (item.quoteType || '').toUpperCase()
-            return ['EQUITY', 'ETF', 'MUTUALFUND', 'CRYPTOCURRENCY'].includes(type)
-          })
-          .map(item => {
-            const typeMap = {
-              EQUITY: 'Aktie',
-              ETF: 'ETF',
-              MUTUALFUND: 'Fonds',
-              CRYPTOCURRENCY: 'Krypto'
-            }
-            return {
+        stockMatches = quotes
+            .filter(item => ['EQUITY', 'ETF', 'MUTUALFUND'].includes((item.quoteType || '').toUpperCase()))
+            .map(item => ({
               symbol: item.symbol,
               name: item.shortname || item.longname || item.symbol,
               exchange: item.exchDisp || item.exchange || '',
-              type: typeMap[item.quoteType] || 'Wertpapier',
-              rawType: item.quoteType === 'CRYPTOCURRENCY' ? 'Crypto' : 'Security'
-            }
-          })
+              type: typeMap[(item.quoteType || '').toUpperCase()] || 'Wertpapier',
+              rawType: 'Security',
+            }))
+      }
     } catch (err) {
-      console.warn('[searchAssets] Fehler bei der Suche:', err.message)
-      return []
+      console.warn('[searchAssets] Yahoo-Suche fehlgeschlagen:', err.message)
     }
+
+    // Krypto oben anheften, falls Treffer vorhanden, gefolgt von Aktien/ETFs
+    return [...cryptoMatches, ...stockMatches]
   }

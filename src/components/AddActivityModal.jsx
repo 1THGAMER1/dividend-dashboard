@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createManualActivity } from '../utils/manualActivities'
-import { searchAssets, fetchYahooDividends } from '../api'
+import { searchAssets, fetchYahooDividends, fetchSingleCryptoPrice } from '../api'
 
 export default function AddActivityModal({ onClose, onSuccess, existingHoldings = [] }) {
     const [type, setType] = useState('buy') // 'buy' | 'sell' | 'dividend'
@@ -42,24 +42,36 @@ export default function AddActivityModal({ onClose, onSuccess, existingHoldings 
         return () => clearTimeout(debounceRef.current)
     }, [searchQuery, selectedAsset])
 
-    // Bei Auswahl eines Wertpapiers: Live-Kurs automatisch abrufen
     const handleSelectAsset = async (asset) => {
         setSelectedAsset(asset)
         setSearchQuery('')
         setSearchResults([])
         setError(null)
 
-        // Kurs für den gewählten Ticker laden
+        const isCrypto = asset.rawType === 'Crypto' || asset.type === 'Krypto'
+
         try {
-            const data = await fetchYahooDividends(asset.symbol)
-            if (data?.price && data.price > 0) {
-                setPrice(data.price.toFixed(2))
+            let livePrice = null
+
+            if (isCrypto) {
+                // Krypto-Kurs direkt von CoinMarketCap in EUR holen
+                livePrice = await fetchSingleCryptoPrice(asset.symbol)
+            } else {
+                // Aktien & ETFs von Yahoo Finance holen
+                const data = await fetchYahooDividends(asset.symbol)
+                livePrice = data?.price || null
+            }
+
+            if (livePrice && livePrice > 0) {
+                // Bei Krypto mehr Nachkommastellen erlauben (z. B. bei Altcoins), bei Aktien 2 Stellen
+                const formattedPrice = livePrice >= 1 ? livePrice.toFixed(2) : livePrice.toFixed(6)
+                setPrice(formattedPrice)
                 if (shares) {
-                    setAmount((parseFloat(shares) * data.price).toFixed(2))
+                    setAmount((parseFloat(shares) * livePrice).toFixed(2))
                 }
             }
-        } catch {
-            // Manueller Kurs bleibt möglich
+        } catch (e) {
+            console.warn('[AddActivityModal] Kursabruf fehlgeschlagen:', e)
         }
     }
 
@@ -207,12 +219,26 @@ export default function AddActivityModal({ onClose, onSuccess, existingHoldings 
                                         <button
                                             key={idx}
                                             type="button"
-                                            onClick={() => handleSelectAsset({
-                                                name: h.name || h.isin,
-                                                symbol: h.isin || h.ticker || h.id,
-                                                type: h.type || 'Wertpapier',
-                                                rawType: 'Security'
-                                            })}
+                                            onClick={() => {
+                                                const rawType = (h.type || '').toLowerCase()
+                                                const isCrypto = rawType.includes('crypto') ||
+                                                    rawType.includes('krypto') ||
+                                                    rawType.includes('coin') ||
+                                                    ['BTC', 'ETH', 'SOL'].some(c => (h.isin || '').toUpperCase().includes(c))
+
+                                                // Sauberes Symbol für CMC extrahieren (z. B. "BTC" statt "BTC-EUR" oder "hld_...")
+                                                const cleanSym = (h.isin || h.ticker || h.id || '')
+                                                    .toUpperCase()
+                                                    .replace(/-EUR$/, '')
+                                                    .replace(/^HLD_.*$/, h.name || '')
+
+                                                handleSelectAsset({
+                                                    name: h.name || cleanSym,
+                                                    symbol: cleanSym,
+                                                    type: isCrypto ? 'Krypto' : (h.type || 'Wertpapier'),
+                                                    rawType: isCrypto ? 'Crypto' : 'Security',
+                                                })
+                                            }}
                                             style={{
                                                 background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 8,
                                                 padding: '5px 10px', color: '#e0e6f0', fontSize: 11, fontWeight: 500,
