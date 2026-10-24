@@ -1,15 +1,11 @@
-/**
- * Footer.jsx — Globaler Footer für alle Seiten
- */
-
 const FOOTER_LINKS = [
-  { label: 'Datenschutz', href: 'privacy' },
+  { label: 'Datenschutz', href: 'https://dividenddashboard.netlify.app/privacy' },
   //{ label: 'Impressum',   href: '#' },
 ]
 
 function DashLogo({ size = 20 }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size} aria-label="Dividend Dashboard">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size} aria-label="KB Portfolio Tracker">
       <rect width="32" height="32" rx="8" fill="#0f1420"/>
       <circle cx="16" cy="16" r="12" fill="none" stroke="#1e3a2a" strokeWidth="2"/>
       <circle cx="16" cy="16" r="12" fill="none" stroke="#22c55e" strokeWidth="2"
@@ -80,7 +76,7 @@ export default function Footer({ onNavigate }) {
             Roadmap
           </button>
           <span style={{ fontSize: 11, color: '#1e2d3d' }}>
-            © {new Date().getFullYear()} Dividend Dashboard
+            © {new Date().getFullYear()} KB Portfolio Tracker
           </span>
         </div>
       </div>

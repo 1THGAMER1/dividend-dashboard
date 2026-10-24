@@ -93,7 +93,7 @@ export default function AppLogin() {
         borderRadius: 16, padding: '40px 36px', width: '100%', maxWidth: 400,
       }}>
         <h1 style={{ color: '#e0e6f0', fontSize: 22, fontWeight: 700, marginBottom: 6 }}>
-          📈 Dividenden Dashboard
+          📈 KB Portfolio Tracker
         </h1>
         <p style={{ color: '#7a8ba0', fontSize: 13, marginBottom: 28 }}>
           {mode === 'login'    && 'Melde dich an um fortzufahren.'}

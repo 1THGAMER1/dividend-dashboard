@@ -21,8 +21,8 @@ export default function AddActivityModal({ onClose, onSuccess, existingHoldings 
     const [tax, setTax] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
+    const [successMsg, setSuccessMsg] = useState(false)
 
-    // Live-Suche mit 300ms Debounce
     useEffect(() => {
         if (selectedAsset) return
         if (searchQuery.trim().length < 2) {
@@ -116,15 +116,19 @@ export default function AddActivityModal({ onClose, onSuccess, existingHoldings 
                 tax: tax ? parseFloat(tax) : 0,
                 asset: {
                     name: selectedAsset.name,
-                    isin: selectedAsset.symbol, // Yahoo-Symbol/Ticker als eindeutiger Schlüssel
+                    isin: selectedAsset.symbol,
                     assetType: selectedAsset.rawType || 'Security'
                 }
             })
+
+            // Mini-Feedback anzeigen und nach 1,2 Sekunden schließen
+            setSuccessMsg(true)
             onSuccess?.()
-            onClose()
+            setTimeout(() => {
+                onClose()
+            }, 1200)
         } catch (err) {
             setError(err.message)
-        } finally {
             setLoading(false)
         }
     }
@@ -160,9 +164,22 @@ export default function AddActivityModal({ onClose, onSuccess, existingHoldings 
                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: 18, cursor: 'pointer' }}>✕</button>
                 </div>
 
-                {error && (
-                    <div style={{ background: '#2d0a0a', border: '1px solid #7f1d1d', color: '#fca5a5', padding: '8px 12px', borderRadius: 8, marginBottom: 14, fontSize: 12 }}>
-                        ⚠ {error}
+                {successMsg && (
+                    <div style={{
+                        background: 'rgba(34, 197, 94, 0.15)',
+                        border: '1px solid #22c55e',
+                        color: '#4ade80',
+                        padding: '10px 14px',
+                        borderRadius: 8,
+                        marginBottom: 14,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8
+                    }}>
+                        <span>✓</span>
+                        <span>Aktivität erfolgreich gespeichert!</span>
                     </div>
                 )}
 
@@ -367,13 +384,25 @@ export default function AddActivityModal({ onClose, onSuccess, existingHoldings 
 
                         <button
                             type="submit"
-                            disabled={loading}
+                            disabled={loading || successMsg}
                             style={{
-                                marginTop: 10, background: '#009991', color: '#fff', border: 'none', borderRadius: 8,
-                                padding: '12px', fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'background 0.15s ease'
+                                marginTop: 10,
+                                background: successMsg ? '#15803d' : '#009991',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: 8,
+                                padding: '12px',
+                                fontSize: 13,
+                                fontWeight: 700,
+                                cursor: (loading || successMsg) ? 'default' : 'pointer',
+                                transition: 'all 0.2s ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6
                             }}
                         >
-                            {loading ? 'Speichere…' : 'Aktivität sicher erfassen'}
+                            {successMsg ? '✓ Gespeichert!' : loading ? 'Speichere…' : 'Aktivität speichern.'}
                         </button>
                     </form>
                 )}

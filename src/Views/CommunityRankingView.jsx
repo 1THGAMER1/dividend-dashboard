@@ -76,7 +76,7 @@ export default function CommunityRankingView({ currentUserId }) {
                             border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer'
                         }}
                     >
-                        Nach 12M Gesamtrendite (%)
+                        Nach 12M IZF (%)
                     </button>
                 </div>
             </div>

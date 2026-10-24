@@ -1,8 +1,3 @@
-/**
- * RoadmapPage.jsx — Elegante, moderne Roadmap-Seite
- * Items können einzeln als done markiert werden direkt in den Daten.
- */
-
 const ROADMAP = [
   {
     phase: '01',
@@ -35,10 +30,8 @@ const ROADMAP = [
     title: 'Sicherheit & Zuverlässigkeit',
     period: 'Q2 2026',
     items: [
-      { text: 'AES-256-GCM Verschlüsselung der Client ID',   done: true },
       { text: 'JWK Key Caching (kein Re-Login nach Reload)', done: true },
       { text: 'CORS-Einschränkung & Bearer-Auth am Proxy',   done: true },
-      { text: 'Access Token in sessionStorage (XSS-Schutz)', done: true },
       { text: 'Weitere kleine QoL Verbesserungen',           done: true },
     ],
   },
@@ -58,6 +51,19 @@ const ROADMAP = [
   {
     phase: '04',
     status: 'active',
+    title: 'Social & Sharing',
+    period: 'Q3 2026',
+    items: [
+      { text: 'Portfolio-Snapshot teilen (anonymisiert)',          done: true },
+      { text: 'Community-Vergleich (anonymisiertes Ranking)',      done: true },
+      { text: 'Einzel-Ansicht mit mehr Informationen für alle Assets',         done: false },
+      { text: 'Öffentliches Dividenden-Tagebuch (opt-in)',         done: false },
+
+    ],
+  },
+  {
+    phase: '05',
+    status: 'planned',
     title: 'Portfolio Intelligence',
     period: 'Q3-Q4 2026',
     items: [
@@ -67,26 +73,15 @@ const ROADMAP = [
     ],
   },
   {
-    phase: '05',
+    phase: '06',
     status: 'planned',
     title: 'Benachrichtigungen & Automatisierung',
     period: 'Q4 2026',
     items: [
       { text: 'E-Mail-Benachrichtigung bei Dividendenzahlungen', done: false },
-      { text: 'Monatlicher Portfolio-Report per Mail',           done: false },
+      { text: 'wöchentlicher Portfolio-Report per Mail',           done: false },
       { text: 'Browser Push-Benachrichtigungen',                 done: false },
       { text: 'Automatischer Daten-Refresh (Cron)',              done: false },
-    ],
-  },
-  {
-    phase: '06',
-    status: 'planned',
-    title: 'Social & Sharing',
-    period: 'Q1 2027',
-    items: [
-      { text: 'Portfolio-Snapshot teilen (anonymisiert)',          done: true },
-      { text: 'Community-Vergleich (anonymisiertes Ranking)',      done: false },
-      { text: 'Öffentliches Dividenden-Tagebuch (opt-in)',         done: false },
     ],
   },
 ]

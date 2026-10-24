@@ -201,7 +201,7 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
       <!-- FOOTER MIT ABMELDE- / EINSTELLUNGS-LINK -->
       <div style="padding: 24px 20px; text-align: center; background: #0c1019; color: #64748b; font-size: 11px; line-height: 1.6;">
         <p style="margin: 0 0 10px;">
-          Du erhältst diese E-Mail, weil du den wöchentlichen Portfolio-Report auf <strong>DivTrack</strong> aktiviert hast.
+          Du erhältst diese E-Mail, weil der wöchentliche Portfolio-Report auf <strong>KB Portfolio Tracker</strong> aktiviert ist.
         </p>
         <p style="margin: 0;">
           Möchtest du den Report anpassen oder abbestellen? 
