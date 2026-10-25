@@ -2,16 +2,13 @@ import { useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient.js'
 
 const FEATURES = [
-    { icon: '📊', title: 'Dividenden-Übersicht',   desc: 'Alle Ausschüttungen auf einen Blick – monatlich, YTD oder Seit Kauf' },
-    { icon: '🔮', title: 'Prognose',                desc: 'Voraussichtliche Dividenden für die nächsten 12 Monate' },
-    { icon: '🗓️', title: 'Heatmap',                 desc: 'Visualisiere deine Dividenden-Monate auf einen Blick' },
-    { icon: '📈', title: 'Wachstumsanalyse',        desc: 'Vergleiche dein Dividendenwachstum Jahr für Jahr' },
-    { icon: '💼', title: 'Positionen',              desc: 'Rendite und Ausschüttungen pro Holding im Detail' },
-    { icon: '🧮', title: 'Dividenden-Rechner',      desc: 'Wann erreichst du deine gewünschte Dividendenrendite?' },
-    { icon: '➕', title: 'Und vieles mehr',         desc: 'Weitere Funktionen folgen bald!' },
+    { icon: '📊', title: 'Dividenden & Portfolio-Übersicht', desc: 'Alle Ausschüttungen und Bestände auf einen Blick' },
+    { icon: '✍️', title: 'Manuelle Aktivitäten',            desc: 'Käufe, Verkäufe und Dividenden selbst erfassen & verwalten' },
+    { icon: '🔮', title: 'Prognose & Heatmap',               desc: 'Voraussichtliche Dividenden und Monatsübersicht' },
+    { icon: '📈', title: 'Unabhängige Performance',          desc: 'Wertentwicklung, TTWROR & Drawdown in Echtzeit' },
+    { icon: '🔄', title: 'Optionaler Parqet-Sync',           desc: 'Verknüpfe Parqet jederzeit für automatische Importe' },
 ]
 
-// Wiederverwendbares Parqet-Logo als sicheres Inline-SVG
 function ParqetLogo({ style }) {
     return (
         <svg viewBox="0 0 24 24" fill="#009991" style={style} xmlns="http://www.w3.org/2000/svg">
@@ -74,7 +71,7 @@ function AnimatedBackground() {
                     if (dist < 120) {
                         ctx.beginPath()
                         ctx.moveTo(particles[i].x, particles[i].y)
-                        ctx.lineTo(particles[j].x, particles[j].y)
+                        ctx.lineTo(particles[i].x, particles[i].y)
                         ctx.strokeStyle = `rgba(0, 153, 145, ${0.08 * (1 - dist / 120)})`
                         ctx.lineWidth   = 1
                         ctx.stroke()
@@ -113,7 +110,7 @@ function AnimatedBackground() {
     )
 }
 
-export default function LoginScreen({ onLogin, loading, error }) {
+export default function LoginScreen({ onLogin, onSkipParqet, loading, error }) {
     const handleSignOut = async () => {
         await supabase.auth.signOut()
         window.location.href = '/'
@@ -137,7 +134,7 @@ export default function LoginScreen({ onLogin, loading, error }) {
                 style={{
                     position: 'absolute', top: 16, right: 20, zIndex: 10,
                     background: 'none', border: 'none',
-                    color: '#3d5266', fontSize: 12, cursor: 'pointer',
+                    color: '#64748b', fontSize: 13, cursor: 'pointer',
                     textDecoration: 'underline', padding: 0,
                 }}
             >
@@ -150,18 +147,18 @@ export default function LoginScreen({ onLogin, loading, error }) {
                 display:       'flex',
                 flexDirection: 'column',
                 alignItems:    'center',
-                gap:           32,
+                gap:           24,
                 maxWidth:      480,
                 width:         '100%',
             }}>
                 {/* Logo + Titel */}
                 <div style={{ textAlign: 'center' }}>
-                    <ParqetLogo style={{ width: 56, height: 56, marginBottom: 16 }} />
+                    <div style={{ fontSize: 42, marginBottom: 10 }}>📈</div>
                     <h1 style={{ fontSize: 26, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>
-                        Dividenden Dashboard
+                        Willkommen im Dashboard
                     </h1>
-                    <p style={{ color: '#7a8ba0', fontSize: 14, marginTop: 8 }}>
-                        Dein persönliches Dividenden-Cockpit – powered by Parqet
+                    <p style={{ color: '#7a8ba0', fontSize: 14, marginTop: 6 }}>
+                        Wähle, wie du dein Portfolio verwalten möchtest
                     </p>
                 </div>
 
@@ -170,18 +167,18 @@ export default function LoginScreen({ onLogin, loading, error }) {
                     background:   '#161b27',
                     border:       '1px solid #1e2a3a',
                     borderRadius: 14,
-                    padding:      '20px 24px',
+                    padding:      '18px 22px',
                     width:        '100%',
                     display:      'flex',
                     flexDirection:'column',
-                    gap:          14,
+                    gap:          12,
                 }}>
                     {FEATURES.map(f => (
-                        <div key={f.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                            <span style={{ fontSize: 20, lineHeight: 1.3 }}>{f.icon}</span>
+                        <div key={f.title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                            <span style={{ fontSize: 18, lineHeight: 1.3 }}>{f.icon}</span>
                             <div>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: '#c8d4e0' }}>{f.title}</div>
-                                <div style={{ fontSize: 12, color: '#556070', marginTop: 2 }}>{f.desc}</div>
+                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>{f.desc}</div>
                             </div>
                         </div>
                     ))}
@@ -194,36 +191,61 @@ export default function LoginScreen({ onLogin, loading, error }) {
                     </div>
                 )}
 
-                {/* Login Button */}
-                <button
-                    onClick={onLogin}
-                    disabled={loading}
-                    style={{
-                        display:         'inline-flex',
-                        alignItems:      'center',
-                        justifyContent:  'center',
-                        gap:             '0.5em',
-                        backgroundColor: loading ? '#5bcec2' : '#009991',
-                        color:           'white',
-                        cursor:          loading ? 'default' : 'pointer',
-                        fontWeight:      600,
-                        whiteSpace:      'nowrap',
-                        borderRadius:    '0.375rem',
-                        border:          'none',
-                        padding:         '0.625rem 1.5rem',
-                        fontSize:        '1rem',
-                        transition:      'background-color 0.2s',
-                        width:           '100%',
-                    }}
-                    onMouseOver={e => { if (!loading) e.currentTarget.style.backgroundColor = '#5bcec2' }}
-                    onMouseOut={e  => { if (!loading) e.currentTarget.style.backgroundColor = '#009991' }}
-                >
-                    <ParqetLogo style={{ width:'1.6em', height:'1.6em', marginBlock:'-0.25em', flexShrink:0, fill: 'white' }} />
-                    {loading ? 'Verbinde…' : 'Connect with Parqet'}
-                </button>
+                {/* Buttons: Mit Parqet verbinden ODER Ohne Parqet starten */}
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* 1. Parqet Verbinden Button */}
+                    <button
+                        onClick={onLogin}
+                        disabled={loading}
+                        style={{
+                            display:         'inline-flex',
+                            alignItems:      'center',
+                            justifyContent:  'center',
+                            gap:             '0.5em',
+                            backgroundColor: loading ? '#5bcec2' : '#009991',
+                            color:           'white',
+                            cursor:          loading ? 'default' : 'pointer',
+                            fontWeight:      600,
+                            borderRadius:    8,
+                            border:          'none',
+                            padding:         '12px 18px',
+                            fontSize:        '15px',
+                            transition:      'background-color 0.2s',
+                            width:           '100%',
+                        }}
+                    >
+                        <ParqetLogo style={{ width:'1.4em', height:'1.4em', marginBlock:'-0.2em', flexShrink:0, fill: 'white' }} />
+                        {loading ? 'Verbinde…' : 'Mit Parqet verbinden'}
+                    </button>
 
-                <p style={{ fontSize: 11, color: '#3d5266', textAlign: 'center' }}>
-                    Deine Daten bleiben privat – die App liest dein Portfolio und verwendet die Daten nur zum Anzeigen der Daten.
+                    {/* 2. Direkter Einstieg ohne Parqet */}
+                    <button
+                        onClick={onSkipParqet}
+                        disabled={loading}
+                        style={{
+                            display:         'inline-flex',
+                            alignItems:      'center',
+                            justifyContent:  'center',
+                            backgroundColor: '#0f1420',
+                            color:           '#93c5fd',
+                            cursor:          'pointer',
+                            fontWeight:      600,
+                            borderRadius:    8,
+                            border:          '1px solid #2a3a50',
+                            padding:         '11px 18px',
+                            fontSize:        '14px',
+                            transition:      'all 0.2s',
+                            width:           '100%',
+                        }}
+                        onMouseOver={e => e.currentTarget.style.borderColor = '#009991'}
+                        onMouseOut={e => e.currentTarget.style.borderColor = '#2a3a50'}
+                    >
+                        ✍️ Ohne Parqet fortfahren (Manuell verwalten)
+                    </button>
+                </div>
+
+                <p style={{ fontSize: 11, color: '#475569', textAlign: 'center', margin: 0 }}>
+                    Du kannst Parqet auch jederzeit später in den Einstellungen verknüpfen oder trennen.
                 </p>
             </div>
         </div>

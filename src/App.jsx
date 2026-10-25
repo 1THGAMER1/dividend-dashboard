@@ -12,11 +12,11 @@ import SharedPortfolioView   from './Views/SharedPortfolioView.jsx'
 import DividendDashboardView from './Views/DividendDashboardView.jsx'
 import PortfolioPageView     from './Views/PortfolioPageView.jsx'
 import DividendsPageView     from './Views/DividendsPageView.jsx'
-import CommunityRankingView from "./Views/CommunityRankingView.jsx";
+import CommunityRankingView  from "./Views/CommunityRankingView.jsx"
 import ProfilePage           from './pages/ProfilePage'
 import RoadmapPage           from './pages/RoadmapPage'
 import Footer                from './components/Footer'
-import AddActivityModal from './components/AddActivityModal.jsx'
+import AddActivityModal      from './components/AddActivityModal.jsx'
 
 const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
@@ -30,7 +30,7 @@ const DIVIDEND_TABS = [
 const PORTFOLIO_TABS = [
   { id: 'portfolio-overview', emoji: '💼', label: 'Bestände'    },
   { id: 'portfolio-assets',   emoji: '🍰', label: 'Allokation'  },
-  { id: 'portfolio-xray', emoji: '🔬', label: 'X-Ray'},
+  { id: 'portfolio-xray',     emoji: '🔬', label: 'X-Ray'       },
   { id: 'portfolio-activities', emoji: '📝', label: 'Aktivitäten'}
 ]
 
@@ -101,7 +101,6 @@ export default function App() {
       const hash = window.location.hash.replace('#', '')
       if (hash && hash !== page) {
         setPage(hash)
-        // Nur den App-Modus umschalten, wenn es sich um eine echte Modus-Seite handelt
         if (hash.startsWith('portfolio')) {
           setAppMode('portfolio')
         } else if (['dashboard', 'calendar', 'calculator', 'drip'].includes(hash)) {
@@ -138,16 +137,26 @@ export default function App() {
   const [tickerProgress, setTickerProgress] = useState(null)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const menuRef = useRef(null)
-  const [isMobile, setIsMobile] = useState(
-      () => window.matchMedia('(max-width: 40rem)').matches
-  )
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 40rem)').matches)
   const [showAddActivity, setShowAddActivity] = useState(false)
+
+  // NEU: Nutzer kann Parqet überspringen und rein manuell arbeiten
+  const [skipParqet, setSkipParqet] = useState(
+      () => localStorage.getItem('skip_parqet') === 'true'
+  )
+
+  const handleSkipParqet = () => {
+    setSkipParqet(true)
+    localStorage.setItem('skip_parqet', 'true')
+  }
+
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 40rem)')
     const onChange = (e) => setIsMobile(e.matches)
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
+
   const currentTabs = appMode === 'dividends' ? DIVIDEND_TABS : PORTFOLIO_TABS
 
   useEffect(() => {
@@ -166,7 +175,12 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => { if (mounted) setAppUser(data.session?.user ?? null) })
     const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
       setAppUser(session?.user ?? null)
-      if (!session?.user) { clearCachedClientId(); setClientIdReady(false) }
+      if (!session?.user) {
+        clearCachedClientId()
+        setClientIdReady(false)
+        setSkipParqet(false)
+        localStorage.removeItem('skip_parqet')
+      }
     })
     return () => { mounted = false; listener.subscription.unsubscribe() }
   }, [])
@@ -181,15 +195,41 @@ export default function App() {
     return () => { active = false }
   }, [appUser])
 
-  // Prüfung läuft, solange sie für den aktuellen Nutzer noch nicht abgeschlossen ist
   const profileLoading = !!appUser && checkedUserId !== appUser.id
 
+  // 1. Initialer Auth-Check
   if (appUser === undefined || profileLoading) return <LoadingScreen text="App wird vorbereitet…" />
-  if (!appUser)        return <AppLogin />
-  if (!clientIdReady)  return <ParqetSetup onDone={() => setClientIdReady(true)} />
-  if (authLoading)     return <LoadingScreen text="Authentifizierung läuft…" />
-  if (!loggedIn)       return <LoginScreen onLogin={startOAuthFlow} loading={authLoading} error={error} />
-  if (tickerProgress)  return <LoadingScreen text="Wertpapiere & Kurse werden geladen…" progress={tickerProgress} />
+
+  // 2. Nicht bei Supabase eingeloggt? -> Zeige Login/Register
+  if (!appUser) return <AppLogin />
+
+  // 3. Wenn Parqet noch nicht übersprungen wurde UND der Nutzer noch keine Parqet-Verbindung hat:
+  if (!skipParqet && !loggedIn) {
+    if (!clientIdReady) {
+      // Setup-Screen zum Eintragen der Client-ID (bietet auch "Überspringen" an)
+      return (
+          <ParqetSetup
+              onDone={() => setClientIdReady(true)}
+              onSkip={handleSkipParqet}
+          />
+      )
+    }
+
+    if (authLoading) return <LoadingScreen text="Authentifizierung läuft…" />
+
+    // LoginScreen mit beiden Optionen: Parqet verbinden ODER manuell starten
+    return (
+        <LoginScreen
+            onLogin={startOAuthFlow}
+            onSkipParqet={handleSkipParqet}
+            loading={authLoading}
+            error={error}
+        />
+    )
+  }
+
+  // 4. Ladeindikator für Kurse
+  if (tickerProgress) return <LoadingScreen text="Wertpapiere & Kurse werden geladen…" progress={tickerProgress} />
 
   const cy = new Date().getFullYear()
   const cm = new Date().getMonth()
@@ -254,9 +294,8 @@ export default function App() {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            {/* Status / Fehler: Auf Handys versteckt, auf PC sichtbar */}
             <span className="desktop-only-timestamp" style={{ fontSize: 11, color: error ? '#fca5a5' : '#7a8ba0', whiteSpace: 'nowrap' }}>
-              {error ? `⚠️ ${error}` : 'Stand: Aktuell'}
+              {error ? `⚠️ ${error}` : (loggedIn ? 'Parqet aktiv' : 'Modus: Manuell')}
             </span>
             <button
                 onClick={() => setShowAddActivity(true)}
@@ -278,25 +317,37 @@ export default function App() {
               <span>Aktivität</span>
             </button>
 
-            <button
-                onClick={loadData}
-                disabled={loading}
-                title={error || "Daten aktualisieren"}
-                style={{ background: loading ? '#1a2233' : '#1e3a5f', border: `1px solid ${error ? '#ef4444' : '#3b82f6'}`, color: error ? '#fca5a5' : '#93c5fd', padding: '5px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 11 }}
-            >
-              {loading ? '⏳' : '↻'}
-            </button>
+            {loggedIn && (
+                <button
+                    onClick={loadData}
+                    disabled={loading}
+                    title={error || "Parqet-Daten aktualisieren"}
+                    style={{ background: loading ? '#1a2233' : '#1e3a5f', border: `1px solid ${error ? '#ef4444' : '#3b82f6'}`, color: error ? '#fca5a5' : '#93c5fd', padding: '5px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 11 }}
+                >
+                  {loading ? '⏳' : '↻'}
+                </button>
+            )}
 
             <div style={{ position: 'relative' }} ref={menuRef}>
               <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ background: '#1e2a3a', border: '1px solid #2a3a50', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, overflow: 'hidden' }}>
                 {appUser?.user_metadata?.avatar_url ? <img src={appUser.user_metadata.avatar_url} alt="Profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ color: '#93c5fd', fontSize: 12, fontWeight: 700 }}>{appUser?.email?.[0]?.toUpperCase()}</span>}
               </button>
               {userMenuOpen && (
-                  <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: '#161b27', border: '1px solid #2a3a50', borderRadius: 12, padding: '8px 0', width: 190, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 200 }}>
+                  <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: '#161b27', border: '1px solid #2a3a50', borderRadius: 12, padding: '8px 0', width: 210, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 200 }}>
                     <div style={{ padding: '8px 16px', borderBottom: '1px solid #1e2a3a', marginBottom: 4 }}>
                       <p style={{ margin: 0, color: '#e0e6f0', fontSize: 13, fontWeight: 600 }}>{appUser?.user_metadata?.full_name || 'Benutzer'}</p>
                       <p style={{ margin: '2px 0 0', color: '#7a8ba0', fontSize: 11 }}>{appUser?.email}</p>
                     </div>
+
+                    {!loggedIn && (
+                        <button
+                            onClick={() => { startOAuthFlow(); setUserMenuOpen(false); }}
+                            style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#38bdf8', padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          🔗 Parqet verknüpfen
+                        </button>
+                    )}
+
                     <button onClick={() => { handlePageChange('profile'); setUserMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#e0e6f0', padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>⚙️ Mein Profil</button>
                     <button onClick={() => { logout(); setUserMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#fca5a5', padding: '8px 16px', fontSize: 13, cursor: 'pointer', borderTop: '1px solid #1e2a3a', marginTop: 4 }}>🚪 Abmelden</button>
                   </div>
