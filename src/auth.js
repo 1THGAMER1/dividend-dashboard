@@ -9,7 +9,6 @@ export function clearCachedClientId() {
   cachedClientId = null
 }
 
-// Exakt deine registrierte Callback-URI:
 export function getRedirectUri() {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return `${window.location.origin}/callback`
@@ -21,6 +20,7 @@ export function getRedirectUri() {
 export function isLoggedIn() {
   return Boolean(
       sessionStorage.getItem('parqet_access_token') ||
+      localStorage.getItem('parqet_access_token') ||
       localStorage.getItem('parqet_refresh_token')
   )
 }
@@ -97,7 +97,7 @@ async function generateCodeChallenge(verifier) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-// 5. Startet den OAuth-Flow zur exakten /callback Route
+// 5. OAuth-Flow starten
 export async function startOAuthFlow() {
   const clientId = await getClientId()
   if (!clientId) {
@@ -127,7 +127,7 @@ export async function startOAuthFlow() {
   window.location.href = url
 }
 
-// 6. Callback auf /callback abfangen und Code austauschen
+// 6. Callback nach Parqet Login (HIER KORRIGIERT: skip_parqet entfernen & Token sofort speichern)
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
@@ -176,7 +176,13 @@ export async function handleCallback() {
 
     const data = await res.json()
     if (data.access_token) {
+      // 1. Token SOFORT in beiden Storages ablegen
       sessionStorage.setItem('parqet_access_token', data.access_token)
+      localStorage.setItem('parqet_access_token', data.access_token)
+
+      // 2. WICHTIG: Manuellen Skip-Modus beenden!
+      localStorage.removeItem('skip_parqet')
+
       if (data.refresh_token) {
         localStorage.setItem('parqet_refresh_token', data.refresh_token)
         const { data: { user } } = await supabase.auth.getUser()
@@ -191,7 +197,7 @@ export async function handleCallback() {
       sessionStorage.removeItem('parqet_code_verifier')
       sessionStorage.removeItem('parqet_oauth_state')
 
-      // Nach erfolgreichem Token-Austausch von /callback auf die Startseite zurückkehren
+      // 3. Zurück ins Dashboard mit vollem Reload, damit alle Hooks frisch starten
       window.location.href = window.location.origin + '/#dashboard'
       return true
     }
@@ -201,9 +207,9 @@ export async function handleCallback() {
   return false
 }
 
-// 7. Access Token holen
+// 7. Access Token holen (mit Fallbacks und automatischem Refresh)
 export async function getAccessToken() {
-  let token = sessionStorage.getItem('parqet_access_token')
+  let token = sessionStorage.getItem('parqet_access_token') || localStorage.getItem('parqet_access_token')
   if (token) return token
 
   let refreshToken = localStorage.getItem('parqet_refresh_token')
@@ -222,7 +228,7 @@ export async function getAccessToken() {
       if (profile?.parqet_client_id) clientId = profile.parqet_client_id
     }
   } catch {
-    // DB-Fallback
+    // Fehler ignorieren
   }
 
   if (!refreshToken) return null
@@ -255,6 +261,7 @@ export async function getAccessToken() {
 
     if (data.access_token) {
       sessionStorage.setItem('parqet_access_token', data.access_token)
+      localStorage.setItem('parqet_access_token', data.access_token)
       if (data.refresh_token) {
         localStorage.setItem('parqet_refresh_token', data.refresh_token)
         const { data: { user } } = await supabase.auth.getUser()
@@ -279,6 +286,7 @@ export async function logout() {
   sessionStorage.removeItem('parqet_access_token')
   sessionStorage.removeItem('parqet_code_verifier')
   sessionStorage.removeItem('parqet_oauth_state')
+  localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_refresh_token')
   localStorage.removeItem('skip_parqet')
   clearCachedClientId()
@@ -297,5 +305,6 @@ export async function disconnectParqet() {
         .eq('id', user.id)
   }
   sessionStorage.removeItem('parqet_access_token')
+  localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_refresh_token')
 }

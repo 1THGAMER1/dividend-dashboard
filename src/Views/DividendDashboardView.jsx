@@ -1,5 +1,4 @@
-
-    import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import KpiCard from '../components/KpiCard.jsx'
 import DividendChart from '../components/DividendChart.jsx'
 import CumulativeDividendChart from '../components/CumulativeDividendChart.jsx'
@@ -20,76 +19,123 @@ const KPI_RANGES = [
     { key: '3y',  label: '3J'    },
 ]
 
+// ── ORIGINAL HILFSFUNKTIONEN WIE IM HOOK ────────────────────────────────────
+function yearTotal(mMap, y) {
+    const arr = mMap?.[y]
+    if (!arr) return 0
+    return arr.reduce((s, v) => s + (v || 0), 0)
+}
+
+function rolling12m(mMap, endY, endM) {
+    let sum = 0
+    for (let i = 0; i < 12; i++) {
+        let m = endM - i
+        let y = endY
+        if (m < 0) { m += 12; y -= 1 }
+        sum += mMap?.[y]?.[m] ?? 0
+    }
+    return sum
+}
+
 export default function DividendDashboardView({
-    showSkeleton,
-    showEmpty: propShowEmpty,
-    loadData,
-    loading,
-    error,
-    kpiRange,
-    setKpiRange,
-    k,
-    dividendYield,
-    trueCagr,
-    yoy,
-    hasRealData,
-    realTotal,
-    inflation,
-    forecast12m,
-    cy = new Date().getFullYear(),
-    forecastMonthly,
-    monthly: propMonthly,
-    cum: propCum,
-    forecastCum,
-    byHolding: propByHolding,
-    forecastByHolding,
-    currentValue = 0,
-    yearTotal,
-}) {
+                                                  showSkeleton: propSkeleton,
+                                                  loadData: propLoadData,
+                                                  loading: parqetLoading,
+                                                  error: propError,
+                                                  kpiRange: propKpiRange,
+                                                  setKpiRange: propSetKpiRange,
+                                                  cy = new Date().getFullYear(),
+                                                  currentValue: propCurrentValue = 0,
+                                                  monthly: propMonthly,
+                                                  byHolding: propByHolding,
+                                              }) {
     const cm = new Date().getMonth()
 
-    // ── SUPABASE-FALLBACK (nur aktiv wenn propMonthly leer ist) ───────────────
-    const [dbActivities, setDbActivities] = useState([])
+    // Eigener Range-State (falls nicht von außen gesteuert)
+    const [ownRange, setOwnRange] = useState('all')
+    const kpiRange = propKpiRange ?? ownRange
+    const setKpiRange = propSetKpiRange ?? setOwnRange
+
+    // ── 1. SUPABASE DATEN LADEN ──────────────────────────────────────────────
+    const [dbActs, setDbActs] = useState([])
+    const [dbLoading, setDbLoading] = useState(true)
+    const [error, setError] = useState(propError || null)
+
+    const loadDb = async () => {
+        setDbLoading(true)
+        try {
+            const data = await fetchAllDbActivities()
+            setDbActs(data || [])
+            setError(null)
+        } catch (e) {
+            setError(e.message)
+        } finally {
+            setDbLoading(false)
+        }
+    }
 
     useEffect(() => {
-        if (!propMonthly || Object.keys(propMonthly).length === 0) {
-            fetchAllDbActivities().then(data => setDbActivities(data || []))
-        }
-    }, [propMonthly])
+        loadDb()
+    }, [])
 
-    // Wenn propMonthly vorhanden ist, nutze das Original. Sonst aus Supabase synthetisieren:
-    const { effectiveMonthly, effectiveByHolding, effectiveCum, hasData } = useMemo(() => {
-        if (propMonthly && Object.keys(propMonthly).length > 0) {
+    const handleRefresh = async () => {
+        await loadDb()
+        if (propLoadData) await propLoadData()
+    }
+
+    // ── 2. DATENBASIS ERSTELLEN (AUS SUPABASE ODER PARQET) ───────────────────
+    const baseData = useMemo(() => {
+        const hasParqet = Boolean(propMonthly && Object.keys(propMonthly).length > 0)
+
+        // Wenn Parqet-Daten da sind, nutze diese Struktur
+        if (hasParqet) {
             return {
-                effectiveMonthly: propMonthly,
-                effectiveByHolding: propByHolding || {},
-                effectiveCum: propCum || {},
-                hasData: true,
+                monthly: propMonthly,
+                byHolding: propByHolding || {},
+                hasRecords: true,
+                liveValue: propCurrentValue
             }
         }
 
-        const synthM = {}
-        const synthH = {}
-        const synthC = {}
-        let count = 0
+        // ANDERNFALLS: Vollständig aus Supabase aufbauen!
+        const m = {}
+        const h = {}
+        let divCount = 0
+        let totalBuy = 0
 
-        ;(dbActivities || []).forEach(a => {
-            if (String(a.type || '').toLowerCase() !== 'dividend') return
+        ;(dbActs || []).forEach(a => {
+            const type = String(a.type || '').toLowerCase()
+            const amt = Number(a.amount ?? 0)
+
+            if (type === 'buy') {
+                totalBuy += amt
+                return
+            }
+            if (type === 'sell') {
+                totalBuy = Math.max(0, totalBuy - amt)
+                return
+            }
+
+            if (type !== 'dividend') return
+
             const d = new Date(a.date || a.datetime || 0)
             if (isNaN(d.getTime())) return
-            count++
+
+            divCount++
             const y = d.getFullYear()
-            const m = d.getMonth()
+            const mon = d.getMonth()
             const net = Number(a.amountNet ?? a.amount ?? 0)
-            const gross = Number(a.gross ?? (net + Number(a.tax || 0)))
             const tax = Number(a.tax ?? 0)
+            const gross = Number(a.gross ?? (net + tax))
             const key = a.isin || a.name || 'Unbekannt'
 
-            if (!synthM[y]) synthM[y] = Array(12).fill(0)
-            synthM[y][m] = +(synthM[y][m] + net).toFixed(2)
+            // Monthly
+            if (!m[y]) m[y] = Array(12).fill(0)
+            m[y][mon] = +(m[y][mon] + net).toFixed(2)
 
-            if (!synthH[key]) {
-                synthH[key] = {
+            // byHolding
+            if (!h[key]) {
+                h[key] = {
                     name: a.name || key,
                     isin: a.isin || key,
                     assetType: a.assetType || 'Security',
@@ -99,39 +145,117 @@ export default function DividendDashboardView({
                     tax: {}
                 }
             }
-            if (!synthH[key].monthly[y]) synthH[key].monthly[y] = Array(12).fill(0)
-            if (!synthH[key].gross[y])   synthH[key].gross[y] = Array(12).fill(0)
-            if (!synthH[key].tax[y])     synthH[key].tax[y] = Array(12).fill(0)
+            if (!h[key].monthly[y]) h[key].monthly[y] = Array(12).fill(0)
+            if (!h[key].gross[y])   h[key].gross[y] = Array(12).fill(0)
+            if (!h[key].tax[y])     h[key].tax[y] = Array(12).fill(0)
 
-            synthH[key].monthly[y][m] = +(synthH[key].monthly[y][m] + net).toFixed(2)
-            synthH[key].gross[y][m]   = +(synthH[key].gross[y][m] + gross).toFixed(2)
-            synthH[key].tax[y][m]     = +(synthH[key].tax[y][m] + tax).toFixed(2)
-            synthH[key].totalNet      = +(synthH[key].totalNet + net).toFixed(2)
-        })
-
-        Object.keys(synthM).forEach(y => {
-            synthC[y] = Array(12).fill(0)
-            let running = 0
-            for (let i = 0; i < 12; i++) {
-                running += (synthM[y][i] || 0)
-                synthC[y][i] = +running.toFixed(2)
-            }
+            h[key].monthly[y][mon] = +(h[key].monthly[y][mon] + net).toFixed(2)
+            h[key].gross[y][mon]   = +(h[key].gross[y][mon] + gross).toFixed(2)
+            h[key].tax[y][mon]     = +(h[key].tax[y][mon] + tax).toFixed(2)
+            h[key].totalNet        = +(h[key].totalNet + net).toFixed(2)
         })
 
         return {
-            effectiveMonthly: synthM,
-            effectiveByHolding: synthH,
-            effectiveCum: synthC,
-            hasData: count > 0,
+            monthly: m,
+            byHolding: h,
+            hasRecords: divCount > 0,
+            liveValue: propCurrentValue > 0 ? propCurrentValue : totalBuy
         }
-    }, [propMonthly, propByHolding, propCum, dbActivities])
+    }, [propMonthly, propByHolding, propCurrentValue, dbActs])
 
-    // ── ORIGINAL ZEITRAUM-FILTER FÜR TABELLE, DONUT & HEATMAP ────────────────
-    const { filteredByHolding, filteredMonthlyForHeatmap, rangeTotals } = useMemo(() => {
-        let net = 0
-        let gross = 0
-        let tax = 0
-        let countMonths = 0
+    const { monthly, byHolding, hasRecords, liveValue } = baseData
+
+    // ── 3. ORIGINALE BERECHNUNGSLOGIK (WIE VORHER) ───────────────────────────
+    const computed = useMemo(() => {
+        if (!hasRecords) return null
+
+        // Kumulierte Werte berechnen (Original)
+        const cum = {}
+        Object.keys(monthly).forEach(y => {
+            cum[y] = Array(12).fill(0)
+            let running = 0
+            for (let i = 0; i < 12; i++) {
+                running += (monthly[y][i] || 0)
+                cum[y][i] = +running.toFixed(2)
+            }
+        })
+
+        // Prognose basierend auf Vorjahr (Original)
+        const forecastM = {}
+        const forecastC = {}
+        const prevYear = monthly[cy - 1] || Array(12).fill(0)
+
+        ;[cy, cy + 1].forEach(targetY => {
+            forecastM[targetY] = Array(12).fill(0)
+            forecastC[targetY] = Array(12).fill(0)
+            let run = 0
+            for (let i = 0; i < 12; i++) {
+                let exp = 0
+                if (targetY === cy) {
+                    exp = i <= cm ? (monthly[cy]?.[i] || 0) : (prevYear[i] || 0)
+                } else {
+                    exp = (monthly[cy]?.[i] || 0) > 0 ? monthly[cy][i] : (prevYear[i] || 0)
+                }
+                forecastM[targetY][i] = exp
+                run += exp
+                forecastC[targetY][i] = +run.toFixed(2)
+            }
+        })
+
+        // Nächste 12 Monate Prognose (Original)
+        let fNext12m = 0
+        for (let i = 0; i < 12; i++) {
+            const fm = (cm + 1 + i) % 12
+            const fy = cy + Math.floor((cm + 1 + i) / 12)
+            fNext12m += forecastM?.[fy]?.[fm] || 0
+        }
+
+        // TTM (Letzte 12 Monate rollierend) (Original)
+        const ttmNet = rolling12m(monthly, cy, cm)
+        const prevTtmNet = rolling12m(monthly, cy - 1, cm)
+        const yoyGrowth = prevTtmNet > 0 ? +(((ttmNet / prevTtmNet) - 1) * 100).toFixed(1) : null
+
+        // CAGR Gesamt (Original)
+        const years = Object.keys(monthly).map(Number).filter(y => y < cy).sort()
+        let cagrObj = null
+        if (years.length >= 2) {
+            const firstY = years[0]
+            const lastY = years[years.length - 1]
+            const nY = lastY - firstY
+            const sVal = yearTotal(monthly, firstY)
+            const eVal = yearTotal(monthly, lastY)
+            if (sVal > 0 && eVal > 0 && nY > 0) {
+                cagrObj = {
+                    val: +(((Math.pow(eVal / sVal, 1 / nY) - 1) * 100)).toFixed(1),
+                    from: firstY,
+                    to: lastY,
+                    years: nY
+                }
+            }
+        }
+
+        // Wachstum laufendes Jahr vs Vorjahr (Original)
+        const lastYTotal = yearTotal(monthly, cy - 1)
+        const curYForecast = (forecastM[cy] || []).reduce((s, v) => s + v, 0)
+        const growthCy = lastYTotal > 0 ? +(((curYForecast - lastYTotal) / lastYTotal) * 100).toFixed(1) : null
+
+        return {
+            cum,
+            forecastMonthly: forecastM,
+            forecastCum: forecastC,
+            forecast12mNet: fNext12m,
+            forecast12mAvg: +(fNext12m / 12).toFixed(2),
+            yoyGrowth,
+            cagrObj,
+            growthCy,
+            ttmNet,
+            lastYTotal
+        }
+    }, [monthly, hasRecords, cy, cm])
+
+    // ── 4. FILTER FÜR ZEITRÄUME (ALL, YTD, 12M, 3J) ──────────────────────────
+    const rangeData = useMemo(() => {
+        if (!hasRecords) return { net: 0, gross: 0, tax: 0, avg: 0, filteredByHolding: {}, filteredHeatmap: {} }
 
         const isInRange = (y, m) => {
             if (kpiRange === 'all') return true
@@ -147,8 +271,13 @@ export default function DividendDashboardView({
             return true
         }
 
-        const resByHolding = {}
-        Object.entries(effectiveByHolding || {}).forEach(([isin, h]) => {
+        let net = 0
+        let gross = 0
+        let tax = 0
+        const fH = {}
+        const fM = {}
+
+        Object.entries(byHolding).forEach(([key, h]) => {
             const newM = {}
             const newG = {}
             const newT = {}
@@ -172,117 +301,64 @@ export default function DividendDashboardView({
                 }
             })
 
-            resByHolding[isin] = {
-                ...h,
-                monthly: newM,
-                gross: newG,
-                tax: newT,
-            }
+            fH[key] = { ...h, monthly: newM, gross: newG, tax: newT }
         })
 
-        const resMonthly = {}
-        Object.keys(effectiveMonthly || {}).forEach(yStr => {
+        Object.keys(monthly).forEach(yStr => {
             const y = Number(yStr)
             for (let m = 0; m < 12; m++) {
                 if (isInRange(y, m)) {
-                    const val = effectiveMonthly?.[y]?.[m] || 0
-                    if (!resMonthly[y]) resMonthly[y] = Array(12).fill(0)
-                    resMonthly[y][m] = val
+                    const val = monthly?.[y]?.[m] || 0
+                    if (!fM[y]) fM[y] = Array(12).fill(0)
+                    fM[y][m] = val
                     net += val
 
-                    Object.values(effectiveByHolding || {}).forEach(h => {
+                    Object.values(byHolding).forEach(h => {
                         gross += (h.gross?.[y]?.[m] || 0)
                         tax += (h.tax?.[y]?.[m] || 0)
                     })
-                    countMonths++
                 }
             }
         })
 
-        const monthsDivisor = kpiRange === 'ytd' ? (cm + 1) : kpiRange === '12m' ? 12 : kpiRange === '3y' ? 36 : Math.max(1, countMonths)
-        const avg = net / Math.max(1, monthsDivisor)
+        // Original-Divisor wie im Hook:
+        const divisor = kpiRange === 'ytd' ? (cm + 1) : kpiRange === '12m' ? 12 : kpiRange === '3y' ? 36 : Math.max(1, Object.keys(monthly).length * 12)
 
         return {
-            filteredByHolding: resByHolding,
-            filteredMonthlyForHeatmap: resMonthly,
-            rangeTotals: {
-                net,
-                gross: gross > 0 ? gross : net,
-                tax,
-                avg
-            }
+            net,
+            gross: gross > 0 ? gross : net,
+            tax,
+            avg: net / divisor,
+            filteredByHolding: fH,
+            filteredHeatmap: fM
         }
-    }, [effectiveByHolding, effectiveMonthly, kpiRange, cy, cm])
+    }, [hasRecords, byHolding, monthly, kpiRange, cy, cm])
 
-    // ── ORIGINAL CHART-DATEN ─────────────────────────────────────────────────
-    const { chartMonthly, chartCum } = useMemo(() => {
-        const allYears = Object.keys(effectiveMonthly || {}).map(Number).sort()
-        let keepYears = allYears
+    // ── 5. ORIGINAL RENDITE BERECHNUNGEN ──────────────────────────────────────
+    const currentYield = useMemo(() => {
+        if (!liveValue || liveValue <= 0 || !computed) return '–'
+        // Original: TTM-Dividenden geteilt durch Depotwert
+        const yieldVal = (computed.ttmNet / liveValue) * 100
+        return fmtPct(yieldVal)
+    }, [liveValue, computed])
 
-        if (kpiRange === '3y') {
-            keepYears = allYears.filter(y => y >= cy - 2)
-        } else if (kpiRange === '12m' || kpiRange === 'ytd') {
-            keepYears = allYears.filter(y => y >= cy - 1)
-        }
+    const forecastYield = useMemo(() => {
+        if (!liveValue || liveValue <= 0 || !computed) return '–'
+        // Original: Nächste 12M Prognose geteilt durch Depotwert
+        const yieldVal = (computed.forecast12mNet / liveValue) * 100
+        return fmtPct(yieldVal)
+    }, [liveValue, computed])
 
-        const resM = {}
-        const resC = {}
+    // ── GECONTROLTER RENDERING-ABLAUF ─────────────────────────────────────────
+    const isWorking = (parqetLoading || dbLoading) && !hasRecords
+    if (propSkeleton || isWorking) return <SkeletonDashboard />
+    if (!hasRecords) return <EmptyStateView onRefresh={handleRefresh} loading={dbLoading} error={error} />
 
-        keepYears.forEach(y => {
-            if (effectiveMonthly?.[y]) resM[y] = effectiveMonthly[y]
-            if (effectiveCum?.[y])     resC[y] = effectiveCum[y]
-        })
-
-        if (effectiveMonthly?.[cy] && !resM[cy]) resM[cy] = effectiveMonthly[cy]
-        if (effectiveCum?.[cy] && !resC[cy])     resC[cy] = effectiveCum[cy]
-
-        return { chartMonthly: resM, chartCum: resC }
-    }, [effectiveMonthly, effectiveCum, kpiRange, cy])
-
-    // ── ORIGINAL KPI-LOGIK ───────────────────────────────────────────────────
-    const activeK = useMemo(() => {
-        // Falls das Original-k aus dem Hook vorhanden ist, nutze es 1:1!
-        if (k && (k.net != null)) {
-            return k
-        }
-        return {
-            net: fmt(rangeTotals.net),
-            gross: fmt(rangeTotals.gross),
-            tax: fmt(rangeTotals.tax),
-            avg: fmt(rangeTotals.avg),
-        }
-    }, [k, rangeTotals])
-
-    // Original Rendite: Nutzt 1:1 dividendYield aus dem Hook!
-    const activeYield = useMemo(() => {
-        if (dividendYield && dividendYield[kpiRange] != null) {
-            return fmtPct(dividendYield[kpiRange])
-        }
-        return '–'
-    }, [dividendYield, kpiRange])
-
-    // Original Prognose-Rendite-Rechner
-    const calcForecastNext12mNet = () => {
-        let total = 0
-        for (let i = 0; i < 12; i++) {
-            const futureMonth = (cm + 1 + i) % 12
-            const futureYear  = cy + Math.floor((cm + 1 + i) / 12)
-            total += forecastMonthly?.[futureYear]?.[futureMonth] ?? 0
-        }
-        return +total.toFixed(2)
-    }
-
-    const currentRangeLabel = KPI_RANGES.find(r => r.key === kpiRange)?.label || 'Gesamt'
-
-    // ── RENDERING ────────────────────────────────────────────────────────────
-    if (showSkeleton) return <SkeletonDashboard />
-    if (!hasData || propShowEmpty) {
-        return <EmptyStateView onRefresh={loadData} loading={loading} error={error} />
-    }
+    const rangeLabel = KPI_RANGES.find(r => r.key === kpiRange)?.label || 'Gesamt'
 
     return (
         <div>
-            {/* ZEITRAUM-SCHALTER & TITEL */}
+            {/* KOPFZEILE MIT SCHALTER */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -336,59 +412,62 @@ export default function DividendDashboardView({
             {/* 1. KPI-REIHE (ORIGINAL) */}
             <div className="kpi-grid">
                 <KpiCard
-                    label={`Dividenden Netto (${currentRangeLabel})`}
-                    value={activeK.net}
+                    label={`Dividenden Netto (${rangeLabel})`}
+                    value={fmt(rangeData.net)}
                     color="#22c55e"
-                    detail={{ label: 'Ø Monatlich', value: activeK.avg, color: '#a78bfa' }}
+                    detail={{ label: 'Ø Monatlich', value: fmt(rangeData.avg), color: '#a78bfa' }}
                 />
                 <KpiCard
                     label="Brutto"
-                    value={activeK.gross}
+                    value={fmt(rangeData.gross)}
                     color="#60a5fa"
-                    detail={{ label: 'davon Steuern', value: activeK.tax, color: '#fb923c' }}
+                    detail={{ label: 'davon Steuern', value: fmt(rangeData.tax), color: '#fb923c' }}
                 />
                 <KpiCard
                     label="Dividendenrendite"
-                    value={activeYield}
+                    value={currentYield}
                     color="#34d399"
-                    sub={currentValue > 0 ? "auf Marktwert (annualisiert)" : "Marktwert noch nicht erfasst"}
+                    sub={liveValue > 0 ? "12M rollierend / Marktwert" : "Marktwert noch nicht erfasst"}
                 />
             </div>
 
-            {/* 2. KPI-REIHE (ORIGINAL: CAGR, YOY & REAL) */}
+            {/* 2. KPI-REIHE (ORIGINAL CAGR & YOY) */}
             <div className="kpi-grid">
-                {trueCagr !== null && (
-                    <KpiCard label={`CAGR (${trueCagr.years}J)`} value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'} color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'} sub={`${trueCagr.from} – ${trueCagr.to}`} />
+                {computed.cagrObj !== null && (
+                    <KpiCard
+                        label={`CAGR (${computed.cagrObj.years}J)`}
+                        value={(computed.cagrObj.val >= 0 ? '+' : '') + String(computed.cagrObj.val).replace('.', ',') + ' %'}
+                        color={computed.cagrObj.val >= 0 ? '#5bcec2' : '#ef4444'}
+                        sub={`${computed.cagrObj.from} – ${computed.cagrObj.to}`}
+                    />
                 )}
-                <KpiCard label="YoY-Wachstum" value={yoy === null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'} color={yoy === null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'} sub={yoy === null ? 'Nicht genügend Daten' : '12M vs. Vorjahr'} />
-                {hasRealData && (
-                    <KpiCard label="Real (inflationsber.)" value={fmt(realTotal)} color="#f59e0b" detail={{ label: 'Verlust', value: fmt(inflation), color: '#ef4444' }} sub={`Basis: ${Object.keys(effectiveMonthly || {}).map(Number).sort()[0]}`} />
-                )}
+                <KpiCard
+                    label="YoY-Wachstum"
+                    value={computed.yoyGrowth !== null ? `${computed.yoyGrowth >= 0 ? '+' : ''}${String(computed.yoyGrowth).replace('.', ',')} %` : '–'}
+                    color={computed.yoyGrowth !== null ? (computed.yoyGrowth >= 0 ? '#22c55e' : '#ef4444') : '#556070'}
+                    sub={computed.yoyGrowth !== null ? '12M vs. Vorjahr' : 'Nicht genügend Daten'}
+                />
             </div>
 
             {/* 3. KPI-REIHE (ORIGINAL PROGNOSE) */}
             <p style={{ fontSize:10, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8, marginTop:6 }}>Prognose · Nächste 12 Monate</p>
             <div className="kpi-grid">
-                <KpiCard label="Voraussichtlich Netto" value={forecast12m ? fmt(forecast12m.total) : '–'} color="#f472b6" detail={{ label:'Ø Monatlich', value: forecast12m ? fmt(forecast12m.avg) : '–', color:'#f472b6' }} sub="Basierend auf Vorjahren" />
+                <KpiCard
+                    label="Voraussichtlich Netto"
+                    value={fmt(computed.forecast12mNet)}
+                    color="#f472b6"
+                    detail={{ label:'Ø Monatlich', value: fmt(computed.forecast12mAvg), color:'#f472b6' }}
+                    sub="Basierend auf Vorjahren"
+                />
                 <KpiCard
                     label={`Wachstum ${cy} vs. ${cy - 1}`}
-                    value={(() => {
-                        const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0);
-                        const actualLastYear = typeof yearTotal === 'function' ? yearTotal(effectiveMonthly, cy - 1) : 0;
-                        if (!actualLastYear || actualLastYear === 0) return '–';
-                        const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100;
-                        return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %';
-                    })()}
-                    color="#22c55e"
+                    value={computed.growthCy !== null ? `${computed.growthCy >= 0 ? '+' : ''}${String(computed.growthCy).replace('.', ',')} %` : '–'}
+                    color={computed.growthCy !== null && computed.growthCy >= 0 ? '#22c55e' : '#ef4444'}
                     sub="Prognose Gesamtjahr"
                 />
                 <KpiCard
                     label="Progn. Dividendenrendite"
-                    value={(() => {
-                        const forecastNet = calcForecastNext12mNet();
-                        if (!currentValue || currentValue === 0) return '–';
-                        return fmtPct((forecastNet / currentValue) * 100);
-                    })()}
+                    value={forecastYield}
                     color="#5bcec2"
                     sub="Nächste 12M / Marktwert"
                 />
@@ -403,29 +482,29 @@ export default function DividendDashboardView({
                 alignItems: 'stretch'
             }}>
                 <DividendChart
-                    monthly={chartMonthly}
-                    forecastMonthly={forecastMonthly}
-                    byHolding={filteredByHolding}
-                    forecastByHolding={forecastByHolding}
+                    monthly={monthly}
+                    forecastMonthly={computed.forecastMonthly}
+                    byHolding={rangeData.filteredByHolding}
+                    forecastByHolding={{}}
                     kpiRange={kpiRange}
                 />
                 <CumulativeDividendChart
-                    monthly={chartMonthly}
-                    cum={chartCum}
-                    forecastCum={forecastCum}
-                    byHolding={filteredByHolding}
+                    monthly={monthly}
+                    cum={computed.cum}
+                    forecastCum={computed.forecastCum}
+                    byHolding={rangeData.filteredByHolding}
                 />
             </div>
 
             {/* HEATMAP */}
             <div style={{ marginTop: 16 }}>
-                <DividendHeatmap monthly={filteredMonthlyForHeatmap} />
+                <DividendHeatmap monthly={rangeData.filteredHeatmap} />
             </div>
 
             {/* DONUT & TABELLE */}
             <div id="dividends-table" style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <DividendDonut byHolding={filteredByHolding} kpiRange={kpiRange} />
-                <PositionsTable byHolding={filteredByHolding} kpiRange={kpiRange} />
+                <DividendDonut byHolding={rangeData.filteredByHolding} kpiRange={kpiRange} />
+                <PositionsTable byHolding={rangeData.filteredByHolding} kpiRange={kpiRange} />
             </div>
         </div>
     )
