@@ -34,7 +34,26 @@ export async function getClientId() {
   return null
 }
 
-// 2. PKCE Helfer
+// 2. Client-ID in Supabase profiles speichern (wichtig für ProfilePage & ParqetSetup)
+export async function saveClientId(clientId) {
+  cachedClientId = clientId
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { error } = await supabase
+      .from('profiles')
+      .upsert(
+          { id: user.id, parqet_client_id: clientId },
+          { onConflict: 'id' }
+      )
+
+  if (error) {
+    console.error('Fehler beim Speichern der Parqet Client-ID:', error)
+    throw error
+  }
+}
+
+// 3. PKCE Helfer
 function generateRandomString(length) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
   const arr = new Uint8Array(length)
@@ -54,7 +73,7 @@ async function generateCodeChallenge(verifier) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-// 3. OAuth Flow starten
+// 4. OAuth Flow starten
 export async function startOAuthFlow() {
   const clientId = await getClientId()
   if (!clientId) {
@@ -79,7 +98,7 @@ export async function startOAuthFlow() {
   window.location.href = url
 }
 
-// 4. OAuth Callback verarbeiten (wird von useDividendData aufgerufen)
+// 5. OAuth Callback verarbeiten (wird von useDividendData aufgerufen)
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
@@ -123,7 +142,6 @@ export async function handleCallback() {
         }
       }
 
-      // Query-Parameter sauber aus der URL entfernen
       window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
       sessionStorage.removeItem('parqet_code_verifier')
       return true
@@ -134,16 +152,15 @@ export async function handleCallback() {
   return false
 }
 
-// 5. Prüft, ob Parqet aktuell eingeloggt/verknüpft ist (wird von useDividendData erwartet!)
+// 6. Prüft, ob Parqet aktuell eingeloggt/verknüpft ist
 export async function isLoggedIn() {
   const token = await getAccessToken()
   return Boolean(token)
 }
 
-// Alias für Konsistenz
 export const isParqetConnected = isLoggedIn
 
-// 6. Access-Token holen (mit automatischem Refresh)
+// 7. Access-Token holen (mit automatischem Refresh)
 export async function getAccessToken() {
   let token = sessionStorage.getItem('parqet_access_token')
   if (token) return token
@@ -202,7 +219,7 @@ export async function getAccessToken() {
   return null
 }
 
-// 7. Logout (Supabase + Parqet Session)
+// 8. Logout
 export async function logout() {
   sessionStorage.removeItem('parqet_access_token')
   sessionStorage.removeItem('parqet_code_verifier')
@@ -214,7 +231,7 @@ export async function logout() {
   window.location.href = '/'
 }
 
-// 8. Parqet-Verbindung gezielt trennen
+// 9. Parqet gezielt trennen
 export async function disconnectParqet() {
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {

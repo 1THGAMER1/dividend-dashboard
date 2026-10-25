@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import { createManualActivity, updateManualActivity, deleteManualActivity } from '../utils/manualActivities'
-import { searchAssets, fetchCurrentPrice } from '../api'
 
-export default function AddActivityModal({ isOpen, onClose, onSuccess, initialActivity = null }) {
+export default function AddActivityModal({
+                                             isOpen = true,
+                                             onClose,
+                                             onSuccess,
+                                             initialActivity = null,
+                                             existingHoldings = []
+                                         }) {
+    if (isOpen === false) return null
+
     const isEdit = Boolean(initialActivity?.id)
 
     const [type, setType] = useState('buy')
@@ -23,7 +30,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [error, setError] = useState(null)
 
-    // Wenn initialActivity übergeben wird (Edit-Modus), Felder vorbefüllen
     useEffect(() => {
         if (initialActivity) {
             setType(initialActivity.type || 'buy')
@@ -40,7 +46,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
             setTax(String(initialActivity.tax || '0'))
             setConfirmDelete(false)
         } else {
-            // Reset bei Neuanlage
             setType('buy')
             setDatetime(new Date().toISOString().slice(0, 16))
             setSelectedAsset(null)
@@ -54,27 +59,53 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
             setConfirmDelete(false)
         }
         setError(null)
-    }, [initialActivity, isOpen])
+    }, [initialActivity])
 
-    // Suche nach Assets
+    // Suche in existierenden Beständen oder über Yahoo Netlify Proxy
     useEffect(() => {
         if (!query.trim() || query.length < 2 || selectedAsset) {
             setResults([])
             return
         }
+
         const timer = setTimeout(async () => {
             setSearching(true)
-            try {
-                const res = await searchAssets(query)
-                setResults(res)
-            } finally {
-                setSearching(false)
-            }
-        }, 300)
-        return () => clearTimeout(timer)
-    }, [query, selectedAsset])
+            const q = query.toLowerCase()
 
-    // Automatische Berechnung des Betrags bei Anteile/Kurs-Änderung
+            // 1. Zuerst lokale Holdings durchsuchen
+            const localMatches = (existingHoldings || [])
+                .filter(h => (h.name || '').toLowerCase().includes(q) || (h.isin || '').toLowerCase().includes(q) || (h.symbol || '').toLowerCase().includes(q))
+                .slice(0, 5)
+                .map(h => ({
+                    name: h.name || h.title,
+                    symbol: h.isin || h.symbol || h.id,
+                    type: h.assetType || 'Holding',
+                }))
+
+            // 2. Falls Yahoo-Funktion erreichbar ist, externe Treffer ergänzen
+            try {
+                const res = await fetch(`/.netlify/functions/yahoo-dividends?q=${encodeURIComponent(query)}`)
+                if (res.ok) {
+                    const data = await res.json()
+                    const yahooMatches = (data?.quotes || []).slice(0, 5).map(item => ({
+                        name: item.shortname || item.longname || item.symbol,
+                        symbol: item.symbol,
+                        type: item.quoteType || 'Security'
+                    }))
+                    setResults([...localMatches, ...yahooMatches])
+                    return
+                }
+            } catch {
+                // Fallback auf lokale Matches
+            }
+
+            setResults(localMatches)
+            setSearching(false)
+        }, 300)
+
+        return () => clearTimeout(timer)
+    }, [query, selectedAsset, existingHoldings])
+
     const handleSharesChange = (val) => {
         setShares(val)
         const p = parseFloat(price.replace(',', '.')) || 0
@@ -89,26 +120,16 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
         if (p > 0 && s > 0) setAmount((p * s).toFixed(2))
     }
 
-    // Asset aus Dropdown auswählen
-    const handleSelectAsset = async (item) => {
+    const handleSelectAsset = (item) => {
         setSelectedAsset({
             name: item.name,
             isin: item.symbol,
-            assetType: item.rawType || 'Security'
+            assetType: item.type || 'Security'
         })
         setResults([])
         setQuery('')
-
-        // Live-Kurs laden
-        const livePrice = await fetchCurrentPrice(item.symbol)
-        if (livePrice) {
-            setPrice(String(livePrice))
-            const s = parseFloat(shares.replace(',', '.')) || 0
-            if (s > 0) setAmount((s * livePrice).toFixed(2))
-        }
     }
 
-    // Speichern (Create oder Update)
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError(null)
@@ -123,7 +144,7 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                 amount: parseFloat(String(amount).replace(',', '.')) || 0,
                 fee: parseFloat(String(fee).replace(',', '.')) || 0,
                 tax: parseFloat(String(tax).replace(',', '.')) || 0,
-                asset: selectedAsset || { name: 'Manuelle Buchung', isin: null, assetType: 'Security' }
+                asset: selectedAsset || { name: query || 'Manuelle Buchung', isin: null, assetType: 'Security' }
             }
 
             if (isEdit) {
@@ -133,7 +154,7 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
             }
 
             onSuccess?.()
-            onClose()
+            onClose?.()
         } catch (err) {
             setError(err.message)
         } finally {
@@ -141,7 +162,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
         }
     }
 
-    // Löschen
     const handleDelete = async () => {
         if (!confirmDelete) {
             setConfirmDelete(true)
@@ -153,15 +173,13 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
         try {
             await deleteManualActivity(initialActivity.id)
             onSuccess?.()
-            onClose()
+            onClose?.()
         } catch (err) {
             setError(err.message)
         } finally {
             setDeleting(false)
         }
     }
-
-    if (!isOpen) return null
 
     const inputStyle = {
         width: '100%',
@@ -215,7 +233,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                 )}
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {/* Typauswahl */}
                     <div style={{ display: 'flex', gap: 6 }}>
                         {[
                             ['buy', '🟢 Kauf'],
@@ -243,7 +260,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                         ))}
                     </div>
 
-                    {/* Datum & Uhrzeit */}
                     <div>
                         <label style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>DATUM & UHRZEIT</label>
                         <input
@@ -255,9 +271,8 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                         />
                     </div>
 
-                    {/* Wertpapier-Auswahl / Suche */}
                     <div>
-                        <label style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>WERTPAPIER / KRYPTO</label>
+                        <label style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>WERTPAPIER / ASSET</label>
                         {selectedAsset ? (
                             <div style={{
                                 display: 'flex',
@@ -285,7 +300,7 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                             <div style={{ position: 'relative' }}>
                                 <input
                                     type="text"
-                                    placeholder="Aktie, ETF oder z. B. BTC suchen…"
+                                    placeholder="Name oder ISIN eingeben…"
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
                                     style={inputStyle}
@@ -323,7 +338,7 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                                             >
                                                 <div>
                                                     <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{item.name}</div>
-                                                    <div style={{ fontSize: 10, color: '#64748b' }}>{item.symbol} {item.exchange ? `· ${item.exchange}` : ''}</div>
+                                                    <div style={{ fontSize: 10, color: '#64748b' }}>{item.symbol}</div>
                                                 </div>
                                                 <span style={{ fontSize: 10, background: '#1e293b', color: '#94a3b8', padding: '2px 6px', borderRadius: 4 }}>
                                                     {item.type}
@@ -336,7 +351,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                         )}
                     </div>
 
-                    {/* Anteile & Kurs (nur bei Kauf & Verkauf) */}
                     {type !== 'dividend' && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                             <div>
@@ -362,7 +376,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                         </div>
                     )}
 
-                    {/* Gesamtbetrag */}
                     <div>
                         <label style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
                             {type === 'dividend' ? 'DIVIDENDE BRUTTO (€)' : 'GESAMTBETRAG (€)'}
@@ -377,7 +390,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                         />
                     </div>
 
-                    {/* Gebühren & Steuern */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                         <div>
                             <label style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>GEBÜHREN (€)</label>
@@ -401,7 +413,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                         </div>
                     </div>
 
-                    {/* Buttons: Löschen + Speichern */}
                     <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                         {isEdit && (
                             <button
@@ -418,7 +429,6 @@ export default function AddActivityModal({ isOpen, onClose, onSuccess, initialAc
                                     fontSize: 13,
                                     fontWeight: 700,
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s',
                                 }}
                             >
                                 {deleting ? 'Löscht…' : confirmDelete ? 'Sicher löschen?' : '🗑️ Löschen'}
