@@ -144,21 +144,29 @@ export function formatActivity(row) {
 }
 
 // Lädt jetzt ALLES direkt und ausschließlich aus Supabase
+// Lädt ALLES aus Supabase, seitenweise (Supabase liefert pro Abfrage höchstens 1000 Zeilen)
 export async function fetchAllDbActivities() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return []
 
-    const { data, error } = await supabase
-        .from('user_activities')
-        .select('*')
-        .order('datetime', { ascending: false })
+    const PAGE = 1000
+    let all = []
+    for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+            .from('user_activities')
+            .select('*')
+            .order('datetime', { ascending: false })
+            .order('id', { ascending: true })
+            .range(from, from + PAGE - 1)
 
-    if (error) {
-        console.warn('Fehler beim Laden aus user_activities:', error.message)
-        return []
+        if (error) {
+            console.warn('Fehler beim Laden aus user_activities:', error.message)
+            break
+        }
+        all = all.concat(data || [])
+        if (!data || data.length < PAGE) break
     }
-
-    return (data || []).map(formatActivity)
+    return all.map(formatActivity)
 }
 
 // Aktualisiert eine bestehende manuelle Aktivität
@@ -218,4 +226,29 @@ export async function deleteManualActivity(id) {
 
     if (error) throw error
     return true
+}
+
+// Bringt eine DB-Aktivität in die Parqet-Form, damit dataUtils (groupByHolding, buildForecast, …) sie versteht
+export function toParqetShape(a) {
+    const t = String(a.type || '').trim().toLowerCase()
+    const type = ['dividende', 'dividenden'].includes(t) ? 'dividend' : t
+    const key = a.isin || a.name || 'unknown'
+    const income = ['dividend', 'interest'].includes(type)
+    const net = a.amountNet ?? a.amount
+    // Beim Sync steht bei Dividenden der Nettobetrag in amount: Brutto = Netto + Steuer
+    const gross = income ? Math.max(Number(a.gross) || 0, +(net + (a.tax || 0)).toFixed(2)) : a.amount
+    return {
+        id: a.id,
+        type,
+        datetime: a.datetime || a.date,
+        shares: a.shares,
+        price: a.price,
+        amount: gross,
+        amountNet: net,
+        fee: a.fee,
+        tax: a.tax,
+        currency: a.currency,
+        holdingAssetType: a.assetType,
+        asset: { isin: key, symbol: key, name: a.name },
+    }
 }
