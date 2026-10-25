@@ -41,12 +41,23 @@ const PAGE = 100
 const chip = (active) => ({
     background: active ? '#009991' : '#0f1420',
     color: active ? '#fff' : '#93c5fd',
-    border: '1px solid #2a3a50', borderRadius: 6, padding: '5px 10px', fontSize: 11,
-    fontWeight: active ? 600 : 400, cursor: 'pointer',
+    border: '1px solid #2a3a50',
+    borderRadius: 8,
+    padding: '6px 12px',
+    fontSize: 11,
+    fontWeight: active ? 600 : 400,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
 })
-const card = { background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 'clamp(12px, 3vw, 20px)' }
 
-export default function ActivitiesView({ holdings = [], enrichedHoldings = [] }) {
+const card = {
+    background: '#161b27',
+    border: '1px solid #1e2a3a',
+    borderRadius: 16,
+    padding: 'clamp(14px, 3vw, 20px)',
+}
+
+export default function ActivitiesView() {
     const [rows, setRows] = useState([])
     const [loading, setLoading] = useState(true)
     const [syncing, setSyncing] = useState(false)
@@ -54,56 +65,44 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
     const [filter, setFilter] = useState('all')
     const [query, setQuery] = useState('')
     const [visible, setVisible] = useState(PAGE)
+
+    // Modal-Steuerung (Neu & Bearbeiten)
+    const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingItem, setEditingItem] = useState(null)
-    const [isAddOpen, setIsAddOpen] = useState(false)
 
-    // Name-Map aus Positionen aufbauen
-    const names = useMemo(() => {
-        const m = {}
-        ;[...(holdings || []), ...(enrichedHoldings || [])].forEach(h => {
-            const n = h.name || h.title
-            if (!n) return
-                ;[h.id, h.isin, h.holdingId].filter(Boolean).forEach(k => { m[String(k).toUpperCase()] = n })
-        })
-        return m
-    }, [holdings, enrichedHoldings])
-
-    // Lädt alles direkt aus Supabase
-    const loadFromSupabase = async () => {
+    // 1. NUR AUS SUPABASE LADEN (Kein Parqet-Aufruf!)
+    const loadData = async () => {
         setLoading(true)
         setError(null)
         try {
             const data = await fetchAllDbActivities()
             setRows(data)
-            // Falls Supabase noch komplett leer ist, initialen Sync anwerfen
-            if (data.length === 0) {
-                await handleSync()
-            }
         } catch (e) {
-            setError(e.message)
+            setError('Fehler beim Laden aus der Datenbank: ' + e.message)
         } finally {
             setLoading(false)
         }
     }
 
-    // Parqet -> Supabase Synchronisation anstoßen
+    useEffect(() => {
+        loadData()
+    }, [])
+
+    // 2. PARQET-SYNC NUR AUF NUTZERWUNSCH
     const handleSync = async () => {
         setSyncing(true)
         setError(null)
         try {
-            await syncParqetToSupabase(names)
+            await syncParqetToSupabase()
+            // Nach dem Sync frisch aus Supabase nachladen
             const updated = await fetchAllDbActivities()
             setRows(updated)
         } catch (e) {
-            setError('Sync fehlgeschlagen: ' + e.message)
+            setError('Synchronisation fehlgeschlagen: ' + e.message)
         } finally {
             setSyncing(false)
         }
     }
-
-    useEffect(() => {
-        loadFromSupabase()
-    }, [])
 
     const counts = useMemo(() => {
         const c = {}
@@ -124,12 +123,112 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
     const sum = (type) => filtered.filter(r => r.type === type).reduce((s, r) => s + r.amount, 0)
     const shown = filtered.slice(0, visible)
 
-    if (loading && rows.length === 0) {
-        return <div style={{ ...card, color: '#64748b', fontSize: 13 }}>Lade Aktivitäten aus Supabase…</div>
+    // LADEZUSTAND
+    if (loading) {
+        return (
+            <div style={{ ...card, textAlign: 'center', padding: 40, color: '#64748b' }}>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Lade Aktivitäten aus deiner Datenbank…</div>
+            </div>
+        )
     }
 
+    // EMPTY-STATE: Noch keine Daten in Supabase vorhanden!
+    if (rows.length === 0) {
+        return (
+            <div style={{
+                ...card,
+                textAlign: 'center',
+                padding: 'clamp(32px, 5vw, 64px) 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 16,
+                maxWidth: 600,
+                margin: '20px auto',
+            }}>
+                <div style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: '50%',
+                    background: 'rgba(0, 153, 145, 0.12)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 28,
+                }}>
+                    📜
+                </div>
+
+                <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' }}>
+                        Noch keine Aktivitäten vorhanden
+                    </h2>
+                    <p style={{ color: '#7a8ba0', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
+                        In deiner persönlichen Datenbank wurden noch keine Aktivitäten gespeichert.
+                        Du kannst deinen bisherigen Verlauf direkt aus Parqet importieren oder eigene manuelle Buchungen erfassen.
+                    </p>
+                </div>
+
+                {error && (
+                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef444455', color: '#fca5a5', padding: '8px 14px', borderRadius: 8, fontSize: 12 }}>
+                        ⚠ {error}
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
+                    <button
+                        onClick={handleSync}
+                        disabled={syncing}
+                        style={{
+                            background: '#009991',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 10,
+                            padding: '10px 18px',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            cursor: syncing ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                        }}
+                    >
+                        <span>{syncing ? '⏳' : '🔄'}</span>
+                        <span>{syncing ? 'Synchronisiere mit Parqet…' : 'Daten von Parqet synchronisieren'}</span>
+                    </button>
+
+                    <button
+                        onClick={() => { setEditingItem(null); setIsModalOpen(true) }}
+                        style={{
+                            background: '#0f1420',
+                            color: '#e0e6f0',
+                            border: '1px solid #2a3a50',
+                            borderRadius: 10,
+                            padding: '10px 18px',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        ✍️ Manuell erfassen
+                    </button>
+                </div>
+
+                <AddActivityModal
+                    isOpen={isModalOpen}
+                    initialActivity={null}
+                    onClose={() => setIsModalOpen(false)}
+                    onSuccess={loadData}
+                />
+            </div>
+        )
+    }
+
+    // NORMALE ANSICHT MIT DATEN
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* OBERE KONTROLL-LEISTE */}
             <div style={card}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
                     {FILTERS.map(([f, label]) => (
@@ -138,39 +237,53 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                         </button>
                     ))}
                     <span style={{ flex: 1 }} />
+
+                    {/* Neuer Eintrag erfassen */}
+                    <button
+                        onClick={() => { setEditingItem(null); setIsModalOpen(true) }}
+                        style={{ ...chip(false), background: '#009991', color: '#fff', border: 'none', fontWeight: 600 }}
+                    >
+                        + Aktivität erfassen
+                    </button>
+
+                    {/* Manueller Sync-Button */}
                     <button
                         onClick={handleSync}
                         disabled={syncing}
-                        style={{ ...chip(false), background: syncing ? '#1e293b' : '#009991', color: '#fff', border: 'none' }}
-                        title="Lädt neue Parqet-Daten direkt in deine Supabase-Datenbank"
+                        style={{ ...chip(false), opacity: syncing ? 0.6 : 1 }}
+                        title="Neue Buchungen aus Parqet in deine Datenbank übertragen"
                     >
-                        {syncing ? '⏳ Synchronisiere mit Parqet…' : '🔄 Mit Parqet abgleichen'}
-                    </button>
-                    <button
-                        onClick={() => { setEditingItem(null); setIsAddOpen(true) }}
-                        style={{ ...chip(false), background: '#009991', color: '#fff', border: 'none' }}
-                    >
-                        + Neu
+                        {syncing ? '⏳ Sync läuft…' : '🔄 Mit Parqet abgleichen'}
                     </button>
                 </div>
 
                 <input
                     value={query}
                     onChange={e => setQuery(e.target.value)}
-                    placeholder="Suchen nach Name oder ISIN…"
-                    style={{ width: '100%', boxSizing: 'border-box', background: '#0f1420', color: '#e0e6f0', border: '1px solid #2a3a50', borderRadius: 8, padding: '9px 12px', fontSize: 13 }}
+                    placeholder="Suchen nach Wertpapier, ISIN…"
+                    style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        background: '#0f1420',
+                        color: '#e0e6f0',
+                        border: '1px solid #2a3a50',
+                        borderRadius: 8,
+                        padding: '9px 12px',
+                        fontSize: 13,
+                    }}
                 />
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginTop: 12 }}>
+                {/* KPI-Kacheln (vollständig aus DB-Daten berechnet) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginTop: 12 }}>
                     {[
                         ['Einträge', String(filtered.length), '#f1f5f9'],
                         ['Käufe', fmt(sum('buy')), '#f1f5f9'],
                         ['Verkäufe', fmt(sum('sell')), '#f1f5f9'],
                         ['Dividenden (netto)', fmt(sum('dividend')), '#22c55e'],
                     ].map(([label, value, color]) => (
-                        <div key={label} style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: '8px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>{label}</div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color, marginTop: 2 }}>{value}</div>
+                        <div key={label} style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: '8px 12px' }}>
+                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color, marginTop: 2 }}>{value}</div>
                         </div>
                     ))}
                 </div>
@@ -182,8 +295,11 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                 )}
             </div>
 
+            {/* TRANSAKTIONSLISTE */}
             {shown.length === 0 ? (
-                <div style={{ ...card, textAlign: 'center', color: '#64748b', fontSize: 13 }}>Keine Aktivitäten gefunden.</div>
+                <div style={{ ...card, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                    Keine Aktivitäten für diese Filterkriterien gefunden.
+                </div>
             ) : (
                 <div style={{ ...card, padding: 'clamp(8px, 2vw, 14px)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {shown.map((r, i) => {
@@ -195,15 +311,36 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                         return (
                             <React.Fragment key={r.id}>
                                 {monthChanged && r.date && (
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, margin: i === 0 ? '0 0 2px' : '10px 0 2px' }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, margin: i === 0 ? '0 0 2px' : '12px 0 2px' }}>
                                         {monthLabel(r.date)}
                                     </div>
                                 )}
-                                <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 10, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    background: '#0f1420',
+                                    border: '1px solid #1e2a3a',
+                                    borderRadius: 10,
+                                    padding: '10px 12px',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-                                        <span style={{ background: `${t.color}26`, color: t.color, border: `1px solid ${t.color}55`, borderRadius: 6, padding: '2px 6px', fontSize: 9, fontWeight: 700, minWidth: 74, textAlign: 'center', flexShrink: 0 }}>
+                                        <span style={{
+                                            background: `${t.color}26`,
+                                            color: t.color,
+                                            border: `1px solid ${t.color}55`,
+                                            borderRadius: 6,
+                                            padding: '2px 6px',
+                                            fontSize: 9,
+                                            fontWeight: 700,
+                                            minWidth: 74,
+                                            textAlign: 'center',
+                                            flexShrink: 0,
+                                        }}>
                                             {t.label}
                                         </span>
+
                                         <div style={{ minWidth: 0 }}>
                                             <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.name}>
                                                 {r.name}
@@ -223,22 +360,23 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Betrag + Edit-Button bei manuellen Einträgen */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                                         <div style={{ fontSize: 13, fontWeight: 700, color: t.sign > 0 ? '#22c55e' : '#f1f5f9', textAlign: 'right' }}>
                                             {r.amount > 0 || t.sign === 0 ? `${sign}${fmt(r.amount)}` : '—'}
                                         </div>
 
-                                        {/* Bearbeiten-Knopf nur für manuelle Buchungen */}
                                         {r.isManual && (
                                             <button
-                                                onClick={() => { setEditingItem(r); setIsAddOpen(true) }}
-                                                title="Aktivität bearbeiten oder löschen"
+                                                onClick={() => { setEditingItem(r); setIsModalOpen(true) }}
+                                                title="Manuelle Aktivität bearbeiten oder löschen"
                                                 style={{
                                                     background: '#1e293b',
                                                     border: '1px solid #334155',
                                                     color: '#94a3b8',
                                                     borderRadius: 6,
-                                                    padding: '4px 7px',
+                                                    padding: '3px 6px',
                                                     fontSize: 11,
                                                     cursor: 'pointer',
                                                 }}
@@ -259,11 +397,13 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                     )}
                 </div>
             )}
+
+            {/* MODAL FÜR NEUANLAGE & BEARBEITUNG */}
             <AddActivityModal
-                isOpen={isAddOpen}
+                isOpen={isModalOpen}
                 initialActivity={editingItem}
-                onClose={() => { setIsAddOpen(false); setEditingItem(null) }}
-                onSuccess={loadFromSupabase}
+                onClose={() => { setIsModalOpen(false); setEditingItem(null) }}
+                onSuccess={loadData}
             />
         </div>
     )
