@@ -252,3 +252,39 @@ export function toParqetShape(a) {
         asset: { isin: key, symbol: key, name: a.name },
     }
 }
+
+// Repariert Aktivitäten, bei denen der Name fälschlicherweise = ISIN ist
+export async function repairActivityNames(namesMap = {}) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Nicht eingeloggt')
+
+    const { data: rows, error: fetchErr } = await supabase
+        .from('user_activities')
+        .select('id, asset_isin, asset_name')
+        .eq('user_id', user.id)
+
+    if (fetchErr) throw fetchErr
+
+    let fixedCount = 0
+
+    for (const row of rows || []) {
+        const isin = row.asset_isin
+        const currentName = row.asset_name
+
+        // Nur reparieren, wenn der gespeicherte Name = ISIN ist (also fehlerhaft)
+        if (isin && currentName && isin.toUpperCase() === currentName.toUpperCase()) {
+            const correctName = namesMap[isin.toUpperCase()]
+            if (correctName && correctName.toUpperCase() !== isin.toUpperCase()) {
+                const { error: updateErr } = await supabase
+                    .from('user_activities')
+                    .update({ asset_name: correctName })
+                    .eq('id', row.id)
+                    .eq('user_id', user.id)
+
+                if (!updateErr) fixedCount++
+            }
+        }
+    }
+
+    return { fixedCount, total: rows?.length || 0 }
+}
