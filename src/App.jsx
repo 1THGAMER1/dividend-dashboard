@@ -388,19 +388,43 @@ export default function App() {
                 {page === 'dashboard' && (
                     <DividendDashboardView
                         showSkeleton={loading && Object.keys(monthly || {}).length === 0}
-                        showEmpty={!loading && Object.keys(monthly || {}).length === 0}
-                        loadData={loadData} loading={loading} error={error}
-                        kpiRange={kpiRange} setKpiRange={setKpiRange} k={k}
-                        dividendYield={dividendYield} trueCagr={trueCagr} yoy={yoy}
+                        showEmpty={!loading && Object.keys(monthly || {}).length === 0 && (!allActivities || allActivities.length === 0)}
+                        activities={allActivities} // <--- HIER MITGEBEN!
+                        loadData={loadData}
+                        loading={loading}
+                        error={error}
+                        kpiRange={kpiRange}
+                        setKpiRange={setKpiRange}
+                        k={k}
+                        dividendYield={dividendYield}
+                        trueCagr={trueCagr}
+                        yoy={yoy}
                         hasRealData={nominalTotal > 0 && Object.keys(monthly || {}).length > 1}
-                        realTotal={realTotal} inflation={nominalTotal - realTotal}
-                        forecast12m={forecast12m} cy={cy} forecastMonthly={forecastMonthly}
-                        monthly={monthly} cum={cum} forecastCum={forecastCum}
-                        byHolding={byHolding} forecastByHolding={forecastByHolding}
-                        currentValue={currentValue} yearTotal={yearTotal}
+                        realTotal={realTotal}
+                        inflation={nominalTotal - realTotal}
+                        forecast12m={forecast12m}
+                        cy={cy}
+                        forecastMonthly={forecastMonthly}
+                        monthly={monthly}
+                        cum={cum}
+                        forecastCum={forecastCum}
+                        byHolding={byHolding}
+                        forecastByHolding={forecastByHolding}
+                        currentValue={currentValue}
+                        yearTotal={yearTotal}
                     />
                 )}
-                <DividendsPageView page={page} portfolioData={portfolioData} forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} loadData={loadData} loading={loading} error={error} />
+                <DividendsPageView
+                    page={page}
+                    portfolioData={portfolioData}
+                    forecastByHolding={forecastByHolding}
+                    byHolding={byHolding}
+                    monthly={monthly}
+                    loadData={loadData}
+                    loading={loading}
+                    error={error}
+                    activities={allActivities}
+                />
               </>
           )}
           {appMode === 'portfolio' && (

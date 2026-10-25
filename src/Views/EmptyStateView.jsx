@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { isLoggedIn, startOAuthFlow } from '../auth'
-import AddActivityModal from './AddActivityModal.jsx'
+import AddActivityModal from '../components/AddActivityModal.jsx'
 
 export default function EmptyStateView({ onRefresh, loading, error }) {
   const [showAddModal, setShowAddModal] = useState(false)
@@ -64,7 +64,7 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
                 : 'In deiner persönlichen Datenbank sind noch keine Dividenden erfasst. Du kannst deine Buchungen manuell pflegen oder Parqet für automatische Importe verknüpfen.'}
           </p>
 
-          {/* Fehleranzeige (falls tatsächlich ein technischer Fehler vorliegt) */}
+          {/* Fehleranzeige */}
           {error && (
               <div style={{
                 background: 'rgba(239, 68, 68, 0.1)',
@@ -82,7 +82,7 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
 
           {/* Aktions-Buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-            {/* 1. Manuelle Aktivität anlegen */}
+            {/* Manuelle Aktivität anlegen */}
             <button
                 onClick={() => setShowAddModal(true)}
                 style={{
@@ -106,7 +106,7 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
               <span>Dividende / Aktivität manuell erfassen</span>
             </button>
 
-            {/* 2. Wenn Parqet noch nicht verknüpft ist: Verknüpfen-Button */}
+            {/* Wenn Parqet nicht verknüpft: Verknüpfen-Option */}
             {!parqetConnected && (
                 <button
                     onClick={startOAuthFlow}
@@ -134,7 +134,7 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
                 </button>
             )}
 
-            {/* 3. Wenn Parqet verknüpft ist: Aktualisieren-Button */}
+            {/* Wenn Parqet verknüpft: Aktualisieren-Button */}
             {parqetConnected && onRefresh && (
                 <button
                     onClick={onRefresh}
@@ -157,7 +157,7 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
             )}
           </div>
 
-          {/* Nützliche Tipps / Info-Box */}
+          {/* Infobox */}
           <div style={{
             background: '#0f1420',
             border: '1px solid #1e2a3a',
@@ -171,19 +171,19 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 10, fontSize: 12, color: '#94a3b8' }}>
                 <span>💡</span>
-                <span>Dividenden werden automatisch berücksichtigt, sobald die Zahlungen in deinen Aktivitäten gebucht sind.</span>
+                <span>Dividenden werden automatisch visualisiert, sobald sie in deinen Aktivitäten verbucht sind.</span>
               </div>
               {parqetConnected && (
                   <div style={{ display: 'flex', gap: 10, fontSize: 12, color: '#94a3b8' }}>
                     <span>🔄</span>
-                    <span>Neue Abrechnungen aus deinem Broker synchronisierst du per Klick auf „Aktualisieren“.</span>
+                    <span>Neue Abrechnungen aus deinem Broker synchronisierst du per Klick auf „↻ Daten von Parqet aktualisieren“.</span>
                   </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Modal zum manuellen Hinzufügen von Aktivitäten */}
+        {/* Modal zum manuellen Erfassen */}
         <AddActivityModal
             isOpen={showAddModal}
             onClose={() => setShowAddModal(false)}

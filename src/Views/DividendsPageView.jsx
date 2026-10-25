@@ -1,9 +1,9 @@
-import React from 'react'
-import UpcomingDividends from "../components/UpcomingDividends.jsx";
-import DividendCalendar from "../components/DividendCalendar.jsx";
+import React, { useMemo } from 'react'
+import UpcomingDividends from "../components/UpcomingDividends.jsx"
+import DividendCalendar from "../components/DividendCalendar.jsx"
 import DividendCalculator from '../pages/DividendCalculator'
 import DripSimulator from '../pages/DripSimulator'
-import EmptyStateView from "./EmptyStateView.jsx";
+import EmptyStateView from "./EmptyStateView.jsx"
 
 export default function DividendsPageView({
                                               page,
@@ -13,24 +13,74 @@ export default function DividendsPageView({
                                               monthly,
                                               loadData,
                                               loading,
-                                              error
+                                              error,
+                                              activities = []
                                           }) {
-    if (page === 'calculator') return <DividendCalculator portfolioData={portfolioData} />
-    if (page === 'drip')       return <DripSimulator portfolioData={portfolioData} />
+    const hasDividendData = useMemo(() => {
+        const hasMonthly = Boolean(monthly && Object.keys(monthly).length > 0)
+        if (hasMonthly) return true
+
+        const hasManualDivs = Array.isArray(activities) && activities.some(a =>
+            String(a.type).toLowerCase() === 'dividend' && (Number(a.amount) > 0 || Number(a.amountNet) > 0)
+        )
+        return hasManualDivs
+    }, [monthly, activities])
+
+    const safePortfolioData = useMemo(() => {
+        if (portfolioData && portfolioData.currentValue > 0) {
+            return portfolioData
+        }
+
+        let totalVal = portfolioData?.currentValue || 0
+        let totalDivs = portfolioData?.totalDividendsNet || 0
+
+        if (byHolding && Object.keys(byHolding).length > 0) {
+            Object.values(byHolding).forEach(h => {
+                totalVal += (Number(h.currentValue) || Number(h.value) || 0)
+                totalDivs += (Number(h.totalNet) || Number(h.total) || 0)
+            })
+        }
+
+        const divYield = totalVal > 0 ? (totalDivs / totalVal) : (portfolioData?.dividendYield || 0.03)
+
+        return {
+            currentValue: totalVal,
+            totalDividendsNet: totalDivs,
+            dividendYield: divYield,
+            forecastDividendYield: portfolioData?.forecastDividendYield || divYield,
+            cagrTotal: portfolioData?.cagrTotal || 0,
+        }
+    }, [portfolioData, byHolding])
+
+    if (page === 'calculator') return <DividendCalculator portfolioData={safePortfolioData} />
+    if (page === 'drip')       return <DripSimulator portfolioData={safePortfolioData} />
 
     if (page === 'calendar') {
         return (
             <div>
                 <div style={{ marginBottom: 16 }}>
-                    <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0' }}>🗓 Kalender & Nächste Zahlungen</h1>
-                    <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 4 }}>Prognose basierend auf Vorjahresdaten</p>
+                    <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>
+                        🗓 Kalender & Nächste Zahlungen
+                    </h1>
+                    <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 4 }}>
+                        Prognose basierend auf deinen Vorjahresdaten und Ausschüttungsterminen
+                    </p>
                 </div>
-                {Object.keys(monthly || {}).length === 0 ? (
+
+                {!hasDividendData ? (
                     <EmptyStateView onRefresh={loadData} loading={loading} error={error} />
                 ) : (
                     <>
-                        <UpcomingDividends forecastByHolding={forecastByHolding} byHolding={byHolding} days={90} />
-                        <DividendCalendar forecastByHolding={forecastByHolding} byHolding={byHolding} monthly={monthly} />
+                        <UpcomingDividends
+                            forecastByHolding={forecastByHolding || {}}
+                            byHolding={byHolding || {}}
+                            days={90}
+                        />
+                        <DividendCalendar
+                            forecastByHolding={forecastByHolding || {}}
+                            byHolding={byHolding || {}}
+                            monthly={monthly || {}}
+                        />
                     </>
                 )}
             </div>
