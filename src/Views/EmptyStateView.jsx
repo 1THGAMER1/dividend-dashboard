@@ -1,131 +1,197 @@
-/**
- * EmptyStateView – wird angezeigt wenn nach dem Laden keine Dividendendaten
- * vorhanden sind (leeres Portfolio, neue Verbindung, API-Fehler).
- */
+import React, { useState } from 'react'
+import { isLoggedIn, startOAuthFlow } from '../auth'
+import AddActivityModal from './AddActivityModal.jsx'
+
 export default function EmptyStateView({ onRefresh, loading, error }) {
+  const [showAddModal, setShowAddModal] = useState(false)
+  const parqetConnected = isLoggedIn()
+
   return (
-    <div style={{
-      minHeight: 'calc(100vh - 52px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '40px 20px',
-    }}>
       <div style={{
-        maxWidth: 480,
-        width: '100%',
-        background: '#161b27',
-        border: '1px solid #1e2a3a',
-        borderRadius: 18,
-        padding: '40px 32px',
-        textAlign: 'center',
+        minHeight: 'calc(100vh - 80px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '30px 16px',
       }}>
-
-        {/* Illustration */}
         <div style={{
-          width: 72,
-          height: 72,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #0f2a3a 0%, #0d1f2d 100%)',
+          maxWidth: 520,
+          width: '100%',
+          background: '#161b27',
           border: '1px solid #1e2a3a',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 24px auto',
-          fontSize: 32,
+          borderRadius: 20,
+          padding: 'clamp(28px, 4vw, 40px) clamp(20px, 3vw, 32px)',
+          textAlign: 'center',
+          boxShadow: '0 20px 40px -15px rgba(0,0,0,0.5)',
         }}>
-          📭
-        </div>
 
-        {/* Titel */}
-        <h2 style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#e0e6f0',
-          margin: '0 0 10px 0',
-          lineHeight: 1.3,
-        }}>
-          Noch keine Dividendendaten
-        </h2>
-
-        {/* Beschreibung */}
-        <p style={{
-          fontSize: 14,
-          color: '#7a8ba0',
-          lineHeight: 1.65,
-          margin: '0 0 28px 0',
-          maxWidth: 340,
-          marginInline: 'auto',
-        }}>
-          Dein Portfolio enthält noch keine abgerechneten Dividenden — oder die Verbindung zu Parqet hat keine Daten zurückgegeben.
-        </p>
-
-        {/* Fehleranzeige */}
-        {error && (
+          {/* Icon */}
           <div style={{
-            background: '#1a0a0a',
-            border: '1px solid #7f1d1d',
-            color: '#fca5a5',
-            borderRadius: 10,
-            padding: '10px 14px',
-            fontSize: 13,
-            marginBottom: 20,
+            width: 68,
+            height: 68,
+            borderRadius: '50%',
+            background: 'rgba(0, 153, 145, 0.12)',
+            border: '1px solid rgba(0, 153, 145, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px auto',
+            fontSize: 30,
+          }}>
+            💰
+          </div>
+
+          {/* Titel */}
+          <h2 style={{
+            fontSize: 22,
+            fontWeight: 700,
+            color: '#f1f5f9',
+            margin: '0 0 10px 0',
+          }}>
+            Noch keine Dividendendaten
+          </h2>
+
+          {/* Beschreibung */}
+          <p style={{
+            fontSize: 14,
+            color: '#7a8ba0',
+            lineHeight: 1.6,
+            margin: '0 auto 24px auto',
+            maxWidth: 400,
+          }}>
+            {parqetConnected
+                ? 'Dein Parqet-Portfolio ist verbunden, enthält aber für diesen Zeitraum noch keine verbuchten Dividendenzahlungen.'
+                : 'In deiner persönlichen Datenbank sind noch keine Dividenden erfasst. Du kannst deine Buchungen manuell pflegen oder Parqet für automatische Importe verknüpfen.'}
+          </p>
+
+          {/* Fehleranzeige (falls tatsächlich ein technischer Fehler vorliegt) */}
+          {error && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#fca5a5',
+                borderRadius: 10,
+                padding: '10px 14px',
+                fontSize: 13,
+                marginBottom: 20,
+                textAlign: 'left',
+              }}>
+                ⚠️ {error}
+              </div>
+          )}
+
+          {/* Aktions-Buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+            {/* 1. Manuelle Aktivität anlegen */}
+            <button
+                onClick={() => setShowAddModal(true)}
+                style={{
+                  width: '100%',
+                  background: '#009991',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '12px 18px',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transition: 'background 0.2s',
+                }}
+            >
+              <span>➕</span>
+              <span>Dividende / Aktivität manuell erfassen</span>
+            </button>
+
+            {/* 2. Wenn Parqet noch nicht verknüpft ist: Verknüpfen-Button */}
+            {!parqetConnected && (
+                <button
+                    onClick={startOAuthFlow}
+                    style={{
+                      width: '100%',
+                      background: '#0f1420',
+                      color: '#38bdf8',
+                      border: '1px solid #2a3a50',
+                      borderRadius: 10,
+                      padding: '11px 18px',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      transition: 'border-color 0.2s',
+                    }}
+                    onMouseOver={e => e.currentTarget.style.borderColor = '#38bdf8'}
+                    onMouseOut={e => e.currentTarget.style.borderColor = '#2a3a50'}
+                >
+                  <span>🔗</span>
+                  <span>Mit Parqet verknüpfen</span>
+                </button>
+            )}
+
+            {/* 3. Wenn Parqet verknüpft ist: Aktualisieren-Button */}
+            {parqetConnected && onRefresh && (
+                <button
+                    onClick={onRefresh}
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      background: '#0f1420',
+                      color: '#93c5fd',
+                      border: '1px solid #2a3a50',
+                      borderRadius: 10,
+                      padding: '11px 18px',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      opacity: loading ? 0.6 : 1,
+                    }}
+                >
+                  {loading ? '⟳ Wird geladen…' : '↻ Daten von Parqet aktualisieren'}
+                </button>
+            )}
+          </div>
+
+          {/* Nützliche Tipps / Info-Box */}
+          <div style={{
+            background: '#0f1420',
+            border: '1px solid #1e2a3a',
+            borderRadius: 12,
+            padding: '14px 18px',
             textAlign: 'left',
           }}>
-            ⚠️ {error}
-          </div>
-        )}
-
-        {/* Checkliste */}
-        <div style={{
-          background: '#0f1420',
-          border: '1px solid #1e2a3a',
-          borderRadius: 12,
-          padding: '16px 20px',
-          marginBottom: 28,
-          textAlign: 'left',
-        }}>
-          <p style={{ fontSize: 12, color: '#556070', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
-            Mögliche Ursachen
-          </p>
-          {[
-            ['📂', 'Das Portfolio hat noch keine Dividendenzahlungen erhalten'],
-            ['🔑', 'Der Parqet OAuth-Token ist abgelaufen — bitte neu anmelden'],
-            ['🌐', 'Parqet API temporär nicht erreichbar (Rate-Limit / Wartung)'],
-            ['⚙️', 'Die Client-ID in den Einstellungen ist nicht korrekt'],
-          ].map(([icon, text]) => (
-            <div key={text} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
-              <span style={{ fontSize: 15, flexShrink: 0, lineHeight: 1.5 }}>{icon}</span>
-              <span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>{text}</span>
+            <p style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 10px 0', fontWeight: 700 }}>
+              Hinweise
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 10, fontSize: 12, color: '#94a3b8' }}>
+                <span>💡</span>
+                <span>Dividenden werden automatisch berücksichtigt, sobald die Zahlungen in deinen Aktivitäten gebucht sind.</span>
+              </div>
+              {parqetConnected && (
+                  <div style={{ display: 'flex', gap: 10, fontSize: 12, color: '#94a3b8' }}>
+                    <span>🔄</span>
+                    <span>Neue Abrechnungen aus deinem Broker synchronisierst du per Klick auf „Aktualisieren“.</span>
+                  </div>
+              )}
             </div>
-          ))}
+          </div>
         </div>
 
-        {/* CTA */}
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          style={{
-            width: '100%',
-            background: loading ? '#1a2233' : '#009991',
-            border: 'none',
-            borderRadius: 10,
-            color: loading ? '#7a8ba0' : '#fff',
-            fontWeight: 700,
-            fontSize: 15,
-            padding: '13px 0',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            transition: 'background 0.2s',
-            letterSpacing: '0.01em',
-          }}
-        >
-          {loading ? '⟳  Wird geladen…' : '↻  Daten erneut laden'}
-        </button>
-
-        <p style={{ fontSize: 12, color: '#3d5266', marginTop: 16 }}>
-          Tipp: Stelle sicher dass dein Parqet-Konto Dividenden-Aktivitäten enthält.
-        </p>
+        {/* Modal zum manuellen Hinzufügen von Aktivitäten */}
+        <AddActivityModal
+            isOpen={showAddModal}
+            onClose={() => setShowAddModal(false)}
+            onSuccess={() => {
+              setShowAddModal(false)
+              onRefresh?.()
+            }}
+        />
       </div>
-    </div>
   )
 }
