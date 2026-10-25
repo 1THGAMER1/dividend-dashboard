@@ -9,6 +9,14 @@ export function clearCachedClientId() {
   cachedClientId = null
 }
 
+// Exakt deine registrierte Callback-URI:
+export function getRedirectUri() {
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `${window.location.origin}/callback`
+  }
+  return 'https://dividenddashboard.netlify.app/callback'
+}
+
 // 1. Synchroner Login-Check
 export function isLoggedIn() {
   return Boolean(
@@ -89,7 +97,7 @@ async function generateCodeChallenge(verifier) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-// 5. Startet den OAuth-Flow mit verlangtem `state`-Parameter!
+// 5. Startet den OAuth-Flow zur exakten /callback Route
 export async function startOAuthFlow() {
   const clientId = await getClientId()
   if (!clientId) {
@@ -98,13 +106,13 @@ export async function startOAuthFlow() {
   }
 
   const codeVerifier = generateRandomString(64)
-  const state = generateRandomString(32) // <--- Zwingend von Parqet verlangt!
+  const state = generateRandomString(32)
 
   sessionStorage.setItem('parqet_code_verifier', codeVerifier)
   sessionStorage.setItem('parqet_oauth_state', state)
 
   const codeChallenge = await generateCodeChallenge(codeVerifier)
-  const redirectUri = window.location.origin + window.location.pathname
+  const redirectUri = getRedirectUri()
 
   const url = `${PARQET_AUTH_DIRECT}/oauth2/authorize?` + new URLSearchParams({
     response_type: 'code',
@@ -113,13 +121,13 @@ export async function startOAuthFlow() {
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
     scope: 'portfolio:read',
-    state: state, // <--- HIER übergeben
+    state: state,
   })
 
   window.location.href = url
 }
 
-// 6. Callback nach Parqet Login
+// 6. Callback auf /callback abfangen und Code austauschen
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
@@ -134,7 +142,7 @@ export async function handleCallback() {
 
   const codeVerifier = sessionStorage.getItem('parqet_code_verifier')
   const clientId = await getClientId()
-  const redirectUri = window.location.origin + window.location.pathname
+  const redirectUri = getRedirectUri()
 
   if (!codeVerifier || !clientId) return false
 
@@ -180,9 +188,11 @@ export async function handleCallback() {
         }
       }
 
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
       sessionStorage.removeItem('parqet_code_verifier')
       sessionStorage.removeItem('parqet_oauth_state')
+
+      // Nach erfolgreichem Token-Austausch von /callback auf die Startseite zurückkehren
+      window.location.href = window.location.origin + '/#dashboard'
       return true
     }
   } catch (err) {
@@ -191,7 +201,7 @@ export async function handleCallback() {
   return false
 }
 
-// 7. Access Token holen (mit automatischem Refresh)
+// 7. Access Token holen
 export async function getAccessToken() {
   let token = sessionStorage.getItem('parqet_access_token')
   if (token) return token
@@ -212,7 +222,7 @@ export async function getAccessToken() {
       if (profile?.parqet_client_id) clientId = profile.parqet_client_id
     }
   } catch {
-    // Fehler ignorieren
+    // DB-Fallback
   }
 
   if (!refreshToken) return null
