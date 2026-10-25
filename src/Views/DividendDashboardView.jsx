@@ -246,7 +246,7 @@ export default function DividendDashboardView({
             yoyGrowth, cagrObj, growthCy, ttmNet, lastYTotal, realVal, inflVal, hasReal
         }
     }, [monthly, hasRecords, hasParqet, dbForecast, cy, cm, propForecastMonthly, propForecastCum, propForecastByHolding, propYoy, propTrueCagr, propRealTotal, propInflation, propHasRealData])
-    // ── 4. FILTER FÜR ZEITRÄUME (ALL, YTD, 12M, 3J) ──────────────────────────
+    // ── 4. FILTER FÜR ZEITRÄUME (ALL, YTD, 12M, 3J) ─────────────────────────
     const rangeData = useMemo(() => {
         if (!hasRecords) return { net: 0, gross: 0, tax: 0, avg: 0, months: 1, filteredByHolding: {}, filteredHeatmap: {} }
 
