@@ -46,7 +46,7 @@ export default function DividendDashboardView({
                                               }) {
     const cm = new Date().getMonth()
 
-    // ── 1. SUPABASE-DATEN DIREKT LADEN ─────────────────────────────────────────
+    // ── 1. ALLE HOOKS MÜSSEN GANZ OBEN STEHEN ──────────────────────────────────
     const [dbActivities, setDbActivities] = useState([])
     const [dbLoading, setDbLoading] = useState(true)
 
@@ -71,11 +71,10 @@ export default function DividendDashboardView({
         if (loadData) await loadData()
     }
 
-    // ── 2. DATENZUSAMMENFÜHRUNG: PARQET ODER SUPABASE ─────────────────────────
+    // 2. Datenquelle Parqet oder Supabase ermitteln
     const { effectiveMonthly, effectiveByHolding, effectiveCum, hasAnyData } = useMemo(() => {
         const hasPropMonthly = Boolean(propMonthly && Object.keys(propMonthly).length > 0)
 
-        // Wenn Parqet-Daten da sind, nutze sie
         if (hasPropMonthly) {
             return {
                 effectiveMonthly: propMonthly,
@@ -85,7 +84,6 @@ export default function DividendDashboardView({
             }
         }
 
-        // Falls Parqet leer ist: Baue alles aus Supabase `user_activities` auf!
         const synthM = {}
         const synthH = {}
         const synthC = {}
@@ -107,11 +105,9 @@ export default function DividendDashboardView({
                 const tax = Number(a.tax ?? 0)
                 const key = a.isin || a.name || 'Unbekannt'
 
-                // Monthly Matrix
                 if (!synthM[y]) synthM[y] = Array(12).fill(0)
                 synthM[y][m] = +(synthM[y][m] + net).toFixed(2)
 
-                // Holdings Map
                 if (!synthH[key]) {
                     synthH[key] = {
                         name: a.name || key,
@@ -133,7 +129,6 @@ export default function DividendDashboardView({
                 synthH[key].totalNet      = +(synthH[key].totalNet + net).toFixed(2)
             })
 
-            // Kumulierte Werte berechnen
             Object.keys(synthM).forEach(y => {
                 synthC[y] = Array(12).fill(0)
                 let running = 0
@@ -152,16 +147,7 @@ export default function DividendDashboardView({
         }
     }, [propMonthly, propByHolding, propCum, dbActivities])
 
-    // Lade- und Leerzustand sauber steuern
-    const isLoading = (parqetLoading && !hasAnyData) || (dbLoading && !hasAnyData)
-    if (showSkeleton || isLoading) return <SkeletonDashboard />
-
-    // Wenn weder in Parqet noch in Supabase Dividenden liegen:
-    if (!hasAnyData) {
-        return <EmptyStateView onRefresh={handleRefreshAll} loading={isLoading} error={error} />
-    }
-
-    // ── 3. ZEITRAUMFILTER FÜR TABELLE, DONUT, HEATMAP & KPIS ─────────────────
+    // 3. Zeitraumfilter
     const { filteredByHolding, filteredMonthlyForHeatmap, rangeTotals } = useMemo(() => {
         let net = 0
         let gross = 0
@@ -182,7 +168,6 @@ export default function DividendDashboardView({
             return true
         }
 
-        // byHolding filtern
         const resByHolding = {}
         Object.entries(effectiveByHolding || {}).forEach(([isin, h]) => {
             const newM = {}
@@ -216,7 +201,6 @@ export default function DividendDashboardView({
             }
         })
 
-        // monthly filtern (für Heatmap & Totals)
         const resMonthly = {}
         Object.keys(effectiveMonthly || {}).forEach(yStr => {
             const y = Number(yStr)
@@ -253,7 +237,7 @@ export default function DividendDashboardView({
         }
     }, [effectiveByHolding, effectiveMonthly, kpiRange, cy, cm])
 
-    // ── 4. CHARTS-DATEN ──────────────────────────────────────────────────────
+    // 4. Chart-Daten
     const { chartMonthly, chartCum } = useMemo(() => {
         const allYears = Object.keys(effectiveMonthly || {}).map(Number).sort()
         let keepYears = allYears
@@ -278,7 +262,7 @@ export default function DividendDashboardView({
         return { chartMonthly: resM, chartCum: resC }
     }, [effectiveMonthly, effectiveCum, kpiRange, cy])
 
-    // ── 5. KPI-WERTE ─────────────────────────────────────────────────────────
+    // 5. KPIs
     const activeK = useMemo(() => {
         if (kpiRange === 'all' && k && rangeTotals.net === 0) return k
         return {
@@ -302,6 +286,11 @@ export default function DividendDashboardView({
     }, [currentValue, rangeTotals, kpiRange, cm, dividendYield])
 
     const currentRangeLabel = KPI_RANGES.find(r => r.key === kpiRange)?.label || 'Gesamt'
+
+    // ── ERST HIER UNTEN DÜRFEN VORZEITIGE RETURNS KOMMEN ──────────────────────
+    const isLoading = (parqetLoading && !hasAnyData) || (dbLoading && !hasAnyData)
+    if (showSkeleton || isLoading) return <SkeletonDashboard />
+    if (!hasAnyData) return <EmptyStateView onRefresh={handleRefreshAll} loading={isLoading} error={error} />
 
     return (
         <div>

@@ -1,10 +1,28 @@
 import React, { useState } from 'react'
 import { isLoggedIn, startOAuthFlow } from '../auth'
+import { syncParqetToSupabase } from '../utils/manualActivities'
 import AddActivityModal from '../components/AddActivityModal.jsx'
 
 export default function EmptyStateView({ onRefresh, loading, error }) {
   const [showAddModal, setShowAddModal] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState(null)
+
   const parqetConnected = isLoggedIn()
+
+  // Direkter Sync aus dem Empty-State heraus
+  const handleDirectSync = async () => {
+    setSyncing(true)
+    setSyncError(null)
+    try {
+      await syncParqetToSupabase()
+      if (onRefresh) await onRefresh()
+    } catch (err) {
+      setSyncError('Sync fehlgeschlagen: ' + err.message)
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   return (
       <div style={{
@@ -57,15 +75,15 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
             color: '#7a8ba0',
             lineHeight: 1.6,
             margin: '0 auto 24px auto',
-            maxWidth: 400,
+            maxWidth: 420,
           }}>
             {parqetConnected
-                ? 'Dein Parqet-Portfolio ist verbunden, enthält aber für diesen Zeitraum noch keine verbuchten Dividendenzahlungen.'
-                : 'In deiner persönlichen Datenbank sind noch keine Dividenden erfasst. Du kannst deine Buchungen manuell pflegen oder Parqet für automatische Importe verknüpfen.'}
+                ? 'Dein Parqet-Konto ist verbunden. Du kannst deine Buchungen jetzt mit 1 Klick in deine eigene Supabase-Datenbank übertragen.'
+                : 'In deiner persönlichen Datenbank sind noch keine Dividenden erfasst. Du kannst Buchungen manuell anlegen oder dein Parqet-Konto für automatische Importe verknüpfen.'}
           </p>
 
-          {/* Fehleranzeige */}
-          {error && (
+          {/* Fehlermeldungen */}
+          {(error || syncError) && (
               <div style={{
                 background: 'rgba(239, 68, 68, 0.1)',
                 border: '1px solid rgba(239, 68, 68, 0.25)',
@@ -76,85 +94,85 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
                 marginBottom: 20,
                 textAlign: 'left',
               }}>
-                ⚠️ {error}
+                ⚠️ {syncError || error}
               </div>
           )}
 
           {/* Aktions-Buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-            {/* Manuelle Aktivität anlegen */}
-            <button
-                onClick={() => setShowAddModal(true)}
-                style={{
-                  width: '100%',
-                  background: '#009991',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '12px 18px',
-                  fontSize: 14,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  transition: 'background 0.2s',
-                }}
-            >
-              <span>➕</span>
-              <span>Dividende / Aktivität manuell erfassen</span>
-            </button>
+            {/* FALL 1: Parqet ist verbunden -> Direkter Sync-Knopf! */}
+            {parqetConnected && (
+                <button
+                    onClick={handleDirectSync}
+                    disabled={syncing || loading}
+                    style={{
+                      width: '100%',
+                      background: '#009991',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 10,
+                      padding: '12px 18px',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: syncing ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                    }}
+                >
+                  <span>{syncing ? '⏳' : '⚡'}</span>
+                  <span>{syncing ? 'Übertrage Aktivitäten nach Supabase…' : 'Parqet-Daten jetzt in Datenbank importieren'}</span>
+                </button>
+            )}
 
-            {/* Wenn Parqet nicht verknüpft: Verknüpfen-Option */}
+            {/* FALL 2: Parqet nicht verbunden -> Verbinden anbieten */}
             {!parqetConnected && (
                 <button
                     onClick={startOAuthFlow}
                     style={{
                       width: '100%',
-                      background: '#0f1420',
-                      color: '#38bdf8',
-                      border: '1px solid #2a3a50',
+                      background: '#009991',
+                      color: '#fff',
+                      border: 'none',
                       borderRadius: 10,
-                      padding: '11px 18px',
+                      padding: '12px 18px',
                       fontSize: 14,
-                      fontWeight: 600,
+                      fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 8,
-                      transition: 'border-color 0.2s',
                     }}
-                    onMouseOver={e => e.currentTarget.style.borderColor = '#38bdf8'}
-                    onMouseOut={e => e.currentTarget.style.borderColor = '#2a3a50'}
                 >
                   <span>🔗</span>
-                  <span>Mit Parqet verknüpfen</span>
+                  <span>Mit Parqet verbinden & importieren</span>
                 </button>
             )}
 
-            {/* Wenn Parqet verknüpft: Aktualisieren-Button */}
-            {parqetConnected && onRefresh && (
-                <button
-                    onClick={onRefresh}
-                    disabled={loading}
-                    style={{
-                      width: '100%',
-                      background: '#0f1420',
-                      color: '#93c5fd',
-                      border: '1px solid #2a3a50',
-                      borderRadius: 10,
-                      padding: '11px 18px',
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      opacity: loading ? 0.6 : 1,
-                    }}
-                >
-                  {loading ? '⟳ Wird geladen…' : '↻ Daten von Parqet aktualisieren'}
-                </button>
-            )}
+            {/* Manuelle Buchung immer anbieten */}
+            <button
+                onClick={() => setShowAddModal(true)}
+                style={{
+                  width: '100%',
+                  background: '#0f1420',
+                  color: '#e0e6f0',
+                  border: '1px solid #2a3a50',
+                  borderRadius: 10,
+                  padding: '11px 18px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+            >
+              <span>➕</span>
+              <span>Aktivität manuell erfassen</span>
+            </button>
           </div>
 
           {/* Infobox */}
@@ -165,25 +183,15 @@ export default function EmptyStateView({ onRefresh, loading, error }) {
             padding: '14px 18px',
             textAlign: 'left',
           }}>
-            <p style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 10px 0', fontWeight: 700 }}>
-              Hinweise
+            <p style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px 0', fontWeight: 700 }}>
+              Funktionsweise
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 10, fontSize: 12, color: '#94a3b8' }}>
-                <span>💡</span>
-                <span>Dividenden werden automatisch visualisiert, sobald sie in deinen Aktivitäten verbucht sind.</span>
-              </div>
-              {parqetConnected && (
-                  <div style={{ display: 'flex', gap: 10, fontSize: 12, color: '#94a3b8' }}>
-                    <span>🔄</span>
-                    <span>Neue Abrechnungen aus deinem Broker synchronisierst du per Klick auf „↻ Daten von Parqet aktualisieren“.</span>
-                  </div>
-              )}
+            <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>
+              Alle Transaktionen werden dauerhaft in deiner privaten Datenbank gespeichert. Sobald Aktivitäten vorhanden sind, werden Dividenden, Monatsbalken und Kennzahlen automatisch berechnet.
             </div>
           </div>
         </div>
 
-        {/* Modal zum manuellen Erfassen */}
         <AddActivityModal
             isOpen={showAddModal}
             onClose={() => setShowAddModal(false)}
