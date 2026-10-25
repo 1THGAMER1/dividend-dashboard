@@ -140,7 +140,7 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 40rem)').matches)
   const [showAddActivity, setShowAddActivity] = useState(false)
 
-  // NEU: Nutzer kann Parqet überspringen und rein manuell arbeiten
+  // Überspringen von Parqet möglich
   const [skipParqet, setSkipParqet] = useState(
       () => localStorage.getItem('skip_parqet') === 'true'
   )
@@ -206,7 +206,6 @@ export default function App() {
   // 3. Wenn Parqet noch nicht übersprungen wurde UND der Nutzer noch keine Parqet-Verbindung hat:
   if (!skipParqet && !loggedIn) {
     if (!clientIdReady) {
-      // Setup-Screen zum Eintragen der Client-ID (bietet auch "Überspringen" an)
       return (
           <ParqetSetup
               onDone={() => setClientIdReady(true)}
@@ -215,9 +214,7 @@ export default function App() {
       )
     }
 
-    if (authLoading) return <LoadingScreen text="Authentifizierung läuft…" />
-
-    // LoginScreen mit beiden Optionen: Parqet verbinden ODER manuell starten
+    // Zeigt den LoginScreen mit Option "Connect" ODER "Ohne Parqet fortfahren"
     return (
         <LoginScreen
             onLogin={startOAuthFlow}

@@ -1,28 +1,34 @@
 import { supabase } from './supabaseClient'
 
-const PARQET_AUTH_BASE = 'https://connect.parqet.com'
+// Nutzt den Netlify-Proxy, um CORS-Fehler im Browser zu vermeiden
+const PARQET_PROXY_BASE = '/.netlify/functions/parqet-proxy'
+const PARQET_AUTH_DIRECT = 'https://connect.parqet.com'
+
 let cachedClientId = null
 
 export function clearCachedClientId() {
   cachedClientId = null
 }
 
-// 1. Client-ID aus Supabase profiles oder Fallback Env laden
 export async function getClientId() {
   if (cachedClientId) return cachedClientId
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
 
-  const { data: profile } = await supabase
-      .from('profiles')
-      .select('parqet_client_id')
-      .eq('id', user.id)
-      .maybeSingle()
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('parqet_client_id')
+        .eq('id', user.id)
+        .maybeSingle()
 
-  if (profile?.parqet_client_id) {
-    cachedClientId = profile.parqet_client_id
-    return cachedClientId
+    if (profile?.parqet_client_id) {
+      cachedClientId = profile.parqet_client_id
+      return cachedClientId
+    }
+  } catch {
+    // Fehler bei DB-Abfrage ignorieren
   }
 
   const envId = import.meta.env.VITE_PARQET_CLIENT_ID
@@ -34,7 +40,6 @@ export async function getClientId() {
   return null
 }
 
-// 2. Client-ID in Supabase profiles speichern (wichtig für ProfilePage & ParqetSetup)
 export async function saveClientId(clientId) {
   cachedClientId = clientId
   const { data: { user } } = await supabase.auth.getUser()
@@ -53,7 +58,6 @@ export async function saveClientId(clientId) {
   }
 }
 
-// 3. PKCE Helfer
 function generateRandomString(length) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
   const arr = new Uint8Array(length)
@@ -73,7 +77,6 @@ async function generateCodeChallenge(verifier) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-// 4. OAuth Flow starten
 export async function startOAuthFlow() {
   const clientId = await getClientId()
   if (!clientId) {
@@ -86,7 +89,8 @@ export async function startOAuthFlow() {
   const codeChallenge = await generateCodeChallenge(codeVerifier)
   const redirectUri = window.location.origin + window.location.pathname
 
-  const url = `${PARQET_AUTH_BASE}/oauth2/authorize?` + new URLSearchParams({
+  // Der Redirect zum Login muss direkt auf connect.parqet.com gehen
+  const url = `${PARQET_AUTH_DIRECT}/oauth2/authorize?` + new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -98,7 +102,6 @@ export async function startOAuthFlow() {
   window.location.href = url
 }
 
-// 5. OAuth Callback verarbeiten (wird von useDividendData aufgerufen)
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
@@ -111,7 +114,8 @@ export async function handleCallback() {
   if (!codeVerifier || !clientId) return false
 
   try {
-    const res = await fetch(`${PARQET_AUTH_BASE}/oauth2/token`, {
+    // Über den Proxy aufrufen, um CORS zu verhindern
+    let res = await fetch(`${PARQET_PROXY_BASE}/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -124,9 +128,21 @@ export async function handleCallback() {
     })
 
     if (!res.ok) {
-      console.error('Parqet Token Exchange fehlgeschlagen:', await res.text())
-      return false
+      // Fallback
+      res = await fetch(`${PARQET_AUTH_DIRECT}/oauth2/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          code,
+          redirect_uri: redirectUri,
+          code_verifier: codeVerifier,
+        }),
+      })
     }
+
+    if (!res.ok) return false
 
     const data = await res.json()
     if (data.access_token) {
@@ -147,37 +163,34 @@ export async function handleCallback() {
       return true
     }
   } catch (err) {
-    console.error('Fehler bei handleCallback:', err)
+    console.warn('Fehler bei handleCallback:', err)
   }
   return false
 }
 
-// 6. Prüft, ob Parqet aktuell eingeloggt/verknüpft ist
-export async function isLoggedIn() {
-  const token = await getAccessToken()
-  return Boolean(token)
-}
-
-export const isParqetConnected = isLoggedIn
-
-// 7. Access-Token holen (mit automatischem Refresh)
 export async function getAccessToken() {
   let token = sessionStorage.getItem('parqet_access_token')
   if (token) return token
 
-  const { data: { user } } = await supabase.auth.getUser()
   let refreshToken = localStorage.getItem('parqet_refresh_token')
   let clientId = cachedClientId
+  let user = null
 
-  if (user) {
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('parqet_refresh_token, parqet_client_id')
-        .eq('id', user.id)
-        .maybeSingle()
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data?.user
+    if (user) {
+      const { data: profile } = await supabase
+          .from('profiles')
+          .select('parqet_refresh_token, parqet_client_id')
+          .eq('id', user.id)
+          .maybeSingle()
 
-    if (profile?.parqet_refresh_token) refreshToken = profile.parqet_refresh_token
-    if (profile?.parqet_client_id) clientId = profile.parqet_client_id
+      if (profile?.parqet_refresh_token) refreshToken = profile.parqet_refresh_token
+      if (profile?.parqet_client_id) clientId = profile.parqet_client_id
+    }
+  } catch {
+    // DB nicht erreichbar -> localStorage nutzen
   }
 
   if (!refreshToken) return null
@@ -185,7 +198,8 @@ export async function getAccessToken() {
   if (!clientId) return null
 
   try {
-    const res = await fetch(`${PARQET_AUTH_BASE}/oauth2/token`, {
+    // 1. Über Netlify-Proxy versuchen (kein CORS)
+    let res = await fetch(`${PARQET_PROXY_BASE}/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -194,6 +208,19 @@ export async function getAccessToken() {
         client_id: clientId,
       }),
     })
+
+    if (!res.ok) {
+      // 2. Fallback
+      res = await fetch(`${PARQET_AUTH_DIRECT}/oauth2/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+          client_id: clientId,
+        }),
+      })
+    }
 
     if (!res.ok) return null
     const data = await res.json()
@@ -211,15 +238,20 @@ export async function getAccessToken() {
       }
       return data.access_token
     }
-  } catch (err) {
-    console.warn('Parqet Token Refresh fehlgeschlagen:', err?.message)
+  } catch {
     return null
   }
 
   return null
 }
 
-// 8. Logout
+export async function isLoggedIn() {
+  const token = await getAccessToken()
+  return Boolean(token)
+}
+
+export const isParqetConnected = isLoggedIn
+
 export async function logout() {
   sessionStorage.removeItem('parqet_access_token')
   sessionStorage.removeItem('parqet_code_verifier')
@@ -231,7 +263,6 @@ export async function logout() {
   window.location.href = '/'
 }
 
-// 9. Parqet gezielt trennen
 export async function disconnectParqet() {
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
