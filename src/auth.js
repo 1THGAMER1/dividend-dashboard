@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient'
 
 const PARQET_AUTH_DIRECT = 'https://connect.parqet.com'
-const PARQET_PROXY = '/.netlify/functions/parqet-proxy'
+// Die Edge Function lauscht direkt auf /oauth/token und /api/*, NICHT unter /.netlify/functions/...
+const PARQET_TOKEN_PROXY = '/oauth/token'
 
 let cachedClientId = null
 
@@ -127,7 +128,7 @@ export async function startOAuthFlow() {
   window.location.href = url
 }
 
-// 6. Callback nach Parqet Login (HIER KORRIGIERT: skip_parqet entfernen & Token sofort speichern)
+// 6. Callback nach Parqet Login
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
@@ -155,19 +156,12 @@ export async function handleCallback() {
   })
 
   try {
-    let res = await fetch(`${PARQET_PROXY}/oauth2/token`, {
+    // Nur noch über die korrekte Edge-Function-Route /oauth/token
+    const res = await fetch(PARQET_TOKEN_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
     })
-
-    if (!res.ok) {
-      res = await fetch(`${PARQET_AUTH_DIRECT}/oauth2/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body,
-      })
-    }
 
     if (!res.ok) {
       console.error('Token-Austausch fehlgeschlagen:', await res.text())
@@ -176,11 +170,8 @@ export async function handleCallback() {
 
     const data = await res.json()
     if (data.access_token) {
-      // 1. Token SOFORT in beiden Storages ablegen
       sessionStorage.setItem('parqet_access_token', data.access_token)
       localStorage.setItem('parqet_access_token', data.access_token)
-
-      // 2. WICHTIG: Manuellen Skip-Modus beenden!
       localStorage.removeItem('skip_parqet')
 
       if (data.refresh_token) {
@@ -197,7 +188,6 @@ export async function handleCallback() {
       sessionStorage.removeItem('parqet_code_verifier')
       sessionStorage.removeItem('parqet_oauth_state')
 
-      // 3. Zurück ins Dashboard mit vollem Reload, damit alle Hooks frisch starten
       window.location.href = window.location.origin + '/#dashboard'
       return true
     }
@@ -207,7 +197,7 @@ export async function handleCallback() {
   return false
 }
 
-// 7. Access Token holen (mit Fallbacks und automatischem Refresh)
+// 7. Access Token holen (mit automatischem Refresh über die korrekte Route)
 export async function getAccessToken() {
   let token = sessionStorage.getItem('parqet_access_token') || localStorage.getItem('parqet_access_token')
   if (token) return token
@@ -242,19 +232,11 @@ export async function getAccessToken() {
       client_id: clientId,
     })
 
-    let res = await fetch(`${PARQET_PROXY}/oauth2/token`, {
+    const res = await fetch(PARQET_TOKEN_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
     })
-
-    if (!res.ok) {
-      res = await fetch(`${PARQET_AUTH_DIRECT}/oauth2/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body,
-      })
-    }
 
     if (!res.ok) return null
     const data = await res.json()
