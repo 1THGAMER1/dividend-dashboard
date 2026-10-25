@@ -248,8 +248,6 @@ export default function DividendDashboardView({
                         </button>
                     ))}
                 </div>
-
-    <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Portfolio-Übersicht · Nettowerte</p>
             </div>
 
             {error && (
