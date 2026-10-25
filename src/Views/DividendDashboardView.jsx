@@ -7,9 +7,9 @@ import PositionsTable from '../components/PositionsTable.jsx'
 import DividendDonut from '../components/DividendDonut.jsx'
 import SkeletonDashboard from '../components/SkeletonDashboard.jsx'
 import EmptyStateView from './EmptyStateView.jsx'
+import { fetchAllDbActivities } from '../utils/manualActivities'
 import { calcRealTotal } from '../inflation.js'
-import { fetchAllDbActivities, toParqetShape } from '../utils/manualActivities'
-import { buildForecast, groupByYearMonth, toCumulative, groupByHolding } from '../utils/dataUtils.js'
+import { buildForecast } from '../utils/dataUtils.js'
 
 const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -36,20 +36,6 @@ function rolling12m(mMap, endY, endM) {
         sum += mMap?.[y]?.[m] ?? 0
     }
     return sum
-}
-
-// Saisonale Prognose aus den eigenen Daten: gleicher Monat im Vorjahr (sonst vor zwei Jahren)
-function seasonalForecast(monthly, cy, cm) {
-    const fm = {}
-    for (let i = 1; i <= 12; i++) {
-        const idx = cm + i
-        const y = cy + Math.floor(idx / 12)
-        const m = idx % 12
-        const prev = monthly?.[y - 1]?.[m] ?? monthly?.[y - 2]?.[m] ?? 0
-        if (!fm[y]) fm[y] = Array(12).fill(0)
-        fm[y][m] = +prev.toFixed(2)
-    }
-    return fm
 }
 
 export default function DividendDashboardView({
@@ -109,64 +95,93 @@ export default function DividendDashboardView({
         if (propLoadData) await propLoadData()
     }
 
+    // ── 2. DATENBASIS ERSTELLEN ──────────────────────────────────────────────
     const baseData = useMemo(() => {
         const hasParqet = Boolean(propMonthly && Object.keys(propMonthly).length > 0)
 
         if (hasParqet) {
-            return { hasParqet: true, monthly: propMonthly, byHolding: propByHolding || {}, hasRecords: true, liveValue: propCurrentValue, forecast: null }
+            return {
+                monthly: propMonthly,
+                byHolding: propByHolding || {},
+                hasRecords: true,
+                liveValue: propCurrentValue,
+                allRawActs: []
+            }
         }
 
-        // Eigene Daten in Parqet-Form bringen und durch dieselben Funktionen schicken wie im Hook
-        const all = (dbActs || []).map(toParqetShape)
-        const divActs  = all.filter(a => a.type === 'dividend')
-        const buyActs  = all.filter(a => a.type === 'buy')
-        const sellActs = all.filter(a => a.type === 'sell')
+        const m = {}
+        const h = {}
+        let divCount = 0
+        let totalBuy = 0
+        const rawActs = []
 
-        const names = {}, types = {}, tickers = {}
-        all.forEach(a => {
-            const k = a.asset.isin
-            if (!names[k]) names[k] = a.asset.name || k
-            if (!types[k] && a.holdingAssetType) types[k] = a.holdingAssetType
-            tickers[k] = k
+        ;(dbActs || []).forEach(a => {
+            const type = String(a.type || '').toLowerCase()
+            const amt = Number(a.amount ?? 0)
+
+            if (type === 'buy') totalBuy += amt
+            if (type === 'sell') totalBuy = Math.max(0, totalBuy - amt)
+
+            if (type !== 'dividend') return
+
+            const d = new Date(a.date || a.datetime || 0)
+            if (isNaN(d.getTime())) return
+
+            divCount++
+            const y = d.getFullYear()
+            const mon = d.getMonth()
+            const net = Number(a.amountNet ?? a.amount ?? 0)
+            const tax = Number(a.tax ?? 0)
+            const gross = (Number(a.gross) > net) ? Number(a.gross) : +(net + tax).toFixed(2)
+            const key = a.isin || a.name || 'Unbekannt'
+
+            rawActs.push({
+                datetime: a.date || a.datetime,
+                amountNet: net,
+                amount: gross,
+                tax,
+                asset: { isin: key, name: a.name || key }
+            })
+
+            if (!m[y]) m[y] = Array(12).fill(0)
+            m[y][mon] = +(m[y][mon] + net).toFixed(2)
+
+            if (!h[key]) {
+                h[key] = {
+                    name: a.name || key,
+                    isin: a.isin || key,
+                    assetType: a.assetType || 'Security',
+                    totalNet: 0,
+                    monthly: {},
+                    gross: {},
+                    tax: {}
+                }
+            }
+            if (!h[key].monthly[y]) h[key].monthly[y] = Array(12).fill(0)
+            if (!h[key].gross[y])   h[key].gross[y] = Array(12).fill(0)
+            if (!h[key].tax[y])     h[key].tax[y] = Array(12).fill(0)
+
+            h[key].monthly[y][mon] = +(h[key].monthly[y][mon] + net).toFixed(2)
+            h[key].gross[y][mon]   = +(h[key].gross[y][mon] + gross).toFixed(2)
+            h[key].tax[y][mon]     = +(h[key].tax[y][mon] + tax).toFixed(2)
+            h[key].totalNet        = +(h[key].totalNet + net).toFixed(2)
         })
-        const purchaseValues = {}
-        buyActs.forEach(a => {
-            const k = a.asset.isin
-            purchaseValues[k] = (purchaseValues[k] || 0) + (a.amount || 0)
-        })
-
-        const m  = groupByYearMonth(divActs)
-        const c  = toCumulative(m)
-        const bh = groupByHolding(divActs, names, types, purchaseValues, tickers)
-
-        let fc = null
-        try {
-            fc = buildForecast(c, divActs, buyActs, names, {}, sellActs, types, {})
-        } catch (err) {
-            console.warn('buildForecast (eigene Daten) fehlgeschlagen:', err)
-        }
-
-        // Marktwert: aus den Positionen der App, sonst Einstand aus der Berechnung
-        const holdingsValue = (enrichedHoldings?.length ? enrichedHoldings : holdings || [])
-            .reduce((s, p) => s + (Number(p.value) || 0), 0)
-        const fcValue = (fc?.enrichedHoldings || []).reduce((s, p) => s + (Number(p.value) || 0), 0)
 
         return {
-            hasParqet: false,
             monthly: m,
-            byHolding: bh,
-            hasRecords: divActs.length > 0,
-            liveValue: propCurrentValue > 0 ? propCurrentValue : (holdingsValue > 0 ? holdingsValue : fcValue),
-            forecast: fc,
+            byHolding: h,
+            hasRecords: divCount > 0,
+            liveValue: propCurrentValue > 0 ? propCurrentValue : totalBuy,
+            allRawActs: rawActs
         }
-    }, [propMonthly, propByHolding, propCurrentValue, dbActs, holdings, enrichedHoldings])
+    }, [propMonthly, propByHolding, propCurrentValue, dbActs])
 
-    const { monthly, byHolding, hasRecords, liveValue, hasParqet, forecast: dbForecast } = baseData
+    const { monthly, byHolding, hasRecords, liveValue, allRawActs } = baseData
 
+    // ── 3. ORIGINALE PROGNOSE & RECHNUNGEN (INKL. KORRIGIERTEM CAGR-KEY) ──────
     const computed = useMemo(() => {
         if (!hasRecords) return null
 
-        // Kumuliert
         const cum = {}
         Object.keys(monthly).forEach(y => {
             cum[y] = Array(12).fill(0)
@@ -177,31 +192,46 @@ export default function DividendDashboardView({
             }
         })
 
-        // Prognose: bei Parqet-Daten die Props, sonst Saisonprognose aus den eigenen Daten
-        const propHasForecast = hasParqet && propForecastMonthly && Object.keys(propForecastMonthly).length > 0
-        const forecastM = propHasForecast ? propForecastMonthly : (dbForecast?.monthly ?? seasonalForecast(monthly, cy, cm))
-        const forecastC = propHasForecast ? propForecastCum : (dbForecast?.cum ?? {})
-        const forecastH = propHasForecast ? propForecastByHolding : (dbForecast?.forecastByHolding ?? {})
+        let forecastM = propForecastMonthly
+        let forecastC = propForecastCum
+        let forecastH = propForecastByHolding
+        let fNext12mNet = propForecast12m?.total || propForecast12m?.net || 0
 
-        let fNext12mNet = 0
-        for (let i = 0; i < 12; i++) {
-            const fm = (cm + 1 + i) % 12
-            const fy = cy + Math.floor((cm + 1 + i) / 12)
-            fNext12mNet += forecastM?.[fy]?.[fm] || 0
+        if (!forecastM || Object.keys(forecastM).length === 0) {
+            try {
+                const combinedHoldings = [...(enrichedHoldings || []), ...(holdings || [])]
+                const fcResult = buildForecast(allRawActs, combinedHoldings)
+                if (fcResult?.forecastMonthly) {
+                    forecastM = fcResult.forecastMonthly
+                    forecastC = fcResult.forecastCum
+                    forecastH = fcResult.forecastByHolding
+                }
+            } catch (err) {
+                console.warn('buildForecast Fallback:', err)
+            }
         }
 
-        // TTM & YoY (Props nur bei Parqet-Daten)
+        if (forecastM && Object.keys(forecastM).length > 0) {
+            fNext12mNet = 0
+            for (let i = 0; i < 12; i++) {
+                const fm = (cm + 1 + i) % 12
+                const fy = cy + Math.floor((cm + 1 + i) / 12)
+                fNext12mNet += forecastM?.[fy]?.[fm] || 0
+            }
+        }
+
         const ttmNet = rolling12m(monthly, cy, cm)
         const prevTtmNet = rolling12m(monthly, cy - 1, cm)
-        let yoyGrowth = hasParqet ? (propYoy ?? null) : null
+        let yoyGrowth = propYoy ?? null
         if (yoyGrowth === null && prevTtmNet > 0) {
             yoyGrowth = +(((ttmNet / prevTtmNet) - 1) * 100).toFixed(1)
         }
 
-        // CAGR
-        let cagrObj = hasParqet ? (propTrueCagr ?? null) : null
+        // ── KORREKTUR: CAGR nutzt jetzt einheitlich den Schlüssel `.value` ────
+        // (identisch zum Original-Objekt aus useDividendData.js: { value, from, to, years })
+        let cagrObj = propTrueCagr ?? null
         if (!cagrObj) {
-            const years = Object.keys(monthly).map(Number).filter(y => y < cy).sort((a, b) => a - b)
+            const years = Object.keys(monthly).map(Number).filter(y => y < cy).sort()
             if (years.length >= 2) {
                 const firstY = years[0]
                 const lastY = years[years.length - 1]
@@ -209,22 +239,23 @@ export default function DividendDashboardView({
                 const sVal = yearTotal(monthly, firstY)
                 const eVal = yearTotal(monthly, lastY)
                 if (sVal > 0 && eVal > 0 && nY > 0) {
-                    cagrObj = { val: +(((Math.pow(eVal / sVal, 1 / nY) - 1) * 100)).toFixed(1), from: firstY, to: lastY, years: nY }
+                    cagrObj = {
+                        value: +(((Math.pow(eVal / sVal, 1 / nY) - 1) * 100)).toFixed(1),
+                        from: firstY,
+                        to: lastY,
+                        years: nY
+                    }
                 }
             }
         }
 
-        // Wachstum laufendes Jahr: erhaltene Monate + Prognose der restlichen Monate
         const lastYTotal = yearTotal(monthly, cy - 1)
-        const curYActual = (monthly?.[cy] || []).reduce((s, v, i) => (i <= cm ? s + (v || 0) : s), 0)
-        const curYRest = (forecastM?.[cy] || []).reduce((s, v, i) => (i > cm ? s + (v || 0) : s), 0)
-        const curYTotal = curYActual + curYRest
-        const growthCy = lastYTotal > 0 && curYTotal > 0 ? +(((curYTotal - lastYTotal) / lastYTotal) * 100).toFixed(1) : null
+        const curYForecast = (forecastM?.[cy] || []).reduce((s, v) => s + v, 0)
+        const growthCy = lastYTotal > 0 ? +(((curYForecast - lastYTotal) / lastYTotal) * 100).toFixed(1) : null
 
-        // Inflation / realer Wert
-        let realVal = hasParqet ? propRealTotal : null
-        let inflVal = hasParqet ? propInflation : null
-        let hasReal = hasParqet ? propHasRealData : false
+        let realVal = propRealTotal
+        let inflVal = propInflation
+        let hasReal = propHasRealData
         if (realVal == null) {
             try {
                 realVal = calcRealTotal(monthly)
@@ -238,17 +269,25 @@ export default function DividendDashboardView({
 
         return {
             cum,
-            forecastMonthly: forecastM,
-            forecastCum: forecastC,
-            forecastByHolding: forecastH,
+            forecastMonthly: forecastM || {},
+            forecastCum: forecastC || {},
+            forecastByHolding: forecastH || {},
             forecast12mNet: fNext12mNet,
             forecast12mAvg: +(fNext12mNet / 12).toFixed(2),
-            yoyGrowth, cagrObj, growthCy, ttmNet, lastYTotal, realVal, inflVal, hasReal
+            yoyGrowth,
+            cagrObj,
+            growthCy,
+            ttmNet,
+            lastYTotal,
+            realVal,
+            inflVal,
+            hasReal
         }
-    }, [monthly, hasRecords, hasParqet, dbForecast, cy, cm, propForecastMonthly, propForecastCum, propForecastByHolding, propYoy, propTrueCagr, propRealTotal, propInflation, propHasRealData])
-    // ── 4. FILTER FÜR ZEITRÄUME (ALL, YTD, 12M, 3J) ─────────────────────────
+    }, [monthly, hasRecords, cy, cm, propForecastMonthly, propForecastCum, propForecastByHolding, propForecast12m, propYoy, propTrueCagr, propRealTotal, propInflation, propHasRealData, allRawActs, enrichedHoldings, holdings])
+
+    // ── 4. FILTER FÜR ZEITRÄUME (ALL, YTD, 12M, 3J) ──────────────────────────
     const rangeData = useMemo(() => {
-        if (!hasRecords) return { net: 0, gross: 0, tax: 0, avg: 0, months: 1, filteredByHolding: {}, filteredHeatmap: {} }
+        if (!hasRecords) return { net: 0, gross: 0, tax: 0, avg: 0, filteredByHolding: {}, filteredHeatmap: {} }
 
         const isInRange = (y, m) => {
             if (kpiRange === 'all') return true
@@ -314,43 +353,46 @@ export default function DividendDashboardView({
             }
         })
 
-        // Monate seit der ersten Dividende (nicht seit Januar des ersten Jahres)
-        let firstIdx = null
-        Object.keys(monthly).map(Number).sort((a, b) => a - b).forEach(y => {
-            for (let m = 0; m < 12; m++) {
-                if (firstIdx === null && (monthly[y]?.[m] || 0) > 0) firstIdx = y * 12 + m
-            }
-        })
-        const sinceFirst = firstIdx === null ? 1 : Math.max(1, cy * 12 + cm - firstIdx + 1)
-
-        let divisor = sinceFirst
+        let divisor = 1
         if (kpiRange === 'ytd') divisor = cm + 1
         else if (kpiRange === '12m') divisor = 12
-        else if (kpiRange === '3y') divisor = Math.min(36, sinceFirst)
+        else if (kpiRange === '3y') divisor = 36
+        else {
+            const years = Object.keys(monthly).map(Number).sort()
+            const startYear = years[0] || cy
+            divisor = Math.max(1, (cy - startYear) * 12 + cm + 1)
+        }
 
         return {
             net,
             gross: +(gross > 0 ? gross : (net + tax)).toFixed(2),
             tax: +tax.toFixed(2),
             avg: net / divisor,
-            months: divisor,
             filteredByHolding: fH,
             filteredHeatmap: fM
         }
     }, [hasRecords, byHolding, monthly, kpiRange, cy, cm])
 
-    // ── 5. ORIGINAL RENDITE-BERECHNUNG ─────────────────────────────────────────
+    // ── 5. KORRIGIERTE RENDITE-BERECHNUNG (jetzt identisch zur Original-Logik) ──
     const currentYield = useMemo(() => {
-        if (hasParqet && propDividendYield?.[kpiRange] > 0) return fmtPct(propDividendYield[kpiRange])
+        // Wenn Parqet den Wert direkt liefert, 1:1 übernehmen
+        if (propDividendYield?.[kpiRange] != null) return fmtPct(propDividendYield[kpiRange])
         if (!liveValue || liveValue <= 0) return '–'
-        // Annualisiertes Netto geteilt durch Depotwert
-        const annualNet = rangeData.net * 12 / Math.max(1, rangeData.months)
-        return fmtPct((annualNet / liveValue) * 100)
-    }, [hasParqet, liveValue, rangeData.net, rangeData.months, kpiRange, propDividendYield])
+
+        // ORIGINAL-FORMEL: Bei "Gesamt" KEINE Proration durch Jahre!
+        // Einfach Netto-Summe im Zeitraum / Marktwert (mit Hochrechnung nur bei YTD/3J)
+        let annualFactor = 1
+        if (kpiRange === 'ytd') annualFactor = 12 / Math.max(1, cm + 1)
+        if (kpiRange === '3y')  annualFactor = 1 / 3
+        if (kpiRange === '12m') annualFactor = 1
+        // 'all' => annualFactor bleibt 1 (identisch zum Original-Verhalten)
+
+        const annualizedNet = rangeData.net * annualFactor
+        return fmtPct((annualizedNet / liveValue) * 100)
+    }, [liveValue, rangeData.net, kpiRange, cm, propDividendYield])
 
     const forecastYield = useMemo(() => {
         if (!liveValue || liveValue <= 0 || !computed?.forecast12mNet) return '–'
-        // Original: Forecast geteilt durch Depotwert (0,78 % wie in Bild 1!)
         return fmtPct((computed.forecast12mNet / liveValue) * 100)
     }, [liveValue, computed?.forecast12mNet])
 
@@ -360,10 +402,9 @@ export default function DividendDashboardView({
     if (!hasRecords) return <EmptyStateView onRefresh={handleRefresh} loading={dbLoading} error={error} />
 
     const rangeLabel = KPI_RANGES.find(r => r.key === kpiRange)?.label || 'Gesamt'
-    const shownError = error || propError
+
     return (
         <div>
-            {/* KOPFZEILE MIT SCHALTER */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -408,13 +449,12 @@ export default function DividendDashboardView({
                 </div>
             </div>
 
-            {shownError && (
+            {error && (
                 <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'10px 14px', borderRadius:8, marginBottom:14, fontSize:12 }}>
-                    ⚠ {shownError}
+                    ⚠ {error}
                 </div>
             )}
 
-            {/* 1. KPI-REIHE */}
             <div className="kpi-grid">
                 <KpiCard
                     label={`Dividenden Netto (${rangeLabel})`}
@@ -436,13 +476,12 @@ export default function DividendDashboardView({
                 />
             </div>
 
-            {/* 2. KPI-REIHE (CAGR, YOY & REAL WIE IN BILD 1!) */}
             <div className="kpi-grid">
                 {computed.cagrObj !== null && (
                     <KpiCard
                         label={`CAGR (${computed.cagrObj.years}J)`}
-                        value={(computed.cagrObj.val >= 0 ? '+' : '') + String(computed.cagrObj.val).replace('.', ',') + ' %'}
-                        color={computed.cagrObj.val >= 0 ? '#5bcec2' : '#ef4444'}
+                        value={(computed.cagrObj.value >= 0 ? '+' : '') + String(computed.cagrObj.value).replace('.', ',') + ' %'}
+                        color={computed.cagrObj.value >= 0 ? '#5bcec2' : '#ef4444'}
                         sub={`${computed.cagrObj.from} – ${computed.cagrObj.to}`}
                     />
                 )}
@@ -463,7 +502,6 @@ export default function DividendDashboardView({
                 )}
             </div>
 
-            {/* 3. KPI-REIHE (PROGNOSE WIE IN BILD 1!) */}
             <p style={{ fontSize:10, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8, marginTop:6 }}>Prognose · Nächste 12 Monate</p>
             <div className="kpi-grid">
                 <KpiCard
@@ -487,7 +525,6 @@ export default function DividendDashboardView({
                 />
             </div>
 
-            {/* CHARTS */}
             <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))',
@@ -510,12 +547,10 @@ export default function DividendDashboardView({
                 />
             </div>
 
-            {/* HEATMAP */}
             <div style={{ marginTop: 16 }}>
                 <DividendHeatmap monthly={rangeData.filteredHeatmap} />
             </div>
 
-            {/* DONUT & TABELLE */}
             <div id="dividends-table" style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <DividendDonut byHolding={rangeData.filteredByHolding} kpiRange={kpiRange} />
                 <PositionsTable byHolding={rangeData.filteredByHolding} kpiRange={kpiRange} />
