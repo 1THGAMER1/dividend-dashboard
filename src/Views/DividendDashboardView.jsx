@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import KpiCard from '../components/KpiCard.jsx'
 import DividendChart from '../components/DividendChart.jsx'
 import CumulativeDividendChart from '../components/CumulativeDividendChart.jsx'
@@ -7,6 +7,7 @@ import PositionsTable from '../components/PositionsTable.jsx'
 import DividendDonut from '../components/DividendDonut.jsx'
 import SkeletonDashboard from '../components/SkeletonDashboard.jsx'
 import EmptyStateView from './EmptyStateView.jsx'
+import { fetchAllDbActivities } from '../utils/manualActivities'
 
 const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -20,9 +21,8 @@ const KPI_RANGES = [
 
 export default function DividendDashboardView({
                                                   showSkeleton,
-                                                  showEmpty,
                                                   loadData,
-                                                  loading,
+                                                  loading: parqetLoading,
                                                   error,
                                                   kpiRange,
                                                   setKpiRange,
@@ -43,31 +43,60 @@ export default function DividendDashboardView({
                                                   forecastByHolding,
                                                   currentValue = 0,
                                                   yearTotal,
-                                                  activities = [] // <--- NEU: Aktivitäten aus Supabase / Hook
                                               }) {
     const cm = new Date().getMonth()
 
-    // ── 0. DATEN-SYNTHESE AUS SUPABASE (falls Parqet leer ist) ────────────────
-    const { effectiveMonthly, effectiveByHolding, effectiveCum } = useMemo(() => {
+    // ── 1. SUPABASE-DATEN DIREKT LADEN ─────────────────────────────────────────
+    const [dbActivities, setDbActivities] = useState([])
+    const [dbLoading, setDbLoading] = useState(true)
+
+    const loadFromDb = async () => {
+        setDbLoading(true)
+        try {
+            const data = await fetchAllDbActivities()
+            setDbActivities(data || [])
+        } catch (err) {
+            console.warn('Fehler beim Laden der Supabase-Aktivitäten:', err)
+        } finally {
+            setDbLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        loadFromDb()
+    }, [])
+
+    const handleRefreshAll = async () => {
+        await loadFromDb()
+        if (loadData) await loadData()
+    }
+
+    // ── 2. DATENZUSAMMENFÜHRUNG: PARQET ODER SUPABASE ─────────────────────────
+    const { effectiveMonthly, effectiveByHolding, effectiveCum, hasAnyData } = useMemo(() => {
         const hasPropMonthly = Boolean(propMonthly && Object.keys(propMonthly).length > 0)
+
+        // Wenn Parqet-Daten da sind, nutze sie
         if (hasPropMonthly) {
             return {
                 effectiveMonthly: propMonthly,
                 effectiveByHolding: propByHolding || {},
-                effectiveCum: propCum || {}
+                effectiveCum: propCum || {},
+                hasAnyData: true,
             }
         }
 
-        // Falls Parqet leer ist: Baue monthly, byHolding & cum direkt aus Supabase-Aktivitäten!
+        // Falls Parqet leer ist: Baue alles aus Supabase `user_activities` auf!
         const synthM = {}
         const synthH = {}
         const synthC = {}
+        let divCount = 0
 
-        if (Array.isArray(activities)) {
-            activities.forEach(a => {
+        if (Array.isArray(dbActivities) && dbActivities.length > 0) {
+            dbActivities.forEach(a => {
                 const type = String(a.type || '').toLowerCase()
                 if (type !== 'dividend') return
 
+                divCount++
                 const d = new Date(a.date || a.datetime || 0)
                 if (isNaN(d.getTime())) return
 
@@ -78,11 +107,11 @@ export default function DividendDashboardView({
                 const tax = Number(a.tax ?? 0)
                 const key = a.isin || a.name || 'Unbekannt'
 
-                // monthly
+                // Monthly Matrix
                 if (!synthM[y]) synthM[y] = Array(12).fill(0)
-                synthM[y][m] += net
+                synthM[y][m] = +(synthM[y][m] + net).toFixed(2)
 
-                // byHolding
+                // Holdings Map
                 if (!synthH[key]) {
                     synthH[key] = {
                         name: a.name || key,
@@ -95,21 +124,21 @@ export default function DividendDashboardView({
                     }
                 }
                 if (!synthH[key].monthly[y]) synthH[key].monthly[y] = Array(12).fill(0)
-                if (!synthH[key].gross[y]) synthH[key].gross[y] = Array(12).fill(0)
-                if (!synthH[key].tax[y]) synthH[key].tax[y] = Array(12).fill(0)
+                if (!synthH[key].gross[y])   synthH[key].gross[y] = Array(12).fill(0)
+                if (!synthH[key].tax[y])     synthH[key].tax[y] = Array(12).fill(0)
 
-                synthH[key].monthly[y][m] += net
-                synthH[key].gross[y][m] += gross
-                synthH[key].tax[y][m] += tax
-                synthH[key].totalNet += net
+                synthH[key].monthly[y][m] = +(synthH[key].monthly[y][m] + net).toFixed(2)
+                synthH[key].gross[y][m]   = +(synthH[key].gross[y][m] + gross).toFixed(2)
+                synthH[key].tax[y][m]     = +(synthH[key].tax[y][m] + tax).toFixed(2)
+                synthH[key].totalNet      = +(synthH[key].totalNet + net).toFixed(2)
             })
 
-            // cum (kumuliert pro Jahr)
+            // Kumulierte Werte berechnen
             Object.keys(synthM).forEach(y => {
                 synthC[y] = Array(12).fill(0)
                 let running = 0
                 for (let i = 0; i < 12; i++) {
-                    running += synthM[y][i] || 0
+                    running += (synthM[y][i] || 0)
                     synthC[y][i] = +running.toFixed(2)
                 }
             })
@@ -118,19 +147,21 @@ export default function DividendDashboardView({
         return {
             effectiveMonthly: synthM,
             effectiveByHolding: synthH,
-            effectiveCum: synthC
+            effectiveCum: synthC,
+            hasAnyData: divCount > 0
         }
-    }, [propMonthly, propByHolding, propCum, activities])
+    }, [propMonthly, propByHolding, propCum, dbActivities])
 
-    // Prüfen, ob wir wirklich gar keine Daten haben
-    const hasData = Object.keys(effectiveMonthly).length > 0
+    // Lade- und Leerzustand sauber steuern
+    const isLoading = (parqetLoading && !hasAnyData) || (dbLoading && !hasAnyData)
+    if (showSkeleton || isLoading) return <SkeletonDashboard />
 
-    if (showSkeleton) return <SkeletonDashboard />
-    if (!hasData || showEmpty) {
-        return <EmptyStateView onRefresh={loadData} loading={loading} error={error} />
+    // Wenn weder in Parqet noch in Supabase Dividenden liegen:
+    if (!hasAnyData) {
+        return <EmptyStateView onRefresh={handleRefreshAll} loading={isLoading} error={error} />
     }
 
-    // ── 1. ZEITRAUMFILTER FÜR TABELLE, DONUT, HEATMAP & KPIS ─────────────────
+    // ── 3. ZEITRAUMFILTER FÜR TABELLE, DONUT, HEATMAP & KPIS ─────────────────
     const { filteredByHolding, filteredMonthlyForHeatmap, rangeTotals } = useMemo(() => {
         let net = 0
         let gross = 0
@@ -222,7 +253,7 @@ export default function DividendDashboardView({
         }
     }, [effectiveByHolding, effectiveMonthly, kpiRange, cy, cm])
 
-    // ── 2. DATEN FÜR DIE CHARTS ──────────────────────────────────────────────
+    // ── 4. CHARTS-DATEN ──────────────────────────────────────────────────────
     const { chartMonthly, chartCum } = useMemo(() => {
         const allYears = Object.keys(effectiveMonthly || {}).map(Number).sort()
         let keepYears = allYears
@@ -247,7 +278,7 @@ export default function DividendDashboardView({
         return { chartMonthly: resM, chartCum: resC }
     }, [effectiveMonthly, effectiveCum, kpiRange, cy])
 
-    // ── 3. KPI-WERTE ─────────────────────────────────────────────────────────
+    // ── 5. KPI-WERTE ─────────────────────────────────────────────────────────
     const activeK = useMemo(() => {
         if (kpiRange === 'all' && k && rangeTotals.net === 0) return k
         return {
@@ -269,16 +300,6 @@ export default function DividendDashboardView({
         }
         return dividendYield?.[kpiRange] ? fmtPct(dividendYield[kpiRange]) : '–'
     }, [currentValue, rangeTotals, kpiRange, cm, dividendYield])
-
-    const calcForecastNext12mNet = () => {
-        let total = 0
-        for (let i = 0; i < 12; i++) {
-            const futureMonth = (cm + 1 + i) % 12
-            const futureYear  = cy + Math.floor((cm + 1 + i) / 12)
-            total += forecastMonthly?.[futureYear]?.[futureMonth] ?? 0
-        }
-        return +total.toFixed(2)
-    }
 
     const currentRangeLabel = KPI_RANGES.find(r => r.key === kpiRange)?.label || 'Gesamt'
 
@@ -387,9 +408,14 @@ export default function DividendDashboardView({
                 <KpiCard
                     label="Progn. Dividendenrendite"
                     value={(() => {
-                        const forecastNet = calcForecastNext12mNet();
+                        let totalF = 0
+                        for (let i = 0; i < 12; i++) {
+                            const fm = (cm + 1 + i) % 12
+                            const fy = cy + Math.floor((cm + 1 + i) / 12)
+                            totalF += forecastMonthly?.[fy]?.[fm] ?? 0
+                        }
                         if (!currentValue || currentValue === 0) return '–';
-                        return fmtPct((forecastNet / currentValue) * 100);
+                        return fmtPct((totalF / currentValue) * 100);
                     })()}
                     color="#5bcec2"
                     sub="Nächste 12M / Marktwert"
