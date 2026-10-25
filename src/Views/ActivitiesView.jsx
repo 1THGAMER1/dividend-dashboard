@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { fetchAllDbActivities, syncParqetToSupabase } from '../utils/manualActivities'
+import AddActivityModal from '../components/AddActivityModal'
 
 const fmt = (n) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -53,6 +54,8 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
     const [filter, setFilter] = useState('all')
     const [query, setQuery] = useState('')
     const [visible, setVisible] = useState(PAGE)
+    const [editingItem, setEditingItem] = useState(null)
+    const [isAddOpen, setIsAddOpen] = useState(false)
 
     // Name-Map aus Positionen aufbauen
     const names = useMemo(() => {
@@ -143,6 +146,12 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                     >
                         {syncing ? '⏳ Synchronisiere mit Parqet…' : '🔄 Mit Parqet abgleichen'}
                     </button>
+                    <button
+                        onClick={() => { setEditingItem(null); setIsAddOpen(true) }}
+                        style={{ ...chip(false), background: '#009991', color: '#fff', border: 'none' }}
+                    >
+                        + Neu
+                    </button>
                 </div>
 
                 <input
@@ -214,8 +223,29 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                                             </div>
                                         </div>
                                     </div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: t.sign > 0 ? '#22c55e' : '#f1f5f9', flexShrink: 0, textAlign: 'right' }}>
-                                        {r.amount > 0 || t.sign === 0 ? `${sign}${fmt(r.amount)}` : '—'}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: t.sign > 0 ? '#22c55e' : '#f1f5f9', textAlign: 'right' }}>
+                                            {r.amount > 0 || t.sign === 0 ? `${sign}${fmt(r.amount)}` : '—'}
+                                        </div>
+
+                                        {/* Bearbeiten-Knopf nur für manuelle Buchungen */}
+                                        {r.isManual && (
+                                            <button
+                                                onClick={() => { setEditingItem(r); setIsAddOpen(true) }}
+                                                title="Aktivität bearbeiten oder löschen"
+                                                style={{
+                                                    background: '#1e293b',
+                                                    border: '1px solid #334155',
+                                                    color: '#94a3b8',
+                                                    borderRadius: 6,
+                                                    padding: '4px 7px',
+                                                    fontSize: 11,
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                ✏️
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </React.Fragment>
@@ -229,6 +259,12 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
                     )}
                 </div>
             )}
+            <AddActivityModal
+                isOpen={isAddOpen}
+                initialActivity={editingItem}
+                onClose={() => { setIsAddOpen(false); setEditingItem(null) }}
+                onSuccess={loadFromSupabase}
+            />
         </div>
     )
 }

@@ -160,3 +160,62 @@ export async function fetchAllDbActivities() {
 
     return (data || []).map(formatActivity)
 }
+
+// Aktualisiert eine bestehende manuelle Aktivität
+export async function updateManualActivity(id, {
+    type,
+    datetime,
+    shares = 0,
+    price = 0,
+    amount,
+    fee = 0,
+    tax = 0,
+    asset,
+    currency = 'EUR'
+}) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Nicht eingeloggt')
+
+    const net = Number(amount) - Number(fee) - Number(tax)
+
+    const payload = {
+        type,
+        datetime: new Date(datetime).toISOString(),
+        shares: Number(shares) || 0,
+        price: Number(price) || 0,
+        amount: Number(amount),
+        amount_net: net,
+        fee: Number(fee) || 0,
+        tax: Number(tax) || 0,
+        currency,
+        asset_isin: asset?.isin || null,
+        asset_name: asset?.name || 'Unbekanntes Asset',
+        asset_type: asset?.assetType || 'Security'
+    }
+
+    const { data, error } = await supabase
+        .from('user_activities')
+        .update(payload)
+        .eq('id', id)
+        .eq('user_id', user.id) // Sicherheitscheck RLS
+        .select()
+        .single()
+
+    if (error) throw error
+    return formatActivity(data)
+}
+
+// Löscht eine manuelle Aktivität
+export async function deleteManualActivity(id) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Nicht eingeloggt')
+
+    const { error } = await supabase
+        .from('user_activities')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+
+    if (error) throw error
+    return true
+}
