@@ -9,7 +9,7 @@ export function clearCachedClientId() {
   cachedClientId = null
 }
 
-// 1. Synchroner Login-Check (MUSS synchron sein, damit useDividendData nicht crasht!)
+// 1. Synchroner Login-Check
 export function isLoggedIn() {
   return Boolean(
       sessionStorage.getItem('parqet_access_token') ||
@@ -69,7 +69,7 @@ export async function saveClientId(clientId) {
   }
 }
 
-// 4. PKCE Code Verifier & Challenge
+// 4. PKCE Helfer
 function generateRandomString(length) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
   const arr = new Uint8Array(length)
@@ -89,16 +89,19 @@ async function generateCodeChallenge(verifier) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-// 5. Startet den OAuth-Redirect zu Parqet
+// 5. Startet den OAuth-Flow mit verlangtem `state`-Parameter!
 export async function startOAuthFlow() {
   const clientId = await getClientId()
   if (!clientId) {
-    alert('Bitte zuerst die Parqet Client-ID eintragen.')
+    alert('Bitte zuerst die Parqet Client-ID in den Einstellungen eintragen.')
     return
   }
 
   const codeVerifier = generateRandomString(64)
+  const state = generateRandomString(32) // <--- Zwingend von Parqet verlangt!
+
   sessionStorage.setItem('parqet_code_verifier', codeVerifier)
+  sessionStorage.setItem('parqet_oauth_state', state)
 
   const codeChallenge = await generateCodeChallenge(codeVerifier)
   const redirectUri = window.location.origin + window.location.pathname
@@ -110,16 +113,24 @@ export async function startOAuthFlow() {
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
     scope: 'portfolio:read',
+    state: state, // <--- HIER übergeben
   })
 
   window.location.href = url
 }
 
-// 6. Token abrufen (Callback nach Parqet Login)
+// 6. Callback nach Parqet Login
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
+  const state = params.get('state')
   if (!code) return false
+
+  const storedState = sessionStorage.getItem('parqet_oauth_state')
+  if (storedState && state && storedState !== state) {
+    console.error('OAuth State Mismatch!')
+    return false
+  }
 
   const codeVerifier = sessionStorage.getItem('parqet_code_verifier')
   const clientId = await getClientId()
@@ -127,7 +138,6 @@ export async function handleCallback() {
 
   if (!codeVerifier || !clientId) return false
 
-  // Über Proxy senden wegen CORS
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     client_id: clientId,
@@ -144,7 +154,6 @@ export async function handleCallback() {
     })
 
     if (!res.ok) {
-      // Fallback
       res = await fetch(`${PARQET_AUTH_DIRECT}/oauth2/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -173,6 +182,7 @@ export async function handleCallback() {
 
       window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
       sessionStorage.removeItem('parqet_code_verifier')
+      sessionStorage.removeItem('parqet_oauth_state')
       return true
     }
   } catch (err) {
@@ -258,6 +268,7 @@ export async function getAccessToken() {
 export async function logout() {
   sessionStorage.removeItem('parqet_access_token')
   sessionStorage.removeItem('parqet_code_verifier')
+  sessionStorage.removeItem('parqet_oauth_state')
   localStorage.removeItem('parqet_refresh_token')
   localStorage.removeItem('skip_parqet')
   clearCachedClientId()

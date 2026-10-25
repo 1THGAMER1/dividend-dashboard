@@ -140,7 +140,20 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 40rem)').matches)
   const [showAddActivity, setShowAddActivity] = useState(false)
 
-  // Überspringen von Parqet möglich
+  // Feedback-State für den Aktualisieren-Knopf
+  const [refreshSuccess, setRefreshSuccess] = useState(false)
+
+  const handleManualRefresh = async () => {
+    try {
+      await loadData()
+      setRefreshSuccess(true)
+      setTimeout(() => setRefreshSuccess(false), 2000)
+    } catch {
+      // Fehler wird im `error`-State des Hooks abgebildet
+    }
+  }
+
+  // Nutzer kann Parqet überspringen
   const [skipParqet, setSkipParqet] = useState(
       () => localStorage.getItem('skip_parqet') === 'true'
   )
@@ -197,13 +210,9 @@ export default function App() {
 
   const profileLoading = !!appUser && checkedUserId !== appUser.id
 
-  // 1. Initialer Auth-Check
   if (appUser === undefined || profileLoading) return <LoadingScreen text="App wird vorbereitet…" />
-
-  // 2. Nicht bei Supabase eingeloggt? -> Zeige Login/Register
   if (!appUser) return <AppLogin />
 
-  // 3. Wenn Parqet noch nicht übersprungen wurde UND der Nutzer noch keine Parqet-Verbindung hat:
   if (!skipParqet && !loggedIn) {
     if (!clientIdReady) {
       return (
@@ -214,7 +223,6 @@ export default function App() {
       )
     }
 
-    // Zeigt den LoginScreen mit Option "Connect" ODER "Ohne Parqet fortfahren"
     return (
         <LoginScreen
             onLogin={startOAuthFlow}
@@ -225,7 +233,6 @@ export default function App() {
     )
   }
 
-  // 4. Ladeindikator für Kurse
   if (tickerProgress) return <LoadingScreen text="Wertpapiere & Kurse werden geladen…" progress={tickerProgress} />
 
   const cy = new Date().getFullYear()
@@ -316,12 +323,26 @@ export default function App() {
 
             {loggedIn && (
                 <button
-                    onClick={loadData}
+                    onClick={handleManualRefresh}
                     disabled={loading}
                     title={error || "Parqet-Daten aktualisieren"}
-                    style={{ background: loading ? '#1a2233' : '#1e3a5f', border: `1px solid ${error ? '#ef4444' : '#3b82f6'}`, color: error ? '#fca5a5' : '#93c5fd', padding: '5px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 11 }}
+                    style={{
+                      background: refreshSuccess ? '#059669' : loading ? '#1a2233' : '#1e3a5f',
+                      border: `1px solid ${refreshSuccess ? '#10b981' : error ? '#ef4444' : '#3b82f6'}`,
+                      color: refreshSuccess ? '#ffffff' : error ? '#fca5a5' : '#93c5fd',
+                      padding: '5px 9px',
+                      borderRadius: 8,
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      transition: 'all 0.2s ease',
+                    }}
                 >
-                  {loading ? '⏳' : '↻'}
+                  <span>{loading ? '⏳' : refreshSuccess ? '✓' : '↻'}</span>
+                  {!isMobile && <span>{loading ? 'Lädt…' : refreshSuccess ? 'Aktuell' : 'Aktualisieren'}</span>}
                 </button>
             )}
 
