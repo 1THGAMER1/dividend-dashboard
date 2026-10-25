@@ -56,9 +56,19 @@ export async function syncParqetToSupabase(namesMap = {}) {
     const parqetActs = await fetchAllActivities()
     if (!parqetActs || parqetActs.length === 0) return { inserted: 0 }
 
+    // Erlaubte Typen
+    const KNOWN_TYPES = ['buy', 'sell', 'dividend', 'interest', 'deposit', 'withdrawal', 'transfer_in', 'transfer_out', 'fees_taxes']
+
     // 2. Ins Supabase-Schema transformieren
     const rows = parqetActs.map(a => {
-        const type = String(a.type || '').toLowerCase()
+        let type = String(a.type || '').toLowerCase()
+        if (!KNOWN_TYPES.includes(type)) {
+            // Unbekannte Typen sicherheitshalber auf 'fees_taxes' oder passendes Fallback lenken
+            if (type.includes('tax') || type.includes('fee')) type = 'fees_taxes'
+            else if (type.includes('transfer')) type = 'transfer_in'
+            else type = 'fees_taxes'
+        }
+
         const key = a.asset?.isin || a.asset?.symbol || a.asset?.holding_id || a.holdingId || ''
         const name = namesMap[String(key).toUpperCase()]
             || a.asset?.name
@@ -76,7 +86,7 @@ export async function syncParqetToSupabase(namesMap = {}) {
 
         return {
             user_id: user.id,
-            parqet_id: String(a.id), // Eindeutige Parqet-ID für Upsert
+            parqet_id: String(a.id),
             type,
             datetime: new Date(a.datetime).toISOString(),
             shares,
