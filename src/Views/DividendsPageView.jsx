@@ -57,6 +57,7 @@ export default function DividendsPageView({
         const shares = {}
         const cost = {}
         const dividends = []
+        const annualDividends = {}
         const dividendPerShare = {}
 
         effectiveActivities
@@ -77,6 +78,7 @@ export default function DividendsPageView({
                     const date = new Date(activity.date || activity.datetime || 0)
                     if (!Number.isNaN(date.getTime())) {
                         dividends.push({ date, amount })
+                        annualDividends[date.getFullYear()] = (annualDividends[date.getFullYear()] || 0) + amount
                         if (quantity > 0) {
                             const month = date.getMonth()
                             dividendPerShare[key] = { ...(dividendPerShare[key] || {}), [month]: amount / quantity }
@@ -100,12 +102,28 @@ export default function DividendsPageView({
         }
 
         const dividendYield = currentValue > 0 ? totalDividendsNet / currentValue : 0
+        const dividendYears = Object.keys(annualDividends)
+            .map(Number)
+            .filter(year => annualDividends[year] >= 1)
+            .sort((a, b) => a - b)
+        let cagrTotal = null
+        if (dividendYears.length >= 2) {
+            const firstYear = dividendYears[0]
+            const lastYear = dividendYears[dividendYears.length - 1]
+            const yearSpan = lastYear - firstYear
+            if (yearSpan > 0 && annualDividends[firstYear] > 0) {
+                cagrTotal = +((Math.pow(
+                    annualDividends[lastYear] / annualDividends[firstYear],
+                    1 / yearSpan
+                ) - 1) * 100).toFixed(1)
+            }
+        }
         return {
             currentValue,
             totalDividendsNet,
             dividendYield,
             forecastDividendYield: currentValue > 0 ? forecastDividend / currentValue : 0,
-            cagrTotal: 0,
+            cagrTotal,
         }
     }, [effectiveActivities])
 
