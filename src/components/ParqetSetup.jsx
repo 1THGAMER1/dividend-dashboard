@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 import { encrypt } from '../utils/crypto.js'
 import { getPassword } from '../passwordStore.js'
 
-const REDIRECT_URI = 'https://dividenddashboard.netlify.app/callback'
+const REDIRECT_URI = 'https://karolbennardo.tech/callback'
 
 export default function ParqetSetup({ onDone }) {
   const [clientId, setClientId] = useState('')

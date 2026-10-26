@@ -14,7 +14,7 @@ export function getRedirectUri() {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return `${window.location.origin}/callback`
   }
-  return 'https://dividenddashboard.netlify.app/callback'
+  return 'https://karolbennardo.tech/callback'
 }
 
 // 1. Synchroner Login-Check

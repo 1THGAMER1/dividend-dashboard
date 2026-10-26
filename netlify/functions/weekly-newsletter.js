@@ -206,7 +206,7 @@ function buildNewsletterHtml({ userEmail, currentValue, weekGain, weekReturn, to
         <p style="margin: 0;">
           Möchtest du den Report anpassen oder abbestellen? 
           <br>
-          <a href="https://dividenddashboard.netlify.app/#profile" 
+          <a href="https://karolbennardo.tech/#profile" 
              style="color: #38bdf8; text-decoration: underline; font-weight: 600; display: inline-block; margin-top: 6px;">
             Hier Einstellungen anpassen oder abmelden
           </a>
