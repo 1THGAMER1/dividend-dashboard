@@ -205,10 +205,10 @@ export default function DividendChart({ monthly, forecastMonthly, byHolding, for
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:8 }}>
                 <div>
                     <h3 style={{ fontSize:16, fontWeight:600, color:'#f1f5f9', margin:0 }}>
-                        📊 {mode === 'monthly' ? 'Monatliche Dividenden' : 'Dividenden nach Einzelwerten'}
+                        📊 {mode === 'monthly' ? 'Monatliche Dividenden' : 'Monatliche Dividenden'}
                     </h3>
                     <p style={{ color:'#64748b', fontSize:12, margin:'2px 0 0 0' }}>
-                        {mode === 'monthly' ? 'Vergleich der Monate im Jahresverlauf' : 'Historische & prognostizierte Cashflows mit TTM-Durchschnitt'}
+                        {mode === 'monthly' ? 'Vergleich der Monate im Jahresverlauf' : 'Historische Cashflows nach Asset'}
                     </p>
                 </div>
 

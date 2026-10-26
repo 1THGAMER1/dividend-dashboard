@@ -7,6 +7,9 @@ import './index.css'
 function Root() {
   const path = window.location.pathname
   if (path === '/reset-password') return <ResetPassword />
+  if (!window.location.hash) {
+    window.history.replaceState(window.history.state, '', '#dashboard')
+  }
   return <App />
 }
 

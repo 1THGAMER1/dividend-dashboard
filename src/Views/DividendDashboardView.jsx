@@ -57,6 +57,7 @@ export default function DividendDashboardView(props) {
         forecastByHolding: propForecastByHolding,
         currentValue: propCurrentValue = 0,
         yearTotal: propYearTotalFn,
+        activities = [],
         holdings = [],
         enrichedHoldings = [],
     } = props
@@ -97,10 +98,8 @@ export default function DividendDashboardView(props) {
         if (loadData) await loadData()
     }
 
-    // Synthese ausschließlich für den reinen Supabase-Modus
+    // Einheitliche lokale Synthese der Prognose für Supabase und Parqet
     const fallback = useMemo(() => {
-        if (hasPropData) return null
-
         const m = {}
         const h = {}
         const lotsByKey = {}   // Wertpapier -> { shares, cost } (Durchschnittskosten)
@@ -108,7 +107,18 @@ export default function DividendDashboardView(props) {
         const divPays = {}     // Wertpapier -> [{ idx, net, shares, t }]
 
         // Chronologisch (älteste zuerst): die Datenbank liefert neueste zuerst
-        const chronological = [...(dbActs || [])].sort(
+        const sourceActivities = hasPropData ? activities : dbActs
+        const normalizedActivities = (sourceActivities || []).map(activity => ({
+            ...activity,
+            date: activity.date || activity.datetime,
+            datetime: activity.datetime || activity.date,
+            isin: activity.isin || activity.asset?.isin || activity.asset?.symbol,
+            name: activity.name || activity.asset?.name || activity.asset?.symbol,
+            assetType: activity.assetType || activity.holdingAssetType || activity.asset?.assetType,
+            amountNet: activity.amountNet ?? activity.amount,
+            gross: activity.gross ?? activity.amount,
+        }))
+        const chronological = normalizedActivities.sort(
             (x, y) => new Date(x.date || x.datetime || 0) - new Date(y.date || y.datetime || 0)
         )
 
@@ -346,15 +356,16 @@ export default function DividendDashboardView(props) {
             hasRealData: hasReal, hasRecords: Object.keys(m).length > 0,
             valueIsCost,
         }
-    }, [hasPropData, dbActs, propCurrentValue, cy, cm, holdings, enrichedHoldings])
+    }, [hasPropData, activities, dbActs, propCurrentValue, cy, cm, holdings, enrichedHoldings])
 
     // ── EFFEKTIVE WERTE: Props haben IMMER Vorrang vor dem Fallback ───────────
     const monthly = hasPropData ? propMonthly : (fallback?.monthly || {})
     const byHolding = hasPropData ? (propByHolding || {}) : (fallback?.byHolding || {})
-    const forecastMonthly = hasPropData ? propForecastMonthly : (fallback?.forecastMonthly || {})
-    const forecastByHolding = hasPropData ? propForecastByHolding : (fallback?.forecastByHolding || {})
-    const forecastCumEff = hasPropData ? propForecastCum : (fallback?.forecastCum || {})
-    const forecast12m = hasPropData ? propForecast12m : fallback?.forecast12m
+    const hasLocalForecast = Boolean(fallback && Object.keys(fallback.forecastMonthly || {}).length > 0)
+    const forecastMonthly = hasLocalForecast ? fallback.forecastMonthly : (propForecastMonthly || {})
+    const forecastByHolding = hasLocalForecast ? fallback.forecastByHolding : (propForecastByHolding || {})
+    const forecastCumEff = hasLocalForecast ? fallback.forecastCum : (propForecastCum || {})
+    const forecast12m = hasLocalForecast ? fallback.forecast12m : propForecast12m
     const yoy = hasPropData ? propYoy : fallback?.yoy
     const trueCagr = hasPropData ? propTrueCagr : fallback?.trueCagr
     const k = hasPropData ? propK : (fallback ? { net: fmt(fallback.kpi[kpiRange]?.net ?? 0), gross: fmt(fallback.kpi[kpiRange]?.gross ?? 0), tax: fmt(fallback.kpi[kpiRange]?.tax ?? 0), avg: fmt(fallback.kpi[kpiRange]?.avgMonthly ?? 0) } : { net: '–', gross: '–', tax: '–', avg: '–' })
