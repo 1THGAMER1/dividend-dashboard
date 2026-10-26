@@ -9,7 +9,6 @@ import SkeletonDashboard from '../components/SkeletonDashboard.jsx'
 import EmptyStateView from './EmptyStateView.jsx'
 import { fetchAllDbActivities } from '../utils/manualActivities'
 import { calcRealTotal } from '../inflation.js'
-import { buildForecast } from '../utils/dataUtils.js'
 
 const fmt = n => (+n).toFixed(2).replace('.', ',') + ' €'
 const fmtPct = n => `${(+n).toFixed(2).replace('.', ',')} %`
@@ -104,7 +103,6 @@ export default function DividendDashboardView(props) {
 
         const m = {}
         const h = {}
-        const rawActs = []
         let totalBuy = 0
 
         ;(dbActs || []).forEach(a => {
@@ -122,8 +120,6 @@ export default function DividendDashboardView(props) {
             const tax = Number(a.tax ?? 0)
             const gross = (Number(a.gross) > net) ? Number(a.gross) : +(net + tax).toFixed(2)
             const key = a.isin || a.name || 'Unbekannt'
-
-            rawActs.push({ datetime: a.date || a.datetime, amountNet: net, amount: gross, tax, asset: { isin: key, name: a.name || key } })
 
             if (!m[y]) m[y] = Array(12).fill(0)
             m[y][mon] = +(m[y][mon] + net).toFixed(2)
@@ -145,33 +141,95 @@ export default function DividendDashboardView(props) {
             for (let i = 0; i < 12; i++) { running += (m[y][i] || 0); cumLocal[y][i] = +running.toFixed(2) }
         })
 
-        // Echte buildForecast-Funktion nutzen (identisch zur Parqet-Logik)
-        let forecastM = {}, forecastC = {}, forecastH = {}
-        try {
-            const combined = [...(enrichedHoldings || []), ...(holdings || [])]
-            const fc = buildForecast(rawActs, combined)
-            if (fc?.forecastMonthly) {
-                forecastM = fc.forecastMonthly
-                forecastC = fc.forecastCum || {}
-                forecastH = fc.forecastByHolding || {}
+        // ── WACHSTUMSBASIERTE PROGNOSE PRO POSITION ────────────────────────────
+        // Berechnet pro Position einen individuellen Wachstumsfaktor (TTM vs. Vorjahres-TTM)
+        // und wendet ihn auf die Vorjahreszahlung desselben Kalendermonats an.
+
+        const sumRange = (holdingMonthly, endY, endM, monthsBack) => {
+            let sum = 0
+            for (let i = 0; i < monthsBack; i++) {
+                let mo = endM - i, y = endY
+                if (mo < 0) { mo += 12; y -= 1 }
+                sum += holdingMonthly?.[y]?.[mo] || 0
             }
-        } catch (err) {
-            console.warn('buildForecast (Fallback) Fehler:', err)
+            return sum
         }
 
-        // forecast12m exakt wie in App.jsx berechnet
+        const findLastKnownForMonth = (holdingMonthly, targetMonth, beforeYear) => {
+            const years = Object.keys(holdingMonthly).map(Number).sort((a, b) => b - a)
+            for (const y of years) {
+                if (y >= beforeYear) continue
+                const v = holdingMonthly[y]?.[targetMonth]
+                if (v > 0) return v
+            }
+            return 0
+        }
+
+        const MAX_GROWTH_FACTOR = 5    // Deckel nach oben (verhindert Explosion bei Kleinstbeträgen)
+        const MIN_GROWTH_FACTOR = 0.3  // Deckel nach unten (verhindert unrealistischen Totalausfall)
+
+        const forecastH = {}
+        const forecastM = {}
+        ;[cy, cy + 1].forEach(ty => { forecastM[ty] = Array(12).fill(0) })
+
+        Object.entries(h).forEach(([key, hh]) => {
+            // TTM der letzten bekannten 12 Monate vs. die 12 Monate davor (für diese EINE Position)
+            const ttmCurrent = sumRange(hh.monthly, cy, cm, 12)
+            const ttmPrevious = sumRange(hh.monthly, cy, cm - 12, 12)
+
+            let growthFactor = 1
+            if (ttmPrevious > 0 && ttmCurrent > 0) {
+                growthFactor = ttmCurrent / ttmPrevious
+                // Deckel anwenden, um Extremwerte abzufedern
+                growthFactor = Math.min(MAX_GROWTH_FACTOR, Math.max(MIN_GROWTH_FACTOR, growthFactor))
+            } else if (ttmPrevious === 0 && ttmCurrent > 0) {
+                // Komplett neue Position ohne Vorjahresbasis: kein künstliches Wachstum aufschlagen
+                growthFactor = 1
+            }
+
+            const fMonthly = {}
+            ;[cy, cy + 1].forEach(ty => {
+                fMonthly[ty] = Array(12).fill(0)
+                for (let i = 0; i < 12; i++) {
+                    let val = 0
+                    if (ty === cy && i <= cm) {
+                        // Vergangene Monate: Ist-Werte 1:1 übernehmen
+                        val = hh.monthly?.[cy]?.[i] || 0
+                    } else {
+                        // Zukünftige Monate: Vorjahreswert * individueller Wachstumsfaktor
+                        const baseVal = hh.monthly?.[ty - 1]?.[i] || findLastKnownForMonth(hh.monthly, i, ty)
+                        val = baseVal * growthFactor
+                    }
+                    fMonthly[ty][i] = +val.toFixed(2)
+                    forecastM[ty][i] = +((forecastM[ty][i] || 0) + val).toFixed(2)
+                }
+            })
+            forecastH[key] = { ...hh, monthly: fMonthly, growthFactor: +growthFactor.toFixed(2) }
+        })
+
+        // Kumulierte Prognose
+        const forecastC = {}
+        ;[cy, cy + 1].forEach(ty => {
+            forecastC[ty] = Array(12).fill(0)
+            let running = 0
+            for (let i = 0; i < 12; i++) { running += (forecastM[ty][i] || 0); forecastC[ty][i] = +running.toFixed(2) }
+        })
+
+        // forecast12m: Summe der nächsten 12 Monate ab dem Folgemonat
         let total = 0
         for (let i = 0; i < 12; i++) {
-            total += forecastM?.[cy + Math.floor((cm + 1 + i) / 12)]?.[(cm + 1 + i) % 12] ?? 0
+            const fm = (cm + 1 + i) % 12
+            const fy = cy + Math.floor((cm + 1 + i) / 12)
+            total += forecastM?.[fy]?.[fm] ?? 0
         }
         const forecast12mLocal = { total: +total.toFixed(2), avg: +(total / 12).toFixed(2), net: +total.toFixed(2) }
 
-        // yoy exakt wie in App.jsx
+        // yoy exakt wie im Original
         const latest = rolling12m(m, cy, cm)
         const prevY = rolling12m(m, cy - 1, cm)
         const yoyLocal = (latest < 1 || prevY < 1) ? null : +((latest / prevY - 1) * 100).toFixed(1)
 
-        // CAGR exakt wie in App.jsx
+        // CAGR exakt wie im Original
         const years = Object.keys(m).map(Number).filter(y => y < cy).sort()
         let cagrLocal = null
         if (years.length >= 2) {
@@ -244,7 +302,7 @@ export default function DividendDashboardView(props) {
             currentValue: liveVal, realTotal: realVal, inflation: nominalTotal - realVal,
             hasRealData: hasReal, hasRecords: Object.keys(m).length > 0,
         }
-    }, [hasPropData, dbActs, propCurrentValue, cy, cm, holdings, enrichedHoldings])
+    }, [hasPropData, dbActs, propCurrentValue, cy, cm])
 
     // ── EFFEKTIVE WERTE: Props haben IMMER Vorrang vor dem Fallback ───────────
     const monthly = hasPropData ? propMonthly : (fallback?.monthly || {})
