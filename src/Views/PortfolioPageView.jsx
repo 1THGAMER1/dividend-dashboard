@@ -7,7 +7,7 @@ import HoldingDetailModal from "../components/HoldingDetailModal.jsx"
 import StockDetailView from './StockDetailView.jsx'
 import ActivitiesView from './ActivitiesView.jsx'
 import { fetchAllDbActivities } from '../utils/manualActivities'
-import { fetchCurrentPrice } from '../api.js'
+import { fetchCurrentPrice, fetchHoldingHistory } from '../api.js'
 
 export default function PortfolioPageView({
                                               page,
@@ -29,6 +29,7 @@ export default function PortfolioPageView({
     const [dbLoading, setDbLoading] = useState(false)
     const [dbLoaded, setDbLoaded] = useState(false)
     const [manualPrices, setManualPrices] = useState({})
+    const [manualHistories, setManualHistories] = useState({})
 
     useEffect(() => {
         if (!['portfolio-overview', 'portfolio-assets', 'portfolio-xray'].includes(page) ||
@@ -69,6 +70,29 @@ export default function PortfolioPageView({
                 if (!cancelled) setManualPrices(Object.fromEntries(entries.filter(([, price]) => price > 0)))
             })
             .catch(error => console.warn('Manuelle Kurse konnten nicht geladen werden:', error.message))
+
+        return () => { cancelled = true }
+    }, [dbActivities])
+
+    useEffect(() => {
+        if (dbActivities.length === 0) return
+
+        const keys = [...new Set(
+            dbActivities
+                .filter(activity => ['buy', 'transfer_in'].includes(String(activity.type || '').toLowerCase()))
+                .map(activity => activity.isin || activity.name)
+                .filter(Boolean)
+        )]
+        let cancelled = false
+        Promise.all(keys.map(async key => [key, await fetchHoldingHistory(key)]))
+            .then(entries => {
+                if (!cancelled) {
+                    setManualHistories(Object.fromEntries(
+                        entries.filter(([, result]) => result?.history?.length > 0)
+                    ))
+                }
+            })
+            .catch(error => console.warn('Historische Kurse konnten nicht geladen werden:', error.message))
 
         return () => { cancelled = true }
     }, [dbActivities])
@@ -152,21 +176,40 @@ export default function PortfolioPageView({
         ? manualValue
         : (currentValue > 0 ? currentValue : manualValue)
     const manualPerformanceSeries = useMemo(() => {
-        if (dbActivities.length === 0) return []
+        if (dbActivities.length === 0 || Object.keys(manualHistories).length === 0) return []
 
+        const activitiesByDate = dbActivities
+            .map(activity => ({
+                ...activity,
+                date: new Date(activity.date || activity.datetime || 0),
+            }))
+            .filter(activity => !Number.isNaN(activity.date.getTime()))
+            .sort((a, b) => a.date - b.date)
+        const firstDate = activitiesByDate[0]?.date
+        if (!firstDate) return []
+
+        const priceRows = Object.entries(manualHistories).map(([rawKey, result]) => ({
+            key: String(rawKey).trim().toUpperCase(),
+            rows: (result.history || [])
+                .map(row => ({ date: String(row.d).slice(0, 10), close: Number(row.close) || 0 }))
+                .filter(row => row.close > 0)
+                .sort((a, b) => a.date.localeCompare(b.date)),
+        })).filter(item => item.rows.length > 0)
+        if (priceRows.length === 0) return []
+
+        const dates = [...new Set(priceRows.flatMap(item => item.rows.map(row => row.date))
+            .filter(date => date >= firstDate.toISOString().slice(0, 10)))]
         const balances = {}
+        const priceIndexes = Object.fromEntries(priceRows.map(item => [item.key, 0]))
+        let activityIndex = 0
         let cash = 0
         let invested = 0
-        let value = 0
         const series = []
 
-        dbActivities
-            .slice()
-            .sort((a, b) => new Date(a.date || a.datetime || 0) - new Date(b.date || b.datetime || 0))
-            .forEach(activity => {
-                const date = new Date(activity.date || activity.datetime || 0)
-                if (Number.isNaN(date.getTime())) return
-
+        dates.forEach(date => {
+            const dayEnd = new Date(`${date}T23:59:59.999Z`)
+            while (activityIndex < activitiesByDate.length && activitiesByDate[activityIndex].date <= dayEnd) {
+                const activity = activitiesByDate[activityIndex++]
                 const type = String(activity.type || '').toLowerCase()
                 const key = String(activity.isin || activity.name || 'Unbekannt').trim().toUpperCase()
                 const shares = Number(activity.shares) || 0
@@ -177,14 +220,11 @@ export default function PortfolioPageView({
                     position.shares += shares
                     position.cost += amount
                     cash -= amount
-                    if (cash < 0) {
-                        invested += -cash
-                        cash = 0
-                    }
+                    invested += amount
                 } else if (type === 'transfer_in') {
                     position.shares += shares
                     position.cost += amount
-                    if (amount > 0) invested += amount
+                    invested += Math.max(0, amount)
                 } else if (type === 'sell' || type === 'transfer_out') {
                     const sold = Math.min(shares, position.shares)
                     const averageCost = position.shares > 0 ? position.cost / position.shares : 0
@@ -193,17 +233,31 @@ export default function PortfolioPageView({
                     if (type === 'sell') cash += amount
                 } else if (type === 'dividend' || type === 'interest') {
                     cash += Number(activity.amountNet ?? amount) || 0
+                } else if (type === 'deposit') {
+                    cash += amount
+                    invested += amount
+                } else if (type === 'withdrawal') {
+                    cash -= amount
+                    invested = Math.max(0, invested - amount)
                 }
+            }
 
-                value = Object.entries(balances).reduce((sum, [holdingKey, item]) => {
-                    const price = Number(manualPrices[holdingKey]) || Number(manualPrices[holdingKey.toUpperCase()]) || 0
-                    return sum + (price > 0 ? item.shares * price : item.cost)
-                }, cash)
-                series.push({ d: date.toISOString(), v: +value.toFixed(2), c: +invested.toFixed(2) })
+            let marketValue = 0
+            priceRows.forEach(({ key, rows }) => {
+                const position = balances[key]
+                if (!position || position.shares <= 0) return
+                while (priceIndexes[key] + 1 < rows.length && rows[priceIndexes[key] + 1].date <= date) {
+                    priceIndexes[key] += 1
+                }
+                const close = rows[priceIndexes[key]]?.close || 0
+                marketValue += position.shares * close
             })
+            const value = marketValue + cash
+            series.push({ d: `${date}T12:00:00.000Z`, v: +value.toFixed(2), c: +invested.toFixed(2) })
+        })
 
-        return series
-    }, [dbActivities, manualPrices])
+        return series.filter(point => point.v > 0 || point.c > 0)
+    }, [dbActivities, manualHistories])
     const effectivePerformanceSeries = manualMode
         ? manualPerformanceSeries
         : (performanceSeries?.length ? performanceSeries : manualPerformanceSeries)
