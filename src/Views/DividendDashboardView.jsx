@@ -26,534 +26,403 @@ function yearTotal(mMap, y) {
     if (!arr) return 0
     return arr.reduce((s, v) => s + (v || 0), 0)
 }
-
 function rolling12m(mMap, endY, endM) {
     let sum = 0
     for (let i = 0; i < 12; i++) {
-        let m = endM - i
-        let y = endY
+        let m = endM - i, y = endY
         if (m < 0) { m += 12; y -= 1 }
         sum += mMap?.[y]?.[m] ?? 0
     }
     return sum
 }
 
-export default function DividendDashboardView({
-                                                  showSkeleton: propSkeleton,
-                                                  loadData: propLoadData,
-                                                  loading: parqetLoading,
-                                                  error: propError,
-                                                  kpiRange: propKpiRange,
-                                                  setKpiRange: propSetKpiRange,
-                                                  cy = new Date().getFullYear(),
-                                                  currentValue: propCurrentValue = 0,
-                                                  monthly: propMonthly,
-                                                  byHolding: propByHolding,
-                                                  forecastMonthly: propForecastMonthly,
-                                                  forecastCum: propForecastCum,
-                                                  forecastByHolding: propForecastByHolding,
-                                                  forecast12m: propForecast12m,
-                                                  dividendYield: propDividendYield,
-                                                  trueCagr: propTrueCagr,
-                                                  yoy: propYoy,
-                                                  realTotal: propRealTotal,
-                                                  inflation: propInflation,
-                                                  hasRealData: propHasRealData,
-                                                  holdings = [],
-                                                  enrichedHoldings = [],
-                                              }) {
-    const cm = new Date().getMonth()
+export default function DividendDashboardView(props) {
+    const {
+        showSkeleton, showEmpty,
+        loadData, loading, error,
+        kpiRange: propKpiRange, setKpiRange: propSetKpiRange,
+        k: propK,
+        dividendYield: propDividendYield,
+        trueCagr: propTrueCagr,
+        yoy: propYoy,
+        hasRealData: propHasRealData,
+        realTotal: propRealTotal,
+        inflation: propInflation,
+        forecast12m: propForecast12m,
+        cy = new Date().getFullYear(),
+        forecastMonthly: propForecastMonthly,
+        monthly: propMonthly,
+        cum: propCum,
+        forecastCum: propForecastCum,
+        byHolding: propByHolding,
+        forecastByHolding: propForecastByHolding,
+        currentValue: propCurrentValue = 0,
+        yearTotal: propYearTotalFn,
+        holdings = [],
+        enrichedHoldings = [],
+    } = props
 
+    const cm = new Date().getMonth()
     const [ownRange, setOwnRange] = useState('all')
     const kpiRange = propKpiRange ?? ownRange
     const setKpiRange = propSetKpiRange ?? setOwnRange
 
-    // ── 1. SUPABASE-DATEN LADEN ──────────────────────────────────────────────
+    // ── KERNREGEL: Wenn echte Parqet-Props vorliegen, NICHTS neu berechnen! ───
+    const hasPropData = Boolean(propMonthly && Object.keys(propMonthly).length > 0)
+
+    // ── SUPABASE-FALLBACK (nur relevant, wenn KEINE Parqet-Daten vorliegen) ───
     const [dbActs, setDbActs] = useState([])
     const [dbLoading, setDbLoading] = useState(true)
-    const [error, setError] = useState(propError || null)
+    const [dbError, setDbError] = useState(null)
 
     const loadDb = async () => {
         setDbLoading(true)
         try {
             const data = await fetchAllDbActivities()
             setDbActs(data || [])
-            setError(null)
+            setDbError(null)
         } catch (e) {
-            setError(e.message)
+            setDbError(e.message)
         } finally {
             setDbLoading(false)
         }
     }
 
     useEffect(() => {
-        loadDb()
-    }, [])
+        if (!hasPropData) loadDb()
+        else setDbLoading(false)
+    }, [hasPropData])
 
     const handleRefresh = async () => {
         await loadDb()
-        if (propLoadData) await propLoadData()
+        if (loadData) await loadData()
     }
 
-    // ── 2. DATENBASIS ERSTELLEN ──────────────────────────────────────────────
-    const baseData = useMemo(() => {
-        const hasParqet = Boolean(propMonthly && Object.keys(propMonthly).length > 0)
-
-        if (hasParqet) {
-            return {
-                monthly: propMonthly,
-                byHolding: propByHolding || {},
-                hasRecords: true,
-                liveValue: propCurrentValue,
-                allRawActs: []
-            }
-        }
+    // Synthese ausschließlich für den reinen Supabase-Modus
+    const fallback = useMemo(() => {
+        if (hasPropData) return null
 
         const m = {}
         const h = {}
-        let divCount = 0
-        let totalBuy = 0
         const rawActs = []
+        let totalBuy = 0
 
         ;(dbActs || []).forEach(a => {
             const type = String(a.type || '').toLowerCase()
             const amt = Number(a.amount ?? 0)
-
             if (type === 'buy') totalBuy += amt
             if (type === 'sell') totalBuy = Math.max(0, totalBuy - amt)
-
             if (type !== 'dividend') return
 
             const d = new Date(a.date || a.datetime || 0)
             if (isNaN(d.getTime())) return
 
-            divCount++
-            const y = d.getFullYear()
-            const mon = d.getMonth()
+            const y = d.getFullYear(), mon = d.getMonth()
             const net = Number(a.amountNet ?? a.amount ?? 0)
             const tax = Number(a.tax ?? 0)
             const gross = (Number(a.gross) > net) ? Number(a.gross) : +(net + tax).toFixed(2)
             const key = a.isin || a.name || 'Unbekannt'
 
-            rawActs.push({
-                datetime: a.date || a.datetime,
-                amountNet: net,
-                amount: gross,
-                tax,
-                asset: { isin: key, name: a.name || key }
-            })
+            rawActs.push({ datetime: a.date || a.datetime, amountNet: net, amount: gross, tax, asset: { isin: key, name: a.name || key } })
 
             if (!m[y]) m[y] = Array(12).fill(0)
             m[y][mon] = +(m[y][mon] + net).toFixed(2)
 
-            if (!h[key]) {
-                h[key] = {
-                    name: a.name || key,
-                    isin: a.isin || key,
-                    assetType: a.assetType || 'Security',
-                    totalNet: 0,
-                    monthly: {},
-                    gross: {},
-                    tax: {}
-                }
-            }
+            if (!h[key]) h[key] = { name: a.name || key, isin: a.isin || key, assetType: a.assetType || 'Security', totalNet: 0, monthly: {}, gross: {}, tax: {} }
             if (!h[key].monthly[y]) h[key].monthly[y] = Array(12).fill(0)
             if (!h[key].gross[y])   h[key].gross[y] = Array(12).fill(0)
             if (!h[key].tax[y])     h[key].tax[y] = Array(12).fill(0)
-
             h[key].monthly[y][mon] = +(h[key].monthly[y][mon] + net).toFixed(2)
             h[key].gross[y][mon]   = +(h[key].gross[y][mon] + gross).toFixed(2)
             h[key].tax[y][mon]     = +(h[key].tax[y][mon] + tax).toFixed(2)
             h[key].totalNet        = +(h[key].totalNet + net).toFixed(2)
         })
 
-        return {
-            monthly: m,
-            byHolding: h,
-            hasRecords: divCount > 0,
-            liveValue: propCurrentValue > 0 ? propCurrentValue : totalBuy,
-            allRawActs: rawActs
-        }
-    }, [propMonthly, propByHolding, propCurrentValue, dbActs])
-
-    const { monthly, byHolding, hasRecords, liveValue, allRawActs } = baseData
-
-    // ── 3. ORIGINALE PROGNOSE & RECHNUNGEN (INKL. KORRIGIERTEM CAGR-KEY) ──────
-    const computed = useMemo(() => {
-        if (!hasRecords) return null
-
-        const cum = {}
-        Object.keys(monthly).forEach(y => {
-            cum[y] = Array(12).fill(0)
+        const cumLocal = {}
+        Object.keys(m).forEach(y => {
+            cumLocal[y] = Array(12).fill(0)
             let running = 0
-            for (let i = 0; i < 12; i++) {
-                running += (monthly[y][i] || 0)
-                cum[y][i] = +running.toFixed(2)
-            }
+            for (let i = 0; i < 12; i++) { running += (m[y][i] || 0); cumLocal[y][i] = +running.toFixed(2) }
         })
 
-        let forecastM = propForecastMonthly
-        let forecastC = propForecastCum
-        let forecastH = propForecastByHolding
-        let fNext12mNet = propForecast12m?.total || propForecast12m?.net || 0
+        // Echte buildForecast-Funktion nutzen (identisch zur Parqet-Logik)
+        let forecastM = {}, forecastC = {}, forecastH = {}
+        try {
+            const combined = [...(enrichedHoldings || []), ...(holdings || [])]
+            const fc = buildForecast(rawActs, combined)
+            if (fc?.forecastMonthly) {
+                forecastM = fc.forecastMonthly
+                forecastC = fc.forecastCum || {}
+                forecastH = fc.forecastByHolding || {}
+            }
+        } catch (err) {
+            console.warn('buildForecast (Fallback) Fehler:', err)
+        }
 
-        if (!forecastM || Object.keys(forecastM).length === 0) {
-            try {
-                const combinedHoldings = [...(enrichedHoldings || []), ...(holdings || [])]
-                const fcResult = buildForecast(allRawActs, combinedHoldings)
-                if (fcResult?.forecastMonthly) {
-                    forecastM = fcResult.forecastMonthly
-                    forecastC = fcResult.forecastCum
-                    forecastH = fcResult.forecastByHolding
-                }
-            } catch (err) {
-                console.warn('buildForecast Fallback:', err)
+        // forecast12m exakt wie in App.jsx berechnet
+        let total = 0
+        for (let i = 0; i < 12; i++) {
+            total += forecastM?.[cy + Math.floor((cm + 1 + i) / 12)]?.[(cm + 1 + i) % 12] ?? 0
+        }
+        const forecast12mLocal = { total: +total.toFixed(2), avg: +(total / 12).toFixed(2), net: +total.toFixed(2) }
+
+        // yoy exakt wie in App.jsx
+        const latest = rolling12m(m, cy, cm)
+        const prevY = rolling12m(m, cy - 1, cm)
+        const yoyLocal = (latest < 1 || prevY < 1) ? null : +((latest / prevY - 1) * 100).toFixed(1)
+
+        // CAGR exakt wie in App.jsx
+        const years = Object.keys(m).map(Number).filter(y => y < cy).sort()
+        let cagrLocal = null
+        if (years.length >= 2) {
+            const firstYear = years[0], lastYear = years[years.length - 1], numYears = lastYear - firstYear
+            const startVal = yearTotal(m, firstYear), endVal = yearTotal(m, lastYear)
+            if (startVal >= 1 && endVal >= 1 && numYears >= 1) {
+                cagrLocal = { value: +(((Math.pow(endVal / startVal, 1 / numYears) - 1) * 100)).toFixed(1), from: firstYear, to: lastYear, years: numYears }
             }
         }
 
-        if (forecastM && Object.keys(forecastM).length > 0) {
-            fNext12mNet = 0
-            for (let i = 0; i < 12; i++) {
-                const fm = (cm + 1 + i) % 12
-                const fy = cy + Math.floor((cm + 1 + i) / 12)
-                fNext12mNet += forecastM?.[fy]?.[fm] || 0
+        // kpi je Range (all/ytd/12m/3y)
+        const buildKpiForRange = (range) => {
+            let net = 0, gross = 0, tax = 0
+            const isIn = (y, mo) => {
+                if (range === 'all') return true
+                if (range === 'ytd') return y === cy && mo <= cm
+                if (range === '12m') { const diff = (cy - y) * 12 + (cm - mo); return diff >= 0 && diff < 12 }
+                if (range === '3y')  { const diff = (cy - y) * 12 + (cm - mo); return diff >= 0 && diff < 36 }
+                return true
             }
-        }
-
-        const ttmNet = rolling12m(monthly, cy, cm)
-        const prevTtmNet = rolling12m(monthly, cy - 1, cm)
-        let yoyGrowth = propYoy ?? null
-        if (yoyGrowth === null && prevTtmNet > 0) {
-            yoyGrowth = +(((ttmNet / prevTtmNet) - 1) * 100).toFixed(1)
-        }
-
-        // ── KORREKTUR: CAGR nutzt jetzt einheitlich den Schlüssel `.value` ────
-        // (identisch zum Original-Objekt aus useDividendData.js: { value, from, to, years })
-        let cagrObj = propTrueCagr ?? null
-        if (!cagrObj) {
-            const years = Object.keys(monthly).map(Number).filter(y => y < cy).sort()
-            if (years.length >= 2) {
-                const firstY = years[0]
-                const lastY = years[years.length - 1]
-                const nY = lastY - firstY
-                const sVal = yearTotal(monthly, firstY)
-                const eVal = yearTotal(monthly, lastY)
-                if (sVal > 0 && eVal > 0 && nY > 0) {
-                    cagrObj = {
-                        value: +(((Math.pow(eVal / sVal, 1 / nY) - 1) * 100)).toFixed(1),
-                        from: firstY,
-                        to: lastY,
-                        years: nY
+            Object.keys(m).forEach(yStr => {
+                const y = Number(yStr)
+                for (let mo = 0; mo < 12; mo++) {
+                    if (isIn(y, mo)) {
+                        net += m[y][mo] || 0
+                        Object.values(h).forEach(hh => {
+                            gross += hh.gross?.[y]?.[mo] || 0
+                            tax += hh.tax?.[y]?.[mo] || 0
+                        })
                     }
                 }
+            })
+            let divisor = 1
+            if (range === 'ytd') divisor = cm + 1
+            else if (range === '12m') divisor = 12
+            else if (range === '3y') divisor = 36
+            else {
+                const ys = Object.keys(m).map(Number).sort()
+                divisor = ys.length ? Math.max(1, (cy - ys[0]) * 12 + cm + 1) : 1
             }
+            return { net: +net.toFixed(2), gross: +(gross > 0 ? gross : net + tax).toFixed(2), tax: +tax.toFixed(2), avgMonthly: +(net / divisor).toFixed(2) }
         }
 
-        const lastYTotal = yearTotal(monthly, cy - 1)
-        const curYForecast = (forecastM?.[cy] || []).reduce((s, v) => s + v, 0)
-        const growthCy = lastYTotal > 0 ? +(((curYForecast - lastYTotal) / lastYTotal) * 100).toFixed(1) : null
-
-        let realVal = propRealTotal
-        let inflVal = propInflation
-        let hasReal = propHasRealData
-        if (realVal == null) {
-            try {
-                realVal = calcRealTotal(monthly)
-                const nominal = Object.values(monthly).flatMap(arr => arr).reduce((s, v) => s + (v || 0), 0)
-                inflVal = nominal - realVal
-                hasReal = nominal > 0 && Object.keys(monthly).length > 1
-            } catch {
-                hasReal = false
-            }
+        const kpiLocal = {
+            all: buildKpiForRange('all'),
+            ytd: buildKpiForRange('ytd'),
+            '12m': buildKpiForRange('12m'),
+            '3y': buildKpiForRange('3y'),
         }
+
+        const liveVal = propCurrentValue > 0 ? propCurrentValue : totalBuy
+
+        const dividendYieldLocal = {}
+        ;['all', 'ytd', '12m', '3y'].forEach(r => {
+            let factor = 1
+            if (r === 'ytd') factor = 12 / Math.max(1, cm + 1)
+            if (r === '3y') factor = 1 / 3
+            dividendYieldLocal[r] = liveVal > 0 ? +(((kpiLocal[r].net * factor) / liveVal) * 100).toFixed(2) : 0
+        })
+
+        const nominalTotal = kpiLocal.all.net
+        const realVal = calcRealTotal(m)
+        const hasReal = nominalTotal > 0 && Object.keys(m).length > 1
 
         return {
-            cum,
-            forecastMonthly: forecastM || {},
-            forecastCum: forecastC || {},
-            forecastByHolding: forecastH || {},
-            forecast12mNet: fNext12mNet,
-            forecast12mAvg: +(fNext12mNet / 12).toFixed(2),
-            yoyGrowth,
-            cagrObj,
-            growthCy,
-            ttmNet,
-            lastYTotal,
-            realVal,
-            inflVal,
-            hasReal
+            monthly: m, byHolding: h, cum: cumLocal,
+            forecastMonthly: forecastM, forecastCum: forecastC, forecastByHolding: forecastH,
+            forecast12m: forecast12mLocal, yoy: yoyLocal, trueCagr: cagrLocal,
+            kpi: kpiLocal, dividendYield: dividendYieldLocal,
+            currentValue: liveVal, realTotal: realVal, inflation: nominalTotal - realVal,
+            hasRealData: hasReal, hasRecords: Object.keys(m).length > 0,
         }
-    }, [monthly, hasRecords, cy, cm, propForecastMonthly, propForecastCum, propForecastByHolding, propForecast12m, propYoy, propTrueCagr, propRealTotal, propInflation, propHasRealData, allRawActs, enrichedHoldings, holdings])
+    }, [hasPropData, dbActs, propCurrentValue, cy, cm, holdings, enrichedHoldings])
 
-    // ── 4. FILTER FÜR ZEITRÄUME (ALL, YTD, 12M, 3J) ──────────────────────────
-    const rangeData = useMemo(() => {
-        if (!hasRecords) return { net: 0, gross: 0, tax: 0, avg: 0, filteredByHolding: {}, filteredHeatmap: {} }
+    // ── EFFEKTIVE WERTE: Props haben IMMER Vorrang vor dem Fallback ───────────
+    const monthly = hasPropData ? propMonthly : (fallback?.monthly || {})
+    const byHolding = hasPropData ? (propByHolding || {}) : (fallback?.byHolding || {})
+    const forecastMonthly = hasPropData ? propForecastMonthly : (fallback?.forecastMonthly || {})
+    const forecastByHolding = hasPropData ? propForecastByHolding : (fallback?.forecastByHolding || {})
+    const forecastCumEff = hasPropData ? propForecastCum : (fallback?.forecastCum || {})
+    const forecast12m = hasPropData ? propForecast12m : fallback?.forecast12m
+    const yoy = hasPropData ? propYoy : fallback?.yoy
+    const trueCagr = hasPropData ? propTrueCagr : fallback?.trueCagr
+    const k = hasPropData ? propK : (fallback ? { net: fmt(fallback.kpi[kpiRange]?.net ?? 0), gross: fmt(fallback.kpi[kpiRange]?.gross ?? 0), tax: fmt(fallback.kpi[kpiRange]?.tax ?? 0), avg: fmt(fallback.kpi[kpiRange]?.avgMonthly ?? 0) } : { net: '–', gross: '–', tax: '–', avg: '–' })
+    const dividendYield = hasPropData ? propDividendYield : (fallback?.dividendYield || {})
+    const currentValue = hasPropData ? propCurrentValue : (fallback?.currentValue || 0)
+    const realTotal = hasPropData ? propRealTotal : fallback?.realTotal
+    const inflation = hasPropData ? propInflation : fallback?.inflation
+    const hasRealData = hasPropData ? propHasRealData : fallback?.hasRealData
+    const hasAnyRecords = hasPropData ? true : Boolean(fallback?.hasRecords)
 
+    // ── ZEITRAUM-FILTER NUR FÜR CHARTS / TABELLE / HEATMAP / DONUT ────────────
+    const { filteredByHolding, filteredMonthlyForHeatmap } = useMemo(() => {
         const isInRange = (y, m) => {
             if (kpiRange === 'all') return true
             if (kpiRange === 'ytd') return y === cy && m <= cm
-            if (kpiRange === '12m') {
-                const diff = (cy - y) * 12 + (cm - m)
-                return diff >= 0 && diff < 12
-            }
-            if (kpiRange === '3y') {
-                const diff = (cy - y) * 12 + (cm - m)
-                return diff >= 0 && diff < 36
-            }
+            if (kpiRange === '12m') { const diff = (cy - y) * 12 + (cm - m); return diff >= 0 && diff < 12 }
+            if (kpiRange === '3y')  { const diff = (cy - y) * 12 + (cm - m); return diff >= 0 && diff < 36 }
             return true
         }
 
-        let net = 0
-        let gross = 0
-        let tax = 0
-        const fH = {}
-        const fM = {}
-
-        Object.entries(byHolding).forEach(([key, h]) => {
-            const newM = {}
-            const newG = {}
-            const newT = {}
-
+        const resByHolding = {}
+        Object.entries(byHolding || {}).forEach(([isin, h]) => {
+            const newM = {}, newG = {}, newT = {}
             Object.keys(h.monthly || {}).forEach(yStr => {
                 const y = Number(yStr)
                 for (let m = 0; m < 12; m++) {
                     if (isInRange(y, m)) {
                         const nVal = h.monthly?.[y]?.[m] || 0
                         const gVal = h.gross?.[y]?.[m] || nVal
-                        const tVal = h.tax?.[y]?.[m] || 0
-
+                        const tVal = h.tax?.[y]?.[m] || (gVal - nVal)
                         if (!newM[y]) newM[y] = Array(12).fill(0)
                         if (!newG[y]) newG[y] = Array(12).fill(0)
                         if (!newT[y]) newT[y] = Array(12).fill(0)
-
-                        newM[y][m] = nVal
-                        newG[y][m] = gVal
-                        newT[y][m] = tVal
+                        newM[y][m] = nVal; newG[y][m] = gVal; newT[y][m] = tVal
                     }
                 }
             })
-
-            fH[key] = { ...h, monthly: newM, gross: newG, tax: newT }
+            resByHolding[isin] = { ...h, monthly: newM, gross: newG, tax: newT }
         })
 
-        Object.keys(monthly).forEach(yStr => {
+        const resMonthly = {}
+        Object.keys(monthly || {}).forEach(yStr => {
             const y = Number(yStr)
             for (let m = 0; m < 12; m++) {
                 if (isInRange(y, m)) {
-                    const val = monthly?.[y]?.[m] || 0
-                    if (!fM[y]) fM[y] = Array(12).fill(0)
-                    fM[y][m] = val
-                    net += val
-
-                    Object.values(byHolding).forEach(h => {
-                        gross += (h.gross?.[y]?.[m] || 0)
-                        tax += (h.tax?.[y]?.[m] || 0)
-                    })
+                    if (!resMonthly[y]) resMonthly[y] = Array(12).fill(0)
+                    resMonthly[y][m] = monthly?.[y]?.[m] || 0
                 }
             }
         })
 
-        let divisor = 1
-        if (kpiRange === 'ytd') divisor = cm + 1
-        else if (kpiRange === '12m') divisor = 12
-        else if (kpiRange === '3y') divisor = 36
-        else {
-            const years = Object.keys(monthly).map(Number).sort()
-            const startYear = years[0] || cy
-            divisor = Math.max(1, (cy - startYear) * 12 + cm + 1)
+        return { filteredByHolding: resByHolding, filteredMonthlyForHeatmap: resMonthly }
+    }, [byHolding, monthly, kpiRange, cy, cm])
+
+    const { chartMonthly, chartCum } = useMemo(() => {
+        const cumSource = hasPropData ? propCum : fallback?.cum
+        const allYears = Object.keys(monthly || {}).map(Number).sort()
+        let keepYears = allYears
+        if (kpiRange === '3y') keepYears = allYears.filter(y => y >= cy - 2)
+        else if (kpiRange === '12m' || kpiRange === 'ytd') keepYears = allYears.filter(y => y >= cy - 1)
+
+        const resM = {}, resC = {}
+        keepYears.forEach(y => {
+            if (monthly?.[y]) resM[y] = monthly[y]
+            if (cumSource?.[y]) resC[y] = cumSource[y]
+        })
+        if (monthly?.[cy] && !resM[cy]) resM[cy] = monthly[cy]
+        if (cumSource?.[cy] && !resC[cy]) resC[cy] = cumSource[cy]
+
+        return { chartMonthly: resM, chartCum: resC }
+    }, [monthly, propCum, fallback, kpiRange, cy, hasPropData])
+
+    const calcForecastNext12mNet = () => {
+        let total = 0
+        for (let i = 0; i < 12; i++) {
+            const fm = (cm + 1 + i) % 12
+            const fy = cy + Math.floor((cm + 1 + i) / 12)
+            total += forecastMonthly?.[fy]?.[fm] ?? 0
         }
+        return +total.toFixed(2)
+    }
 
-        return {
-            net,
-            gross: +(gross > 0 ? gross : (net + tax)).toFixed(2),
-            tax: +tax.toFixed(2),
-            avg: net / divisor,
-            filteredByHolding: fH,
-            filteredHeatmap: fM
-        }
-    }, [hasRecords, byHolding, monthly, kpiRange, cy, cm])
-
-    // ── 5. KORRIGIERTE RENDITE-BERECHNUNG (jetzt identisch zur Original-Logik) ──
-    const currentYield = useMemo(() => {
-        // Wenn Parqet den Wert direkt liefert, 1:1 übernehmen
-        if (propDividendYield?.[kpiRange] != null) return fmtPct(propDividendYield[kpiRange])
-        if (!liveValue || liveValue <= 0) return '–'
-
-        // ORIGINAL-FORMEL: Bei "Gesamt" KEINE Proration durch Jahre!
-        // Einfach Netto-Summe im Zeitraum / Marktwert (mit Hochrechnung nur bei YTD/3J)
-        let annualFactor = 1
-        if (kpiRange === 'ytd') annualFactor = 12 / Math.max(1, cm + 1)
-        if (kpiRange === '3y')  annualFactor = 1 / 3
-        if (kpiRange === '12m') annualFactor = 1
-        // 'all' => annualFactor bleibt 1 (identisch zum Original-Verhalten)
-
-        const annualizedNet = rangeData.net * annualFactor
-        return fmtPct((annualizedNet / liveValue) * 100)
-    }, [liveValue, rangeData.net, kpiRange, cm, propDividendYield])
-
-    const forecastYield = useMemo(() => {
-        if (!liveValue || liveValue <= 0 || !computed?.forecast12mNet) return '–'
-        return fmtPct((computed.forecast12mNet / liveValue) * 100)
-    }, [liveValue, computed?.forecast12mNet])
+    const yearTotalFn = propYearTotalFn || yearTotal
+    const currentRangeLabel = KPI_RANGES.find(r => r.key === kpiRange)?.label || 'Gesamt'
 
     // ── RENDERING ────────────────────────────────────────────────────────────
-    const isWorking = (parqetLoading || dbLoading) && !hasRecords
-    if (propSkeleton || isWorking) return <SkeletonDashboard />
-    if (!hasRecords) return <EmptyStateView onRefresh={handleRefresh} loading={dbLoading} error={error} />
-
-    const rangeLabel = KPI_RANGES.find(r => r.key === kpiRange)?.label || 'Gesamt'
+    if (showSkeleton && hasPropData) return <SkeletonDashboard />
+    if (!hasPropData && dbLoading && !hasAnyRecords) return <SkeletonDashboard />
+    if (!hasAnyRecords) {
+        return <EmptyStateView onRefresh={handleRefresh} loading={dbLoading} error={error || dbError} />
+    }
 
     return (
         <div>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 12,
-                marginBottom: 14
-            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
                 <div>
                     <h1 style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', margin: 0 }}>📈 Dividenden Dashboard</h1>
                     <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2, marginBottom: 0 }}>Portfolio-Übersicht · Nettowerte</p>
                 </div>
-
-                <div style={{
-                    display: 'inline-flex',
-                    gap: 4,
-                    background: '#0f1420',
-                    padding: 3,
-                    borderRadius: 22,
-                    border: '1px solid #1e2a3a',
-                    flexWrap: 'wrap'
-                }}>
+                <div style={{ display: 'inline-flex', gap: 4, background: '#0f1420', padding: 3, borderRadius: 22, border: '1px solid #1e2a3a', flexWrap: 'wrap' }}>
                     {KPI_RANGES.map(({ key, label }) => (
-                        <button
-                            key={key}
-                            onClick={() => setKpiRange(key)}
-                            style={{
-                                padding: '4px 14px',
-                                borderRadius: 18,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                border: 'none',
-                                background: kpiRange === key ? '#009991' : 'transparent',
-                                color: kpiRange === key ? '#ffffff' : '#7a8ba0',
-                                transition: 'all 0.15s ease'
-                            }}
-                        >
-                            {label}
-                        </button>
+                        <button key={key} onClick={() => setKpiRange(key)} style={{
+                            padding: '4px 14px', borderRadius: 18, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
+                            background: kpiRange === key ? '#009991' : 'transparent', color: kpiRange === key ? '#ffffff' : '#7a8ba0', transition: 'all 0.15s ease'
+                        }}>{label}</button>
                     ))}
                 </div>
             </div>
 
-            {error && (
+            {(error || dbError) && (
                 <div style={{ background:'#2d0a0a', border:'1px solid #7f1d1d', color:'#fca5a5', padding:'10px 14px', borderRadius:8, marginBottom:14, fontSize:12 }}>
-                    ⚠ {error}
+                    ⚠ {error || dbError}
                 </div>
             )}
 
             <div className="kpi-grid">
-                <KpiCard
-                    label={`Dividenden Netto (${rangeLabel})`}
-                    value={fmt(rangeData.net)}
-                    color="#22c55e"
-                    detail={{ label: 'Ø Monatlich', value: fmt(rangeData.avg), color: '#a78bfa' }}
-                />
-                <KpiCard
-                    label="Brutto"
-                    value={fmt(rangeData.gross)}
-                    color="#60a5fa"
-                    detail={{ label: 'davon Steuern', value: fmt(rangeData.tax), color: '#fb923c' }}
-                />
-                <KpiCard
-                    label="Dividendenrendite"
-                    value={currentYield}
-                    color="#34d399"
-                    sub={liveValue > 0 ? "auf Marktwert (annualisiert)" : "Marktwert noch nicht erfasst"}
-                />
+                <KpiCard label={`Dividenden Netto (${currentRangeLabel})`} value={k.net} color="#22c55e" detail={{ label: 'Ø Monatlich', value: k.avg, color: '#a78bfa' }} />
+                <KpiCard label="Brutto" value={k.gross} color="#60a5fa" detail={{ label: 'davon Steuern', value: k.tax, color: '#fb923c' }} />
+                <KpiCard label="Dividendenrendite" value={dividendYield?.[kpiRange] != null ? fmtPct(dividendYield[kpiRange]) : '–'} color="#34d399" sub={currentValue > 0 ? "auf Marktwert (annualisiert)" : "Marktwert noch nicht erfasst"} />
             </div>
 
             <div className="kpi-grid">
-                {computed.cagrObj !== null && (
-                    <KpiCard
-                        label={`CAGR (${computed.cagrObj.years}J)`}
-                        value={(computed.cagrObj.value >= 0 ? '+' : '') + String(computed.cagrObj.value).replace('.', ',') + ' %'}
-                        color={computed.cagrObj.value >= 0 ? '#5bcec2' : '#ef4444'}
-                        sub={`${computed.cagrObj.from} – ${computed.cagrObj.to}`}
-                    />
+                {trueCagr != null && (
+                    <KpiCard label={`CAGR (${trueCagr.years}J)`} value={(trueCagr.value >= 0 ? '+' : '') + String(trueCagr.value).replace('.', ',') + ' %'} color={trueCagr.value >= 0 ? '#5bcec2' : '#ef4444'} sub={`${trueCagr.from} – ${trueCagr.to}`} />
                 )}
-                <KpiCard
-                    label="YoY-Wachstum"
-                    value={computed.yoyGrowth !== null ? `${computed.yoyGrowth >= 0 ? '+' : ''}${String(computed.yoyGrowth).replace('.', ',')} %` : '–'}
-                    color={computed.yoyGrowth !== null ? (computed.yoyGrowth >= 0 ? '#22c55e' : '#ef4444') : '#556070'}
-                    sub={computed.yoyGrowth !== null ? '12M vs. Vorjahr' : 'Nicht genügend Daten'}
-                />
-                {computed.hasReal && (
-                    <KpiCard
-                        label="Real (inflationsber.)"
-                        value={fmt(computed.realVal)}
-                        color="#f59e0b"
-                        detail={{ label: 'Verlust', value: fmt(computed.inflVal), color: '#ef4444' }}
-                        sub={`Basis: ${Object.keys(monthly).map(Number).sort()[0]}`}
-                    />
+                <KpiCard label="YoY-Wachstum" value={yoy == null ? '–' : (yoy >= 0 ? '+' : '') + String(yoy).replace('.', ',') + ' %'} color={yoy == null ? '#556070' : yoy >= 0 ? '#22c55e' : '#ef4444'} sub={yoy == null ? 'Nicht genügend Daten' : '12M vs. Vorjahr'} />
+                {hasRealData && (
+                    <KpiCard label="Real (inflationsber.)" value={fmt(realTotal)} color="#f59e0b" detail={{ label: 'Verlust', value: fmt(inflation), color: '#ef4444' }} sub={`Basis: ${Object.keys(monthly || {}).map(Number).sort()[0]}`} />
                 )}
             </div>
 
             <p style={{ fontSize:10, color:'#3d5266', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8, marginTop:6 }}>Prognose · Nächste 12 Monate</p>
             <div className="kpi-grid">
-                <KpiCard
-                    label="Voraussichtlich Netto"
-                    value={fmt(computed.forecast12mNet)}
-                    color="#f472b6"
-                    detail={{ label:'Ø Monatlich', value: fmt(computed.forecast12mAvg), color:'#f472b6' }}
-                    sub="Basierend auf Vorjahren"
-                />
+                <KpiCard label="Voraussichtlich Netto" value={forecast12m ? fmt(forecast12m.total) : '–'} color="#f472b6" detail={{ label:'Ø Monatlich', value: forecast12m ? fmt(forecast12m.avg) : '–', color:'#f472b6' }} sub="Basierend auf Vorjahren" />
                 <KpiCard
                     label={`Wachstum ${cy} vs. ${cy - 1}`}
-                    value={computed.growthCy !== null ? `${computed.growthCy >= 0 ? '+' : ''}${String(computed.growthCy).replace('.', ',')} %` : '–'}
-                    color={computed.growthCy !== null && computed.growthCy >= 0 ? '#22c55e' : '#ef4444'}
+                    value={(() => {
+                        const forecastCurrentYear = (forecastMonthly?.[cy] || []).reduce((s, v) => s + v, 0);
+                        const actualLastYear = yearTotalFn(monthly, cy - 1);
+                        if (!actualLastYear || actualLastYear === 0) return '–';
+                        const growth = ((forecastCurrentYear - actualLastYear) / actualLastYear) * 100;
+                        return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %';
+                    })()}
+                    color="#22c55e"
                     sub="Prognose Gesamtjahr"
                 />
                 <KpiCard
                     label="Progn. Dividendenrendite"
-                    value={forecastYield}
+                    value={(() => {
+                        const forecastNet = calcForecastNext12mNet();
+                        if (!currentValue || currentValue === 0) return '–';
+                        return fmtPct((forecastNet / currentValue) * 100);
+                    })()}
                     color="#5bcec2"
                     sub="Nächste 12M / Marktwert"
                 />
             </div>
 
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))',
-                gap: 16,
-                marginTop: 16,
-                alignItems: 'stretch'
-            }}>
-                <DividendChart
-                    monthly={monthly}
-                    forecastMonthly={computed.forecastMonthly}
-                    byHolding={rangeData.filteredByHolding}
-                    forecastByHolding={computed.forecastByHolding}
-                    kpiRange={kpiRange}
-                />
-                <CumulativeDividendChart
-                    monthly={monthly}
-                    cum={computed.cum}
-                    forecastCum={computed.forecastCum}
-                    byHolding={rangeData.filteredByHolding}
-                />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16, marginTop: 16, alignItems: 'stretch' }}>
+                <DividendChart monthly={chartMonthly} forecastMonthly={forecastMonthly} byHolding={filteredByHolding} forecastByHolding={forecastByHolding} kpiRange={kpiRange} />
+                <CumulativeDividendChart monthly={chartMonthly} cum={chartCum} forecastCum={forecastCumEff} byHolding={filteredByHolding} />
             </div>
 
             <div style={{ marginTop: 16 }}>
-                <DividendHeatmap monthly={rangeData.filteredHeatmap} />
+                <DividendHeatmap monthly={filteredMonthlyForHeatmap} />
             </div>
 
             <div id="dividends-table" style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <DividendDonut byHolding={rangeData.filteredByHolding} kpiRange={kpiRange} />
-                <PositionsTable byHolding={rangeData.filteredByHolding} kpiRange={kpiRange} />
+                <DividendDonut byHolding={filteredByHolding} kpiRange={kpiRange} />
+                <PositionsTable byHolding={filteredByHolding} kpiRange={kpiRange} />
             </div>
         </div>
     )
