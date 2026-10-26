@@ -410,6 +410,27 @@ export default function DividendDashboardView(props) {
         return { filteredByHolding: resByHolding, filteredMonthlyForHeatmap: resMonthly }
     }, [byHolding, monthly, kpiRange, cy, cm])
 
+    const yieldInfo = useMemo(() => {
+        let net = 0
+        Object.values(filteredMonthlyForHeatmap || {}).forEach(arr => {
+            ;(arr || []).forEach(value => { net += value || 0 })
+        })
+
+        // Monate seit der ersten Dividende (junge Historien nicht unterschätzen)
+        let firstIdx = null
+        Object.keys(monthly || {}).map(Number).sort((a, b) => a - b).forEach(y => {
+            for (let mo = 0; mo < 12; mo++) {
+                if (firstIdx === null && (monthly[y]?.[mo] || 0) > 0) firstIdx = y * 12 + mo
+            }
+        })
+        const sinceFirst = firstIdx === null ? 1 : Math.max(1, cy * 12 + cm - firstIdx + 1)
+        const span = { all: sinceFirst, ytd: cm + 1, '12m': 12, '3y': 36 }[kpiRange] ?? sinceFirst
+        const months = Math.max(1, Math.min(span, sinceFirst))
+        const annual = (net * 12) / months
+
+        return { months, annual, pct: currentValue > 0 ? (annual / currentValue) * 100 : null }
+    }, [filteredMonthlyForHeatmap, monthly, kpiRange, cy, cm, currentValue])
+
     const { chartMonthly, chartCum } = useMemo(() => {
         const cumSource = hasPropData ? propCum : fallback?.cum
         const allYears = Object.keys(monthly || {}).map(Number).sort()
@@ -474,7 +495,12 @@ export default function DividendDashboardView(props) {
             <div className="kpi-grid">
                 <KpiCard label={`Dividenden Netto (${currentRangeLabel})`} value={k.net} color="#22c55e" detail={{ label: 'Ø Monatlich', value: k.avg, color: '#a78bfa' }} />
                 <KpiCard label="Brutto" value={k.gross} color="#60a5fa" detail={{ label: 'davon Steuern', value: k.tax, color: '#fb923c' }} />
-                <KpiCard label="Dividendenrendite" value={dividendYield?.[kpiRange] != null ? fmtPct(dividendYield[kpiRange]) : '–'} color="#34d399" sub={currentValue > 0 ? (valueIsCost ? 'auf Einstandswert (annualisiert)' : 'auf Marktwert (annualisiert)') : "Marktwert noch nicht erfasst"} />
+                <KpiCard
+                    label="Dividendenrendite"
+                    value={yieldInfo.pct != null ? fmtPct(yieldInfo.pct) : '–'}
+                    color="#34d399"
+                    sub={yieldInfo.pct != null ? `auf Marktwert · aus ${yieldInfo.months} Monaten auf 12 hochgerechnet` : 'Marktwert noch nicht erfasst'}
+                />
             </div>
 
             <div className="kpi-grid">
