@@ -99,7 +99,13 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '')
-      if (hash && hash !== page) {
+      if (!hash) {
+        setPage('dashboard')
+        setAppMode('dividends')
+        window.history.replaceState(window.history.state, '', '#dashboard')
+        return
+      }
+      if (hash !== page) {
         setPage(hash)
         if (hash.startsWith('portfolio')) {
           setAppMode('portfolio')
