@@ -31,7 +31,7 @@ export default async (request, context) => {
   if (url.pathname === '/oauth/token') {
     // Token-Endpoint: kein Bearer erforderlich (PKCE-Flow)
     targetUrl = 'https://connect.parqet.com/oauth2/token'
-  } else if (url.pathname.startsWith('/api/') || url.pathname.includes('/parqet-proxy/')) {
+  } else if (url.pathname.startsWith('/api/')) {
     // Alle API-Calls erfordern ein gültiges Bearer-Token
     const authorization = request.headers.get('authorization') || ''
     if (!authorization.startsWith('Bearer ') || authorization.length < 20) {
@@ -41,10 +41,8 @@ export default async (request, context) => {
       })
     }
 
-    const apiPath = url.pathname.startsWith('/api/')
-      ? url.pathname.slice('/api'.length)
-      : url.pathname.slice(url.pathname.indexOf('/parqet-proxy/') + '/parqet-proxy'.length)
-    targetUrl = `https://connect.parqet.com${apiPath}${url.search}`
+    const stripped = url.pathname.replace('/api', '')
+    targetUrl = `https://connect.parqet.com${stripped}${url.search}`
   } else {
     return new Response(JSON.stringify({ error: 'Not found' }), {
       status: 404,

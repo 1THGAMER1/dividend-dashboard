@@ -1,7 +1,7 @@
   import { getAccessToken } from './auth'
   import { supabase } from './supabaseClient'
   
-  const BASE = import.meta.env.DEV ? '/api' : '/.netlify/functions/parqet-proxy'
+  const BASE = '/api'
   const YAHOO_FN = '/.netlify/functions/yahoo-dividends'
   const CMC_FN = '/.netlify/functions/coinmarketcap' // CoinMarketCap Abfrage
   const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{10}$/
