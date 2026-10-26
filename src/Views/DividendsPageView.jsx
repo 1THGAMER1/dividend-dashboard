@@ -80,6 +80,7 @@ export default function DividendsPageView({
                             forecastByHolding={forecastByHolding || {}}
                             byHolding={byHolding || {}}
                             monthly={monthly || {}}
+                            activities={activities}
                         />
                     </>
                 )}

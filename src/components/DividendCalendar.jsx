@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { fetchAllDbActivities } from '../utils/manualActivities'
 
 // Cents nur bei Beträgen < 1000€, sonst ganzzahlig
 const fmtAmt = n => {
@@ -14,17 +15,88 @@ const fmtSm = n => {
 const MONTHS     = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
 const MONTH_FULL = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember']
 
-export default function DividendCalendar({ forecastByHolding = {}, byHolding = {}, monthly = {} }) {
+export default function DividendCalendar({
+  forecastByHolding = {},
+  byHolding = {},
+  monthly = {},
+  activities = [],
+}) {
   const now = new Date()
   const cy  = now.getFullYear()
   const cm  = now.getMonth()
+
+  const [dbActivities, setDbActivities] = useState([])
+
+  useEffect(() => {
+    if (activities.length > 0 || Object.keys(monthly).length > 0) return
+    fetchAllDbActivities()
+      .then(setDbActivities)
+      .catch(error => {
+        console.warn('Fehler beim Laden der Kalenderdaten aus Supabase:', error.message)
+        setDbActivities([])
+      })
+  }, [activities, monthly])
+
+  const localData = useMemo(() => {
+    const source = activities.length > 0 ? activities : dbActivities
+    if (source.length === 0) return null
+
+    const actualMonthly = {}
+    const holdings = {}
+    const shares = {}
+    const dividends = {}
+
+    source
+      .slice()
+      .sort((a, b) => new Date(a.date || a.datetime || 0) - new Date(b.date || b.datetime || 0))
+      .forEach(activity => {
+        const type = String(activity.type || '').toLowerCase()
+        const key = activity.isin || activity.name || 'Unbekannt'
+        const date = new Date(activity.date || activity.datetime || 0)
+        const amount = Number(activity.amountNet ?? activity.amount) || 0
+        const quantity = Number(activity.shares) || 0
+
+        if (['buy', 'transfer_in'].includes(type)) shares[key] = (shares[key] || 0) + quantity
+        if (['sell', 'transfer_out'].includes(type)) shares[key] = Math.max(0, (shares[key] || 0) - quantity)
+        if (type !== 'dividend' || Number.isNaN(date.getTime())) return
+
+        const year = date.getFullYear()
+        const month = date.getMonth()
+        if (!actualMonthly[year]) actualMonthly[year] = Array(12).fill(0)
+        actualMonthly[year][month] = +(actualMonthly[year][month] + amount).toFixed(2)
+
+        const holding = (holdings[key] ||= { name: activity.name || key, monthly: {} })
+        if (!holding.monthly[year]) holding.monthly[year] = Array(12).fill(0)
+        holding.monthly[year][month] = +(holding.monthly[year][month] + amount).toFixed(2)
+
+        const perShare = quantity > 0 ? amount / quantity : 0
+        if (perShare > 0) (dividends[key] ||= {})[month] = perShare
+      })
+
+    const forecast = {}
+    Object.entries(holdings).forEach(([key, holding]) => {
+      forecast[key] = { ...holding, monthly: {} }
+      forecast[key].monthly[cy] = Array(12).fill(0)
+      for (let month = cm; month < 12; month++) {
+        forecast[key].monthly[cy][month] = +((dividends[key]?.[month] || 0) * (shares[key] || 0)).toFixed(2)
+      }
+    })
+
+    return { monthly: actualMonthly, byHolding: holdings, forecastByHolding: forecast }
+  }, [activities, dbActivities, cy, cm])
+
+  const effectiveMonthly = Object.keys(monthly).length > 0 ? monthly : (localData?.monthly || {})
+  const effectiveByHolding = Object.keys(byHolding).length > 0 ? byHolding : (localData?.byHolding || {})
+  const effectiveForecast = Object.keys(forecastByHolding).length > 0
+    ? forecastByHolding
+    : (localData?.forecastByHolding || {})
 
   const monthData = Array.from({ length: 12 }, (_, m) => {
     const isPast    = m < cm
     const isCurrent = m === cm
     const isFuture  = m > cm
 
-    const actual = monthly?.[cy]?.[m] ?? 0
+    const actual = effectiveMonthly?.[cy]?.[m] ?? 0
 
     let amount
     let isPrognose
@@ -33,24 +105,24 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
       amount     = actual
       isPrognose = false
     } else if (isCurrent) {
-      const forecast = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
+      const forecast = Object.values(effectiveForecast).reduce((s, mMap) => s + (mMap.monthly?.[cy]?.[m] ?? mMap[m] ?? 0), 0)
       amount     = forecast > 0 ? forecast : actual
       isPrognose = true
     } else {
-      amount     = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
+      amount     = Object.values(effectiveForecast).reduce((s, mMap) => s + (mMap.monthly?.[cy]?.[m] ?? mMap[m] ?? 0), 0)
       isPrognose = true
     }
 
-    const positions = Object.entries(forecastByHolding)
+    const positions = Object.entries(effectiveForecast)
         .map(([isin, mMap]) => {
           let posAmount
           if (isPast) {
-            posAmount = byHolding[isin]?.monthly?.[cy]?.[m] ?? 0
+            posAmount = effectiveByHolding[isin]?.monthly?.[cy]?.[m] ?? 0
           } else {
-            posAmount = mMap[m] ?? 0
+            posAmount = mMap.monthly?.[cy]?.[m] ?? mMap[m] ?? 0
           }
           return {
-            name:   byHolding[isin]?.name || isin,
+            name:   effectiveByHolding[isin]?.name || mMap.name || isin,
             amount: posAmount,
           }
         })
