@@ -10,6 +10,14 @@ import { fetchAllDbActivities } from '../utils/manualActivities'
 import { fetchCurrentPrice, fetchHoldingHistory } from '../api.js'
 
 const KNOWN_CRYPTO = ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'MATIC', 'BNB', 'USDT', 'USDC']
+const FUND_BUYS_FROM_CASH = true
+
+// Gewicht eines Geldflusses am Tag: 1 = Tagesanfang (nimmt voll an der Tagesrendite teil), 0 = Tagesende
+const flowWeight = (ts) => {
+    const h = ts.getUTCHours() + ts.getUTCMinutes() / 60
+    if (h === 0) return 1                                   // nur Datum ohne Uhrzeit: Tagesanfang
+    return 1 - Math.min(1, Math.max(0, (h - 8) / 13))       // Handelszeit etwa 8 bis 21 Uhr UTC
+}
 
 export default function PortfolioPageView({
                                               page,
@@ -218,7 +226,6 @@ export default function PortfolioPageView({
             return (Number(a.shares) || 0) * f
         }
 
-        // WICHTIG: sortierte Tagesliste
         const dates = [...new Set(Object.values(prices).flatMap(p => p.rows.map(r => r.date)).filter(d => d >= startDay))].sort()
 
         const balances = {}
@@ -227,9 +234,8 @@ export default function PortfolioPageView({
         let invested = 0   // von außen eingezahltes Kapital
         const out = []
 
-        // Ausgaben (Käufe, Gebühren) werden zuerst aus dem Cash bezahlt, der Rest zählt als neue Einzahlung.
-        // So stimmt es mit und ohne erfasste Einzahlungen, ohne Doppelzählung.
         const spend = (amount) => {
+            if (!FUND_BUYS_FROM_CASH) { invested += amount; return }
             const fromCash = Math.min(Math.max(cash, 0), amount)
             cash -= fromCash
             invested += amount - fromCash
@@ -237,8 +243,12 @@ export default function PortfolioPageView({
 
         dates.forEach(date => {
             const dayEnd = new Date(`${date}T23:59:59.999Z`)
+            let dayFlow = 0    // Geldfluss von außen an diesem Tag
+            let dayFlowW = 0   // dasselbe, nach Uhrzeit gewichtet
+
             while (ai < acts.length && acts[ai].ts <= dayEnd) {
                 const a = acts[ai++]
+                const investedBefore = invested
                 const type = String(a.type || '').trim().toLowerCase()
                 const key = String(a.isin || a.name || 'Unbekannt').trim().toUpperCase()
                 const amount = Number(a.amount ?? a.amountNet) || 0
@@ -270,6 +280,9 @@ export default function PortfolioPageView({
                 } else if (type === 'fees_taxes') {
                     spend(amount || (Number(a.fee) || 0) + (Number(a.tax) || 0))
                 }
+
+                const d = invested - investedBefore
+                if (d !== 0) { dayFlow += d; dayFlowW += d * flowWeight(a.ts) }
             }
 
             // Depotwert: Positionen zum Tageskurs, ohne Kurshistorie zum Einstand
@@ -282,25 +295,36 @@ export default function PortfolioPageView({
                 market += pos.shares * p.rows[p.idx].close
             })
 
-            out.push({ d: `${date}T12:00:00.000Z`, v: +(market + cash).toFixed(2), c: +invested.toFixed(2) })
+            out.push({
+                d: `${date}T12:00:00.000Z`,
+                v: +(market + cash).toFixed(2),
+                c: +invested.toFixed(2),
+                m: +market.toFixed(2),
+                k: +cash.toFixed(2),
+                flow: dayFlow,
+                fw: dayFlowW,
+            })
         })
 
-        // TTWROR (Modified Dietz je Tag, Ein-/Auszahlungen neutralisiert) und Drawdown auf dieser Wertentwicklung
+        // TTWROR: je Tag Modified Dietz mit nach Uhrzeit gewichteten Geldflüssen; Drawdown auf dieser Wertentwicklung
         let index = 1, peak = 1
         return out
             .filter(p => p.v > 0 || p.c > 0)
             .map((p, i, arr) => {
                 if (i > 0) {
                     const prev = arr[i - 1]
-                    const flow = p.c - prev.c
-                    const base = prev.v + flow / 2
+                    const base = prev.v + p.fw
                     if (base > 0) {
-                        const r = (p.v - prev.v - flow) / base
+                        const r = (p.v - prev.v - p.flow) / base
                         if (Number.isFinite(r) && r > -1) index *= 1 + r
                     }
                 }
                 peak = Math.max(peak, index)
-                return { ...p, t: +((index - 1) * 100).toFixed(3), dd: +((index / peak - 1) * 100).toFixed(2) }
+                return {
+                    d: p.d, v: p.v, c: p.c, m: p.m, k: p.k,
+                    t: +((index - 1) * 100).toFixed(3),
+                    dd: +((index / peak - 1) * 100).toFixed(2),
+                }
             })
     }, [dbActivities, manualHistories])
     const effectivePerformanceSeries = manualMode
