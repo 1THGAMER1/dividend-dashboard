@@ -6,16 +6,56 @@ const fmtAmt = n => {
 
 const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
 
-export default function UpcomingDividends({ forecastByHolding = {}, byHolding = {}, days = 90 }) {
+export default function UpcomingDividends({ forecastByHolding = {}, byHolding = {}, activities = [], days = 90 }) {
   const now      = new Date()
   const cy       = now.getFullYear()
   const cm       = now.getMonth()
   const cutoffMs = now.getTime() + days * 864e5
 
+  const effectiveForecast = { ...forecastByHolding }
+  const effectiveByHolding = { ...byHolding }
+
+  if (Object.keys(effectiveForecast).length === 0 && activities.length > 0) {
+    const shares = {}
+    const payments = {}
+    const actualByHolding = {}
+
+    activities
+      .slice()
+      .sort((a, b) => new Date(a.date || a.datetime || 0) - new Date(b.date || b.datetime || 0))
+      .forEach(activity => {
+        const type = String(activity.type || '').toLowerCase()
+        const key = activity.isin || activity.name || 'Unbekannt'
+        const quantity = Number(activity.shares) || 0
+        if (['buy', 'transfer_in'].includes(type)) shares[key] = (shares[key] || 0) + quantity
+        if (['sell', 'transfer_out'].includes(type)) shares[key] = Math.max(0, (shares[key] || 0) - quantity)
+        if (type !== 'dividend') return
+
+        const date = new Date(activity.date || activity.datetime || 0)
+        if (Number.isNaN(date.getTime())) return
+        const amount = Number(activity.amountNet ?? activity.amount) || 0
+        const month = date.getMonth()
+        const year = date.getFullYear()
+        const holding = (actualByHolding[key] ||= { name: activity.name || key, monthly: {} })
+        if (!holding.monthly[year]) holding.monthly[year] = Array(12).fill(0)
+        holding.monthly[year][month] = +(holding.monthly[year][month] + amount).toFixed(2)
+        const perShare = quantity > 0 ? amount / quantity : 0
+        if (perShare > 0) (payments[key] ||= {})[month] = perShare
+      })
+
+    Object.entries(payments).forEach(([key, monthly]) => {
+      effectiveForecast[key] = {}
+      effectiveByHolding[key] = actualByHolding[key]
+      Object.entries(monthly).forEach(([month, amount]) => {
+        effectiveForecast[key][month] = +(amount * (shares[key] || 0)).toFixed(2)
+      })
+    })
+  }
+
   const upcoming = []
 
-  for (const [isin, monthMap] of Object.entries(forecastByHolding)) {
-    const name = byHolding[isin]?.name || isin
+  for (const [isin, monthMap] of Object.entries(effectiveForecast)) {
+    const name = effectiveByHolding[isin]?.name || isin
 
     for (let offset = 0; offset < 13; offset++) {
       const month = (cm + offset) % 12
@@ -24,17 +64,17 @@ export default function UpcomingDividends({ forecastByHolding = {}, byHolding = 
       const date = new Date(year, month, 15)
       if (date.getTime() > cutoffMs) continue
 
-      const amount = forecastByHolding[isin]?.[month]
+      const amount = effectiveForecast[isin]?.[month]
       if (!amount || amount < 0.01) continue
 
       const alreadyPaidThisMonth =
-        offset === 0 && (byHolding[isin]?.monthly?.[cy]?.[month] ?? 0) > 0
+        offset === 0 && (effectiveByHolding[isin]?.monthly?.[cy]?.[month] ?? 0) > 0
 
       if (offset === 0 && month < cm) continue
 
       const paidLastYear =
-        (byHolding[isin]?.monthly?.[year - 1]?.[month] ?? 0) > 0 ||
-        (byHolding[isin]?.monthly?.[year]?.[month] ?? 0) > 0
+        (effectiveByHolding[isin]?.monthly?.[year - 1]?.[month] ?? 0) > 0 ||
+        (effectiveByHolding[isin]?.monthly?.[year]?.[month] ?? 0) > 0
 
       upcoming.push({
         isin, name, month, year, amount, date, paidLastYear,

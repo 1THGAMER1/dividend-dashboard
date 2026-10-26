@@ -103,6 +103,7 @@ export default function DividendsPageView({
                         <UpcomingDividends
                             forecastByHolding={forecastByHolding || {}}
                             byHolding={byHolding || {}}
+                            activities={effectiveActivities}
                             days={90}
                         />
                         <DividendCalendar
