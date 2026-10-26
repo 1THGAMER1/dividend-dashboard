@@ -185,9 +185,6 @@ export default function PortfolioPageView({
         ? manualTradeActivities.filter(activity => activity._type === 'SELL')
         : sellActs
     const manualValue = activeHoldings.reduce((sum, item) => sum + (Number(item.value) || 0), 0)
-    const displayValue = manualMode
-        ? manualValue
-        : (currentValue > 0 ? currentValue : manualValue)
     const manualPerformanceSeries = useMemo(() => {
         if (dbActivities.length === 0 || Object.keys(manualHistories).length === 0) return []
 
@@ -309,6 +306,9 @@ export default function PortfolioPageView({
     const effectivePerformanceSeries = manualMode
         ? manualPerformanceSeries
         : (performanceSeries?.length ? performanceSeries : manualPerformanceSeries)
+    // Im manuellen Modus gehört das Guthaben (Dividenden, Verkaufserlöse) zum Gesamtwert, wie bei Parqet
+    const manualCash = manualMode ? Math.max(0, manualPerformanceSeries.at(-1)?.k ?? 0) : 0
+    const displayValue = manualMode ? manualValue + manualCash : (currentValue > 0 ? currentValue : manualValue)
     const [selectedHolding, setSelectedHolding] = useState(null)
     const [fullDetailStock, setFullDetailStock] = useState(null)
 
@@ -358,8 +358,8 @@ export default function PortfolioPageView({
                         <p style={{ color: '#7a8ba0', fontSize: 12, marginTop: 2 }}>Aufteilung deiner echten Depotwerte nach Klassen</p>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <AssetHoldingDonut holdings={activeHoldings} onNavigate={onNavigate} />
-                        <AssetAllocationDonut holdings={activeHoldings} />
+                        <AssetHoldingDonut holdings={activeHoldings} onNavigate={onNavigate} currentValue={displayValue} />
+                        <AssetAllocationDonut holdings={activeHoldings} currentValue={displayValue} />
                     </div>
                 </>
             )}
