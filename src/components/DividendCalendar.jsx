@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { fetchAllDbActivities } from '../utils/manualActivities'
 
 // Cents nur bei Beträgen < 1000€, sonst ganzzahlig
 const fmtAmt = n => {
@@ -18,13 +19,90 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
   const now = new Date()
   const cy  = now.getFullYear()
   const cm  = now.getMonth()
+  const [dbActivities, setDbActivities] = useState([])
+  const hasPropData = Object.keys(monthly).length > 0 || Object.keys(byHolding).length > 0
+
+  useEffect(() => {
+    // Im Parqet-Modus kommen die Werte bereits über Props. Nur im leeren
+    // Modus aus Supabase laden, damit kein zweiter Datenabruf nötig ist.
+    if (hasPropData) return
+
+    let active = true
+    fetchAllDbActivities()
+      .then(activities => {
+        if (active) setDbActivities(activities || [])
+      })
+      .catch(error => {
+        console.warn('DividendCalendar: Supabase-Daten konnten nicht geladen werden:', error.message)
+      })
+
+    return () => { active = false }
+  }, [hasPropData])
+
+  const dbData = useMemo(() => {
+    if (dbActivities.length === 0) return { monthly: {}, byHolding: {}, forecastByHolding: {} }
+
+    const actualMonthly = {}
+    const actualByHolding = {}
+    const dividendRows = dbActivities.filter(activity => {
+      const type = String(activity.type || '').trim().toLowerCase()
+      return ['dividend', 'dividende', 'dividenden'].includes(type)
+    })
+
+    dividendRows.forEach(activity => {
+      const date = new Date(activity.datetime || activity.date)
+      if (Number.isNaN(date.getTime())) return
+
+      const year = date.getFullYear()
+      const month = date.getMonth()
+      const amount = Number(activity.amountNet ?? activity.amount ?? 0)
+      if (!Number.isFinite(amount) || amount <= 0) return
+
+      const isin = activity.isin || activity.name || 'Unbekannt'
+      const name = activity.name || isin
+
+      if (!actualMonthly[year]) actualMonthly[year] = Array(12).fill(0)
+      actualMonthly[year][month] = +(actualMonthly[year][month] + amount).toFixed(2)
+
+      if (!actualByHolding[isin]) {
+        actualByHolding[isin] = { name, monthly: {} }
+      }
+      if (!actualByHolding[isin].monthly[year]) {
+        actualByHolding[isin].monthly[year] = Array(12).fill(0)
+      }
+      actualByHolding[isin].monthly[year][month] =
+        +(actualByHolding[isin].monthly[year][month] + amount).toFixed(2)
+    })
+
+    // Für manuelle Daten gibt es keine Parqet-Prognose. Als konservative
+    // Prognose wird je Wertpapier die letzte bekannte Zahlung je Monat genutzt.
+    const forecast = {}
+    Object.entries(actualByHolding).forEach(([isin, holding]) => {
+      const byMonth = Array(12).fill(0)
+      Object.entries(holding.monthly).forEach(([year, values]) => {
+        if (Number(year) >= cy) return
+        values.forEach((value, month) => {
+          if (value > 0) byMonth[month] = value
+        })
+      })
+      forecast[isin] = byMonth
+    })
+
+    return { monthly: actualMonthly, byHolding: actualByHolding, forecastByHolding: forecast }
+  }, [dbActivities, cy])
+
+  const effectiveMonthly = hasPropData ? monthly : dbData.monthly
+  const effectiveByHolding = hasPropData ? byHolding : dbData.byHolding
+  const effectiveForecastByHolding = Object.keys(forecastByHolding).length > 0
+    ? forecastByHolding
+    : dbData.forecastByHolding
 
   const monthData = Array.from({ length: 12 }, (_, m) => {
     const isPast    = m < cm
     const isCurrent = m === cm
     const isFuture  = m > cm
 
-    const actual = monthly?.[cy]?.[m] ?? 0
+    const actual = effectiveMonthly?.[cy]?.[m] ?? 0
 
     let amount
     let isPrognose
@@ -33,24 +111,24 @@ export default function DividendCalendar({ forecastByHolding = {}, byHolding = {
       amount     = actual
       isPrognose = false
     } else if (isCurrent) {
-      const forecast = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
+      const forecast = Object.values(effectiveForecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
       amount     = forecast > 0 ? forecast : actual
       isPrognose = true
     } else {
-      amount     = Object.values(forecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
+      amount     = Object.values(effectiveForecastByHolding).reduce((s, mMap) => s + (mMap[m] ?? 0), 0)
       isPrognose = true
     }
 
-    const positions = Object.entries(forecastByHolding)
+    const positions = Object.entries(effectiveForecastByHolding)
       .map(([isin, mMap]) => {
         let posAmount
         if (isPast) {
-          posAmount = byHolding[isin]?.monthly?.[cy]?.[m] ?? 0
+          posAmount = effectiveByHolding[isin]?.monthly?.[cy]?.[m] ?? 0
         } else {
           posAmount = mMap[m] ?? 0
         }
         return {
-          name:   byHolding[isin]?.name || isin,
+          name:   effectiveByHolding[isin]?.name || isin,
           amount: posAmount,
         }
       })
