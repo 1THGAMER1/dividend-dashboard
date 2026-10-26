@@ -177,9 +177,13 @@ export default function StockDetailView({
     const totalExposurePct = totalPortfolioValue > 0 ? ((totalExposure / totalPortfolioValue) * 100).toFixed(1).replace('.', ',') : null
 
     // Aktivitäten
+    const normalizeKey = value => String(value || '').trim().toUpperCase()
     const isMyAct = (a) => {
-        const aIsin = a.asset?.isin || a.asset?.symbol || a.holdingId || a.isin
-        return aIsin === isin || aIsin === stock.id
+        const activityKeys = [
+            a.asset?.isin, a.asset?.symbol, a.holdingId, a.isin, a.asset_isin,
+        ].map(normalizeKey).filter(Boolean)
+        const stockKeys = [isin, stock.id, stock.name].map(normalizeKey).filter(Boolean)
+        return activityKeys.some(key => stockKeys.includes(key))
     }
     const myBuys = (buyActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'BUY' }))
     const mySells = (sellActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'SELL' }))

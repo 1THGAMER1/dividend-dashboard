@@ -127,6 +127,26 @@ export default function PortfolioPageView({
 
     const manualMode = !enrichedHoldings?.length && !holdings?.length
     const activeHoldings = enrichedHoldings?.length ? enrichedHoldings : holdings?.length ? holdings : manualHoldings
+    const manualTradeActivities = useMemo(() => dbActivities
+        .filter(activity => ['buy', 'sell'].includes(String(activity.type || '').toLowerCase()))
+        .map(activity => ({
+            ...activity,
+            _type: String(activity.type).toUpperCase(),
+            datetime: activity.datetime || activity.date,
+            amount: Number(activity.amount ?? activity.amountNet) || 0,
+            asset: {
+                ...(activity.asset || {}),
+                isin: activity.isin || activity.asset?.isin,
+                symbol: activity.isin || activity.asset?.symbol,
+                name: activity.name || activity.asset?.name,
+            },
+        })), [dbActivities])
+    const effectiveBuyActs = manualMode
+        ? manualTradeActivities.filter(activity => activity._type === 'BUY')
+        : buyActs
+    const effectiveSellActs = manualMode
+        ? manualTradeActivities.filter(activity => activity._type === 'SELL')
+        : sellActs
     const manualValue = activeHoldings.reduce((sum, item) => sum + (Number(item.value) || 0), 0)
     const displayValue = manualMode
         ? manualValue
@@ -135,6 +155,7 @@ export default function PortfolioPageView({
         if (dbActivities.length === 0) return []
 
         const balances = {}
+        let cash = 0
         let invested = 0
         let value = 0
         const series = []
@@ -155,20 +176,29 @@ export default function PortfolioPageView({
                 if (type === 'buy') {
                     position.shares += shares
                     position.cost += amount
-                    invested += amount
+                    cash -= amount
+                    if (cash < 0) {
+                        invested += -cash
+                        cash = 0
+                    }
                 } else if (type === 'transfer_in') {
                     position.shares += shares
+                    position.cost += amount
+                    if (amount > 0) invested += amount
                 } else if (type === 'sell' || type === 'transfer_out') {
                     const sold = Math.min(shares, position.shares)
                     const averageCost = position.shares > 0 ? position.cost / position.shares : 0
                     position.shares -= sold
                     position.cost = Math.max(0, position.cost - averageCost * sold)
+                    if (type === 'sell') cash += amount
+                } else if (type === 'dividend' || type === 'interest') {
+                    cash += Number(activity.amountNet ?? amount) || 0
                 }
 
                 value = Object.entries(balances).reduce((sum, [holdingKey, item]) => {
                     const price = Number(manualPrices[holdingKey]) || Number(manualPrices[holdingKey.toUpperCase()]) || 0
                     return sum + (price > 0 ? item.shares * price : item.cost)
-                }, 0)
+                }, cash)
                 series.push({ d: date.toISOString(), v: +value.toFixed(2), c: +invested.toFixed(2) })
             })
 
@@ -187,8 +217,8 @@ export default function PortfolioPageView({
                 stock={fullDetailStock}
                 onBack={() => setFullDetailStock(null)}
                 allHoldings={activeHoldings}
-                buyActs={buyActs}
-                sellActs={sellActs}
+                buyActs={effectiveBuyActs}
+                sellActs={effectiveSellActs}
                 byHolding={byHolding}
                 totalPortfolioValue={displayValue}
             />
@@ -210,8 +240,8 @@ export default function PortfolioPageView({
                         currentValue={displayValue}
                         holdings={activeHoldings}
                         performanceSeries={effectivePerformanceSeries}
-                        buyActs={buyActs}
-                        sellActs={sellActs}
+                        buyActs={effectiveBuyActs}
+                        sellActs={effectiveSellActs}
                         byHolding={byHolding}
                         forecastByHolding={forecastByHolding}
                         onOpenFullDetail={(item) => setFullDetailStock(item)}
@@ -263,12 +293,12 @@ export default function PortfolioPageView({
                     holding={selectedHolding}
                     onClose={() => setSelectedHolding(null)}
                     allHoldings={activeHoldings}
-                    buyActs={buyActs}
-                    sellActs={sellActs}
+                    buyActs={effectiveBuyActs}
+                    sellActs={effectiveSellActs}
                     byHolding={byHolding}
                     forecastByHolding={forecastByHolding}
                     range="MAX"
-                    totalPortfolioValue={currentValue}
+                    totalPortfolioValue={displayValue}
                     onOpenFullDetail={(item) => {
                         setSelectedHolding(null)
                         setFullDetailStock(item)

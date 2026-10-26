@@ -138,10 +138,15 @@ export default function HoldingDetailModal({
     const currentPrice = sharesNum > 0 && val > 0 ? val / sharesNum : null
 
     // Aktivitäten filtern (Käufe & Verkäufe für diese ISIN)
+    const normalizeKey = value => String(value || '').trim().toUpperCase()
     const isMyAct = (a) => {
-        const aIsin = a.asset?.isin || a.asset?.symbol || a.holdingId || a.isin
-        return aIsin === isin || aIsin === holding.id ||
-            (holding.holdingId && a.holdingId === holding.holdingId)
+        const activityKeys = [
+            a.asset?.isin, a.asset?.symbol, a.holdingId, a.isin, a.asset_isin,
+        ].map(normalizeKey).filter(Boolean)
+        const holdingKeys = [
+            isin, holding.id, holding.holdingId, holding.name,
+        ].map(normalizeKey).filter(Boolean)
+        return activityKeys.some(key => holdingKeys.includes(key))
     }
 
     const myBuys = (buyActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'BUY' }))
