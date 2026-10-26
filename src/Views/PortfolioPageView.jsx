@@ -52,11 +52,15 @@ export default function PortfolioPageView({
 
     const manualHoldings = useMemo(() => {
         const result = {}
-        dbActivities.forEach(activity => {
+        const chronological = dbActivities
+            .slice()
+            .sort((a, b) => new Date(a.date || a.datetime || 0) - new Date(b.date || b.datetime || 0))
+
+        chronological.forEach(activity => {
             const type = String(activity.type || '').toLowerCase()
-            const key = activity.isin || activity.name || 'Unbekannt'
+            const key = String(activity.isin || activity.name || 'Unbekannt').trim().toUpperCase()
             const shares = Number(activity.shares) || 0
-            const amount = Number(activity.amount) || 0
+            const amount = Number(activity.amount ?? activity.amountNet) || 0
             const item = (result[key] ||= {
                 id: key,
                 isin: activity.isin || key,
@@ -74,11 +78,11 @@ export default function PortfolioPageView({
                 if (type === 'buy') item.costValue += amount
             } else if (type === 'sell' || type === 'transfer_out') {
                 const sold = Math.min(shares, item.shares)
-                item.shares -= sold
-                if (item.shares + sold > 0) {
-                    item.costValue *= item.shares / (item.shares + sold)
-                }
-                if (type === 'sell') item.realizedGain += amount
+                const averageCost = item.shares > 0 ? item.costValue / item.shares : 0
+                const soldCost = averageCost * sold
+                item.shares = Math.max(0, item.shares - sold)
+                item.costValue = Math.max(0, item.costValue - soldCost)
+                if (type === 'sell') item.realizedGain += amount - soldCost
             } else if (type === 'dividend') {
                 item.dividends += Number(activity.amountNet ?? amount) || 0
             }
@@ -91,7 +95,7 @@ export default function PortfolioPageView({
             costValue: +item.costValue.toFixed(2),
             realizedGain: +item.realizedGain.toFixed(2),
             dividends: +item.dividends.toFixed(2),
-        }))
+        })).filter(item => item.shares > 0.000001 || item.dividends > 0 || item.realizedGain !== 0)
     }, [dbActivities])
 
     const manualMode = !enrichedHoldings?.length && !holdings?.length
@@ -99,6 +103,47 @@ export default function PortfolioPageView({
     const displayValue = currentValue > 0
         ? currentValue
         : activeHoldings.reduce((sum, item) => sum + (Number(item.value) || 0), 0)
+    const manualPerformanceSeries = useMemo(() => {
+        if (dbActivities.length === 0) return []
+
+        const balances = {}
+        let invested = 0
+        let value = 0
+        const series = []
+
+        dbActivities
+            .slice()
+            .sort((a, b) => new Date(a.date || a.datetime || 0) - new Date(b.date || b.datetime || 0))
+            .forEach(activity => {
+                const date = new Date(activity.date || activity.datetime || 0)
+                if (Number.isNaN(date.getTime())) return
+
+                const type = String(activity.type || '').toLowerCase()
+                const key = String(activity.isin || activity.name || 'Unbekannt').trim().toUpperCase()
+                const shares = Number(activity.shares) || 0
+                const amount = Number(activity.amount ?? activity.amountNet) || 0
+                const position = (balances[key] ||= { shares: 0, cost: 0 })
+
+                if (type === 'buy') {
+                    position.shares += shares
+                    position.cost += amount
+                    invested += amount
+                } else if (type === 'transfer_in') {
+                    position.shares += shares
+                } else if (type === 'sell' || type === 'transfer_out') {
+                    const sold = Math.min(shares, position.shares)
+                    const averageCost = position.shares > 0 ? position.cost / position.shares : 0
+                    position.shares -= sold
+                    position.cost = Math.max(0, position.cost - averageCost * sold)
+                }
+
+                value = Object.values(balances).reduce((sum, item) => sum + item.cost, 0)
+                series.push({ d: date.toISOString(), v: +value.toFixed(2), c: +invested.toFixed(2) })
+            })
+
+        return series
+    }, [dbActivities])
+    const effectivePerformanceSeries = performanceSeries?.length ? performanceSeries : manualPerformanceSeries
     const [selectedHolding, setSelectedHolding] = useState(null)
     const [fullDetailStock, setFullDetailStock] = useState(null)
 
@@ -131,7 +176,7 @@ export default function PortfolioPageView({
                     <PortfolioDashboard
                         currentValue={displayValue}
                         holdings={activeHoldings}
-                        performanceSeries={performanceSeries}
+                        performanceSeries={effectivePerformanceSeries}
                         buyActs={buyActs}
                         sellActs={sellActs}
                         byHolding={byHolding}
