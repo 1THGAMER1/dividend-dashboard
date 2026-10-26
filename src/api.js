@@ -65,6 +65,7 @@
       const body = await res.text().catch(() => '')
       throw new Error(`API Fehler ${res.status}: ${path} ${body.slice(0, 200)}`)
     }
+    return res.json()
   }
   
   export async function fetchDividendActivities() {
