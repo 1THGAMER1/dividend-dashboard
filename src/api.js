@@ -61,8 +61,10 @@
         ...(options.headers || {}),
       },
     })
-    if (!res.ok) throw new Error(`API Fehler ${res.status}: ${path}`)
-    return res.json()
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`API Fehler ${res.status}: ${path} ${body.slice(0, 200)}`)
+    }
   }
   
   export async function fetchDividendActivities() {
