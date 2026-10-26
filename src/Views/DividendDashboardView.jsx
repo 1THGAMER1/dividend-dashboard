@@ -103,21 +103,36 @@ export default function DividendDashboardView(props) {
 
         const m = {}
         const h = {}
-        let totalBuy = 0
-        const trades = {}   // Wertpapier -> [{ t, d }]  (+ Zugang / − Abgang an Anteilen)
-        const divPays = {}  // Wertpapier -> [{ idx, net, shares, t }]
+        const lotsByKey = {}   // Wertpapier -> { shares, cost } (Durchschnittskosten)
+        const trades = {}      // Wertpapier -> [{ t, d }]  (+ Zugang / − Abgang an Anteilen)
+        const divPays = {}     // Wertpapier -> [{ idx, net, shares, t }]
 
-        ;(dbActs || []).forEach(a => {
-            const type = String(a.type || '').toLowerCase()
+        // Chronologisch (älteste zuerst): die Datenbank liefert neueste zuerst
+        const chronological = [...(dbActs || [])].sort(
+            (x, y) => new Date(x.date || x.datetime || 0) - new Date(y.date || y.datetime || 0)
+        )
+
+        chronological.forEach(a => {
+            const rawType = String(a.type || '').trim().toLowerCase()
+            const type = ['dividende', 'dividenden'].includes(rawType) ? 'dividend' : rawType
             const amt = Number(a.amount ?? 0)
-            if (type === 'buy') totalBuy += amt
-            if (type === 'sell') totalBuy = Math.max(0, totalBuy - amt)
-            // Anteilsbewegungen, damit der Bestand zu jedem Zeitpunkt bekannt ist
             const sh = Number(a.shares) || 0
             const tradeKey = a.isin || a.name || 'Unbekannt'
             const tradeT = new Date(a.date || a.datetime || 0).getTime()
+
+            // Einstand mit Durchschnittskosten: Verkäufe reduzieren den Einstand der verkauften Anteile
+            const lot = (lotsByKey[tradeKey] ||= { shares: 0, cost: 0 })
+            if (type === 'buy') { lot.shares += sh; lot.cost += amt }
+            if (type === 'sell' && lot.shares > 0) {
+                const sold = Math.min(sh, lot.shares)
+                lot.cost -= (lot.cost / lot.shares) * sold
+                lot.shares -= sold
+            }
+
+            // Anteilsbewegungen, damit der Bestand zu jedem Zeitpunkt bekannt ist
             const delta = ['buy', 'transfer_in'].includes(type) ? sh : (['sell', 'transfer_out'].includes(type) ? -sh : 0)
             if (delta !== 0 && !isNaN(tradeT)) (trades[tradeKey] ||= []).push({ t: tradeT, d: delta })
+
             if (type !== 'dividend') return
 
             const d = new Date(a.date || a.datetime || 0)
@@ -299,14 +314,23 @@ export default function DividendDashboardView(props) {
 
         const holdingsValue = (enrichedHoldings?.length ? enrichedHoldings : holdings || [])
             .reduce((s, p) => s + (Number(p.value) || 0), 0)
-        const liveVal = propCurrentValue > 0 ? propCurrentValue : (holdingsValue > 0 ? holdingsValue : totalBuy)
+        const totalCost = Object.values(lotsByKey).reduce((s, l) => s + Math.max(0, l.cost), 0)
+        const valueIsCost = !(propCurrentValue > 0) && !(holdingsValue > 0)
+        const liveVal = propCurrentValue > 0 ? propCurrentValue : (holdingsValue > 0 ? holdingsValue : totalCost)
+
+        // Monate seit der ersten Dividende (für die Annualisierung kurzer Historien)
+        let firstIdx = null
+        Object.keys(m).map(Number).sort((a, b) => a - b).forEach(y => {
+            for (let mo = 0; mo < 12; mo++) {
+                if (firstIdx === null && (m[y][mo] || 0) > 0) firstIdx = y * 12 + mo
+            }
+        })
+        const sinceFirst = firstIdx === null ? 1 : Math.max(1, cy * 12 + cm - firstIdx + 1)
+        const monthsFor = { all: sinceFirst, ytd: Math.min(cm + 1, sinceFirst), '12m': Math.min(12, sinceFirst), '3y': Math.min(36, sinceFirst) }
 
         const dividendYieldLocal = {}
         ;['all', 'ytd', '12m', '3y'].forEach(r => {
-            let factor = 1
-            if (r === 'ytd') factor = 12 / Math.max(1, cm + 1)
-            if (r === '3y') factor = 1 / 3
-            dividendYieldLocal[r] = liveVal > 0 ? +(((kpiLocal[r].net * factor) / liveVal) * 100).toFixed(2) : 0
+            dividendYieldLocal[r] = liveVal > 0 ? +(((kpiLocal[r].net * 12 / monthsFor[r]) / liveVal) * 100).toFixed(2) : 0
         })
 
         const nominalTotal = kpiLocal.all.net
@@ -320,6 +344,7 @@ export default function DividendDashboardView(props) {
             kpi: kpiLocal, dividendYield: dividendYieldLocal,
             currentValue: liveVal, realTotal: realVal, inflation: nominalTotal - realVal,
             hasRealData: hasReal, hasRecords: Object.keys(m).length > 0,
+            valueIsCost,
         }
     }, [hasPropData, dbActs, propCurrentValue, cy, cm, holdings, enrichedHoldings])
 
@@ -339,6 +364,7 @@ export default function DividendDashboardView(props) {
     const inflation = hasPropData ? propInflation : fallback?.inflation
     const hasRealData = hasPropData ? propHasRealData : fallback?.hasRealData
     const hasAnyRecords = hasPropData ? true : Boolean(fallback?.hasRecords)
+    const valueIsCost = hasPropData ? false : Boolean(fallback?.valueIsCost)
 
     // ── ZEITRAUM-FILTER NUR FÜR CHARTS / TABELLE / HEATMAP / DONUT ────────────
     const { filteredByHolding, filteredMonthlyForHeatmap } = useMemo(() => {
@@ -448,7 +474,7 @@ export default function DividendDashboardView(props) {
             <div className="kpi-grid">
                 <KpiCard label={`Dividenden Netto (${currentRangeLabel})`} value={k.net} color="#22c55e" detail={{ label: 'Ø Monatlich', value: k.avg, color: '#a78bfa' }} />
                 <KpiCard label="Brutto" value={k.gross} color="#60a5fa" detail={{ label: 'davon Steuern', value: k.tax, color: '#fb923c' }} />
-                <KpiCard label="Dividendenrendite" value={dividendYield?.[kpiRange] != null ? fmtPct(dividendYield[kpiRange]) : '–'} color="#34d399" sub={currentValue > 0 ? "auf Marktwert (annualisiert)" : "Marktwert noch nicht erfasst"} />
+                <KpiCard label="Dividendenrendite" value={dividendYield?.[kpiRange] != null ? fmtPct(dividendYield[kpiRange]) : '–'} color="#34d399" sub={currentValue > 0 ? (valueIsCost ? 'auf Einstandswert (annualisiert)' : 'auf Marktwert (annualisiert)') : "Marktwert noch nicht erfasst"} />
             </div>
 
             <div className="kpi-grid">
@@ -474,7 +500,7 @@ export default function DividendDashboardView(props) {
                         return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %';
                     })()}
                     color="#22c55e"
-                    sub={forecast12m?.growthPct != null ? `Dividendenwachstum je Anteil: ${forecast12m.growthPct >= 0 ? '+' : ''}${String(forecast12m.growthPct).replace('.', ',')} %` : 'Basierend auf Vorjahren'}
+                    sub={valueIsCost ? 'Nächste 12M / Einstandswert' : 'Nächste 12M / Marktwert'}
                 />
                 <KpiCard
                     label="Progn. Dividendenrendite"
