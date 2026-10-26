@@ -7,6 +7,7 @@ import HoldingDetailModal from "../components/HoldingDetailModal.jsx"
 import StockDetailView from './StockDetailView.jsx'
 import ActivitiesView from './ActivitiesView.jsx'
 import { fetchAllDbActivities } from '../utils/manualActivities'
+import { fetchCurrentPrice } from '../api.js'
 
 export default function PortfolioPageView({
                                               page,
@@ -27,9 +28,12 @@ export default function PortfolioPageView({
     const [dbActivities, setDbActivities] = useState([])
     const [dbLoading, setDbLoading] = useState(false)
     const [dbLoaded, setDbLoaded] = useState(false)
+    const [manualPrices, setManualPrices] = useState({})
 
     useEffect(() => {
-        if (page !== 'portfolio-overview' || dbLoaded || (enrichedHoldings?.length || holdings?.length)) return
+        if (!['portfolio-overview', 'portfolio-assets', 'portfolio-xray'].includes(page) ||
+            dbLoaded ||
+            (enrichedHoldings?.length || holdings?.length)) return
 
         let cancelled = false
         setDbLoading(true)
@@ -49,6 +53,25 @@ export default function PortfolioPageView({
 
         return () => { cancelled = true }
     }, [page, dbLoaded, enrichedHoldings?.length, holdings?.length])
+
+    useEffect(() => {
+        if (dbActivities.length === 0) return
+
+        const keys = [...new Set(
+            dbActivities
+                .filter(activity => ['buy', 'transfer_in'].includes(String(activity.type || '').toLowerCase()))
+                .map(activity => activity.isin || activity.name)
+                .filter(Boolean)
+        )]
+        let cancelled = false
+        Promise.all(keys.map(async key => [key, await fetchCurrentPrice(key)]))
+            .then(entries => {
+                if (!cancelled) setManualPrices(Object.fromEntries(entries.filter(([, price]) => price > 0)))
+            })
+            .catch(error => console.warn('Manuelle Kurse konnten nicht geladen werden:', error.message))
+
+        return () => { cancelled = true }
+    }, [dbActivities])
 
     const manualHoldings = useMemo(() => {
         const result = {}
@@ -88,21 +111,26 @@ export default function PortfolioPageView({
             }
         })
 
-        return Object.values(result).map(item => ({
+        return Object.values(result).map(item => {
+            const price = Number(manualPrices[item.isin]) || Number(manualPrices[item.name]) || 0
+            const value = price > 0 ? item.shares * price : item.costValue
+            return {
             ...item,
             shares: +item.shares.toFixed(6),
-            value: +item.costValue.toFixed(2),
+            value: +value.toFixed(2),
             costValue: +item.costValue.toFixed(2),
             realizedGain: +item.realizedGain.toFixed(2),
             dividends: +item.dividends.toFixed(2),
-        })).filter(item => item.shares > 0.000001 || item.dividends > 0 || item.realizedGain !== 0)
-    }, [dbActivities])
+            }
+        }).filter(item => item.shares > 0.000001 || item.dividends > 0 || item.realizedGain !== 0)
+    }, [dbActivities, manualPrices])
 
     const manualMode = !enrichedHoldings?.length && !holdings?.length
     const activeHoldings = enrichedHoldings?.length ? enrichedHoldings : holdings?.length ? holdings : manualHoldings
-    const displayValue = currentValue > 0
-        ? currentValue
-        : activeHoldings.reduce((sum, item) => sum + (Number(item.value) || 0), 0)
+    const manualValue = activeHoldings.reduce((sum, item) => sum + (Number(item.value) || 0), 0)
+    const displayValue = manualMode
+        ? manualValue
+        : (currentValue > 0 ? currentValue : manualValue)
     const manualPerformanceSeries = useMemo(() => {
         if (dbActivities.length === 0) return []
 
@@ -137,13 +165,18 @@ export default function PortfolioPageView({
                     position.cost = Math.max(0, position.cost - averageCost * sold)
                 }
 
-                value = Object.values(balances).reduce((sum, item) => sum + item.cost, 0)
+                value = Object.entries(balances).reduce((sum, [holdingKey, item]) => {
+                    const price = Number(manualPrices[holdingKey]) || Number(manualPrices[holdingKey.toUpperCase()]) || 0
+                    return sum + (price > 0 ? item.shares * price : item.cost)
+                }, 0)
                 series.push({ d: date.toISOString(), v: +value.toFixed(2), c: +invested.toFixed(2) })
             })
 
         return series
-    }, [dbActivities])
-    const effectivePerformanceSeries = performanceSeries?.length ? performanceSeries : manualPerformanceSeries
+    }, [dbActivities, manualPrices])
+    const effectivePerformanceSeries = manualMode
+        ? manualPerformanceSeries
+        : (performanceSeries?.length ? performanceSeries : manualPerformanceSeries)
     const [selectedHolding, setSelectedHolding] = useState(null)
     const [fullDetailStock, setFullDetailStock] = useState(null)
 
@@ -157,7 +190,7 @@ export default function PortfolioPageView({
                 buyActs={buyActs}
                 sellActs={sellActs}
                 byHolding={byHolding}
-                totalPortfolioValue={currentValue}
+                totalPortfolioValue={displayValue}
             />
         )
     }
@@ -202,7 +235,7 @@ export default function PortfolioPageView({
             {page === 'portfolio-xray' && (
                 <EtfUploadWidget
                     holdings={activeHoldings}
-                    currentValue={currentValue}
+                    currentValue={displayValue}
                     onSelectHolding={setSelectedHolding}
                 />
             )}
