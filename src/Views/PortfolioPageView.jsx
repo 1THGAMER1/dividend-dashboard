@@ -9,6 +9,8 @@ import ActivitiesView from './ActivitiesView.jsx'
 import { fetchAllDbActivities } from '../utils/manualActivities'
 import { fetchCurrentPrice, fetchHoldingHistory } from '../api.js'
 
+const KNOWN_CRYPTO = ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'MATIC', 'BNB', 'USDT', 'USDC']
+
 export default function PortfolioPageView({
                                               page,
                                               onNavigate,
@@ -77,14 +79,25 @@ export default function PortfolioPageView({
     useEffect(() => {
         if (dbActivities.length === 0) return
 
+        const kinds = {}
+        dbActivities.forEach(a => {
+            const k = a.isin || a.name
+            if (k && !kinds[k]) kinds[k] = a.assetType
+        })
         const keys = [...new Set(
             dbActivities
-                .filter(activity => ['buy', 'transfer_in'].includes(String(activity.type || '').toLowerCase()))
-                .map(activity => activity.isin || activity.name)
+                .filter(a => ['buy', 'transfer_in'].includes(String(a.type || '').toLowerCase()))
+                .map(a => a.isin || a.name)
                 .filter(Boolean)
         )]
+        // Krypto-Kurse gibt es bei Yahoo als "BTC-EUR", nicht als "BTC"
+        const symbolFor = (key) =>
+            /crypto|krypto|coin|token/i.test(kinds[key] || '') || KNOWN_CRYPTO.includes(String(key).toUpperCase())
+                ? `${String(key).toUpperCase()}-EUR`
+                : key
+
         let cancelled = false
-        Promise.all(keys.map(async key => [key, await fetchHoldingHistory(key)]))
+        Promise.all(keys.map(async key => [key, await fetchHoldingHistory(symbolFor(key))]))
             .then(entries => {
                 if (!cancelled) {
                     setManualHistories(Object.fromEntries(
@@ -178,85 +191,120 @@ export default function PortfolioPageView({
     const manualPerformanceSeries = useMemo(() => {
         if (dbActivities.length === 0 || Object.keys(manualHistories).length === 0) return []
 
-        const activitiesByDate = dbActivities
-            .map(activity => ({
-                ...activity,
-                date: new Date(activity.date || activity.datetime || 0),
-            }))
-            .filter(activity => !Number.isNaN(activity.date.getTime()))
-            .sort((a, b) => a.date - b.date)
-        const firstDate = activitiesByDate[0]?.date
-        if (!firstDate) return []
+        const acts = dbActivities
+            .map(a => ({ ...a, ts: new Date(a.date || a.datetime || 0) }))
+            .filter(a => !Number.isNaN(a.ts.getTime()))
+            .sort((a, b) => a.ts - b.ts)
+        if (!acts.length) return []
+        const startDay = acts[0].ts.toISOString().slice(0, 10)
 
-        const priceRows = Object.entries(manualHistories).map(([rawKey, result]) => ({
-            key: String(rawKey).trim().toUpperCase(),
-            rows: (result.history || [])
-                .map(row => ({ date: String(row.d).slice(0, 10), close: Number(row.close) || 0 }))
-                .filter(row => row.close > 0)
-                .sort((a, b) => a.date.localeCompare(b.date)),
-        })).filter(item => item.rows.length > 0)
-        if (priceRows.length === 0) return []
+        // Kurse und Splits je Position
+        const prices = {}
+        Object.entries(manualHistories).forEach(([rawKey, result]) => {
+            const rows = (result.history || [])
+                .map(r => ({ date: String(r.d).slice(0, 10), close: Number(r.close) || 0 }))
+                .filter(r => r.close > 0)
+                .sort((a, b) => a.date.localeCompare(b.date))
+            if (rows.length) {
+                prices[String(rawKey).trim().toUpperCase()] = {
+                    rows, idx: 0,
+                    splits: (result.splits || []).filter(s => s?.date && s.ratio > 0),
+                }
+            }
+        })
+        if (!Object.keys(prices).length) return []
 
-        const dates = [...new Set(priceRows.flatMap(item => item.rows.map(row => row.date))
-            .filter(date => date >= firstDate.toISOString().slice(0, 10)))]
+        // Stückzahl auf den heutigen Split-Stand bringen (Yahoo-Kurse sind rückwirkend bereinigt)
+        const adjShares = (key, a) => {
+            const day = a.ts.toISOString().slice(0, 10)
+            const f = (prices[key]?.splits || []).reduce((acc, s) => (day < s.date ? acc * s.ratio : acc), 1)
+            return (Number(a.shares) || 0) * f
+        }
+
+        // WICHTIG: sortierte Tagesliste
+        const dates = [...new Set(Object.values(prices).flatMap(p => p.rows.map(r => r.date)).filter(d => d >= startDay))].sort()
+
         const balances = {}
-        const priceIndexes = Object.fromEntries(priceRows.map(item => [item.key, 0]))
-        let activityIndex = 0
-        let cash = 0
-        let invested = 0
-        const series = []
+        let ai = 0
+        let cash = 0       // Geld im Depot (Verkäufe, Dividenden, Einzahlungen)
+        let invested = 0   // von außen eingezahltes Kapital
+        const out = []
+
+        // Ausgaben (Käufe, Gebühren) werden zuerst aus dem Cash bezahlt, der Rest zählt als neue Einzahlung.
+        // So stimmt es mit und ohne erfasste Einzahlungen, ohne Doppelzählung.
+        const spend = (amount) => {
+            const fromCash = Math.min(Math.max(cash, 0), amount)
+            cash -= fromCash
+            invested += amount - fromCash
+        }
 
         dates.forEach(date => {
             const dayEnd = new Date(`${date}T23:59:59.999Z`)
-            while (activityIndex < activitiesByDate.length && activitiesByDate[activityIndex].date <= dayEnd) {
-                const activity = activitiesByDate[activityIndex++]
-                const type = String(activity.type || '').toLowerCase()
-                const key = String(activity.isin || activity.name || 'Unbekannt').trim().toUpperCase()
-                const shares = Number(activity.shares) || 0
-                const amount = Number(activity.amount ?? activity.amountNet) || 0
-                const position = (balances[key] ||= { shares: 0, cost: 0 })
+            while (ai < acts.length && acts[ai].ts <= dayEnd) {
+                const a = acts[ai++]
+                const type = String(a.type || '').trim().toLowerCase()
+                const key = String(a.isin || a.name || 'Unbekannt').trim().toUpperCase()
+                const amount = Number(a.amount ?? a.amountNet) || 0
+                const pos = (balances[key] ||= { shares: 0, cost: 0 })
 
                 if (type === 'buy') {
-                    position.shares += shares
-                    position.cost += amount
-                    cash -= amount
-                    invested += amount
+                    pos.shares += adjShares(key, a)
+                    pos.cost += amount
+                    spend(amount)
                 } else if (type === 'transfer_in') {
-                    position.shares += shares
-                    position.cost += amount
+                    pos.shares += adjShares(key, a)
+                    pos.cost += amount
                     invested += Math.max(0, amount)
                 } else if (type === 'sell' || type === 'transfer_out') {
-                    const sold = Math.min(shares, position.shares)
-                    const averageCost = position.shares > 0 ? position.cost / position.shares : 0
-                    position.shares -= sold
-                    position.cost = Math.max(0, position.cost - averageCost * sold)
+                    const sold = Math.min(adjShares(key, a), pos.shares)
+                    const avg = pos.shares > 0 ? pos.cost / pos.shares : 0
+                    pos.shares -= sold
+                    pos.cost = Math.max(0, pos.cost - avg * sold)
                     if (type === 'sell') cash += amount
+                    else invested = Math.max(0, invested - avg * sold)
                 } else if (type === 'dividend' || type === 'interest') {
-                    cash += Number(activity.amountNet ?? amount) || 0
+                    cash += Number(a.amountNet ?? amount) || 0
                 } else if (type === 'deposit') {
                     cash += amount
                     invested += amount
                 } else if (type === 'withdrawal') {
                     cash -= amount
                     invested = Math.max(0, invested - amount)
+                } else if (type === 'fees_taxes') {
+                    spend(amount || (Number(a.fee) || 0) + (Number(a.tax) || 0))
                 }
             }
 
-            let marketValue = 0
-            priceRows.forEach(({ key, rows }) => {
-                const position = balances[key]
-                if (!position || position.shares <= 0) return
-                while (priceIndexes[key] + 1 < rows.length && rows[priceIndexes[key] + 1].date <= date) {
-                    priceIndexes[key] += 1
-                }
-                const close = rows[priceIndexes[key]]?.close || 0
-                marketValue += position.shares * close
+            // Depotwert: Positionen zum Tageskurs, ohne Kurshistorie zum Einstand
+            let market = 0
+            Object.entries(balances).forEach(([key, pos]) => {
+                if (pos.shares <= 1e-9) return
+                const p = prices[key]
+                if (!p) { market += pos.cost; return }
+                while (p.idx + 1 < p.rows.length && p.rows[p.idx + 1].date <= date) p.idx++
+                market += pos.shares * p.rows[p.idx].close
             })
-            const value = marketValue + cash
-            series.push({ d: `${date}T12:00:00.000Z`, v: +value.toFixed(2), c: +invested.toFixed(2) })
+
+            out.push({ d: `${date}T12:00:00.000Z`, v: +(market + cash).toFixed(2), c: +invested.toFixed(2) })
         })
 
-        return series.filter(point => point.v > 0 || point.c > 0)
+        // TTWROR (Modified Dietz je Tag, Ein-/Auszahlungen neutralisiert) und Drawdown auf dieser Wertentwicklung
+        let index = 1, peak = 1
+        return out
+            .filter(p => p.v > 0 || p.c > 0)
+            .map((p, i, arr) => {
+                if (i > 0) {
+                    const prev = arr[i - 1]
+                    const flow = p.c - prev.c
+                    const base = prev.v + flow / 2
+                    if (base > 0) {
+                        const r = (p.v - prev.v - flow) / base
+                        if (Number.isFinite(r) && r > -1) index *= 1 + r
+                    }
+                }
+                peak = Math.max(peak, index)
+                return { ...p, t: +((index - 1) * 100).toFixed(3), dd: +((index / peak - 1) * 100).toFixed(2) }
+            })
     }, [dbActivities, manualHistories])
     const effectivePerformanceSeries = manualMode
         ? manualPerformanceSeries
