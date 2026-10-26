@@ -1,8 +1,98 @@
 import { supabase } from '../supabaseClient'
-import { fetchAllActivities } from '../api'
+import { fetchAllActivities, getKnownAssets, invalidateKnownAssets } from '../api'
+import { normalizeName, sameCompany } from './portfolioXray'
 
 const num = (v) => parseFloat(String(v ?? 0).replace(',', '.')) || 0
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}\d$/
+const isIsin = (v) => ISIN_RE.test(String(v || '').trim().toUpperCase())
+const isCryptoType = (t) => /crypto|krypto|coin|token/i.test(String(t || ''))
 
+// Bekannte Papiere mit echter ISIN, je ISIN einmal
+const toIndex = (list) => {
+    const byIsin = new Map()
+    ;(list || []).forEach(a => {
+        const isin = String(a.isin || '').trim().toUpperCase()
+        if (isIsin(isin) && a.name && !byIsin.has(isin)) {
+            byIsin.set(isin, { isin, name: a.name, key: normalizeName(a.name) })
+        }
+    })
+    return [...byIsin.values()]
+}
+
+// Genau ein Treffer = sicher. Mehrere (z. B. Aktiengattungen) oder keiner = nicht zusammenführen.
+function matchKnownAsset(index, name) {
+    const key = normalizeName(name)
+    if (!key) return null
+    const exact = index.filter(a => a.key === key)
+    if (exact.length === 1) return exact[0]
+    if (exact.length > 1) return null
+    const loose = index.filter(a => Math.min(a.key.length, key.length) >= 8 && sameCompany(key, a.key))
+    return loose.length === 1 ? loose[0] : null
+}
+
+// Beim Anlegen/Ändern: Papier ohne ISIN auf die ISIN eines bekannten Papiers abbilden
+async function resolveAssetIdentity(asset) {
+    const name = asset?.name || 'Unbekanntes Asset'
+    const isin = asset?.isin || null
+    if (isIsin(isin) || isCryptoType(asset?.assetType)) return { isin, name }
+    const hit = matchKnownAsset(toIndex(await getKnownAssets()), name)
+    return hit ? { isin: hit.isin, name: hit.name } : { isin, name }
+}
+
+// Alle Zeilen seitenweise laden (Supabase liefert pro Abfrage höchstens 1000)
+async function fetchAllRows() {
+    const PAGE = 1000
+    let all = []
+    for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+            .from('user_activities')
+            .select('*')
+            .order('datetime', { ascending: false })
+            .order('id', { ascending: true })
+            .range(from, from + PAGE - 1)
+        if (error) { console.warn('Fehler beim Laden aus user_activities:', error.message); break }
+        all = all.concat(data || [])
+        if (!data || data.length < PAGE) break
+    }
+    return all
+}
+
+// Führt manuell erfasste Papiere (Yahoo-Kürzel wie AAPL) mit denselben Papieren aus Parqet (echte ISIN) zusammen
+export async function unifyManualAssets() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { merged: 0 }
+
+    const rows = await fetchAllRows()
+    const index = toIndex(rows.map(r => ({ isin: r.asset_isin, name: r.asset_name })))
+    if (!index.length) return { merged: 0 }
+
+    // Manuelle Zeilen ohne ISIN, gruppiert nach Kürzel und Name
+    const groups = new Map()
+    rows
+        .filter(r => !r.parqet_id && !isIsin(r.asset_isin) && !isCryptoType(r.asset_type))
+        .forEach(r => {
+            const k = `${r.asset_isin || ''}|${r.asset_name || ''}`
+            if (!groups.has(k)) groups.set(k, [])
+            groups.get(k).push(r)
+        })
+
+    let merged = 0
+    for (const list of groups.values()) {
+        const hit = matchKnownAsset(index, list[0].asset_name)
+        if (!hit) continue
+        const ids = list.map(r => r.id)
+        for (let i = 0; i < ids.length; i += 100) {
+            const { error } = await supabase
+                .from('user_activities')
+                .update({ asset_isin: hit.isin, asset_name: hit.name })
+                .in('id', ids.slice(i, i + 100))
+                .eq('user_id', user.id)
+            if (!error) merged += Math.min(100, ids.length - i)
+        }
+    }
+    invalidateKnownAssets()
+    return { merged }
+}
 // Speichert EINE manuelle Aktivität in Supabase
 export async function createManualActivity({
                                                type,
@@ -19,6 +109,7 @@ export async function createManualActivity({
     if (!user) throw new Error('Nicht eingeloggt')
 
     const net = Number(amount) - Number(fee) - Number(tax)
+    const identity = await resolveAssetIdentity(asset)
 
     const payload = {
         user_id: user.id,
@@ -32,8 +123,8 @@ export async function createManualActivity({
         fee: Number(fee) || 0,
         tax: Number(tax) || 0,
         currency,
-        asset_isin: asset?.isin || null,
-        asset_name: asset?.name || 'Unbekanntes Asset',
+        asset_isin: identity.isin,
+        asset_name: identity.name,
         asset_type: asset?.assetType || 'Security'
     }
 
@@ -116,7 +207,9 @@ export async function syncParqetToSupabase(namesMap = {}) {
         }
     }
 
-    return { total: rows.length }
+    invalidateKnownAssets()
+    const { merged } = await unifyManualAssets()
+    return { total: rows.length, merged }
 }
 
 // Formatiert eine DB-Zeile für das UI
@@ -166,7 +259,7 @@ export async function fetchAllDbActivities() {
         all = all.concat(data || [])
         if (!data || data.length < PAGE) break
     }
-    return all.map(formatActivity)
+    return (await fetchAllRows()).map(formatActivity)
 }
 
 // Aktualisiert eine bestehende manuelle Aktivität

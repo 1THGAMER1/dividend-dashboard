@@ -732,17 +732,66 @@
     { symbol: 'PEPE', name: 'Pepe' },
   ]
 
+  // Papiere aus den eigenen Buchungen (echte ISIN + Name), einmal pro Sitzung geladen
+  const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}\d$/
+  let _knownAssetsPromise = null
+
+  export function invalidateKnownAssets() { _knownAssetsPromise = null }
+
+  export function getKnownAssets() {
+    if (!_knownAssetsPromise) {
+      _knownAssetsPromise = (async () => {
+        const seen = new Map()
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase
+              .from('user_activities')
+              .select('asset_isin, asset_name, asset_type')
+              .not('asset_isin', 'is', null)
+              .order('id')
+              .range(from, from + 999)
+          if (error || !data?.length) break
+          data.forEach(r => {
+            const k = String(r.asset_isin).trim().toUpperCase()
+            const isCrypto = /crypto|krypto|coin|token/i.test(r.asset_type || '')
+            if ((ISIN_RE.test(k) || isCrypto) && r.asset_name && !seen.has(k)) {
+              seen.set(k, { isin: k, name: r.asset_name, type: r.asset_type })
+            }
+          })
+          if (data.length < 1000) break
+        }
+        return [...seen.values()]
+      })().catch(() => [])
+    }
+    return _knownAssetsPromise
+  }
+
   export async function searchAssets(query) {
     const q = String(query || '').trim()
     if (q.length < 2) return []
 
     const qUpper = q.toUpperCase()
     const qLower = q.toLowerCase()
+    const isIsinQuery = ISIN_RE.test(qUpper)
 
-    // 1. Zuerst prüfen, ob es ein bekanntes Krypto-Asset ist
+    // 0. Eigene Papiere zuerst: gleiche ISIN wie in Parqet, damit nichts doppelt angelegt wird
+    const known = await getKnownAssets()
+    const ownMatches = known
+        .filter(a => a.isin.includes(qUpper) || a.name.toLowerCase().includes(qLower))
+        .slice(0, 5)
+        .map(a => ({
+          symbol: a.isin,
+          isin: a.isin,
+          name: a.name,
+          exchange: 'Dein Depot',
+          type: a.type || 'Wertpapier',
+          rawType: /crypto|krypto|coin|token/i.test(a.type || '') ? 'Crypto' : 'Security',
+        }))
+    const ownSymbols = new Set(ownMatches.map(a => a.symbol))
+
+    // 1. Bekannte Kryptowährungen
     const cryptoMatches = POPULAR_CRYPTOS.filter(
         c => c.symbol.includes(qUpper) || c.name.toLowerCase().includes(qLower)
-    ).map(c => ({
+    ).filter(c => !ownSymbols.has(c.symbol)).map(c => ({
       symbol: c.symbol,
       name: c.name,
       exchange: 'CoinMarketCap',
@@ -750,23 +799,20 @@
       rawType: 'Crypto',
     }))
 
-    // 2. Parallel Yahoo für Aktien & ETFs anfragen
+    // 2. Yahoo für Aktien & ETFs (bei einer ISIN-Eingabe bleibt die ISIN erhalten)
     let stockMatches = []
     try {
       const res = await fetch(`${YAHOO_FN}?q=${encodeURIComponent(q)}`)
-      if (res.ok) {
+      if (!res.ok) {
+        console.warn('[searchAssets] Yahoo-Suche HTTP', res.status)
+      } else {
         const data = await res.json()
-        const quotes = data.quotes || []
-        const typeMap = {
-          EQUITY: 'Aktie',
-          ETF: 'ETF',
-          MUTUALFUND: 'Fonds',
-        }
-
-        stockMatches = quotes
+        const typeMap = { EQUITY: 'Aktie', ETF: 'ETF', MUTUALFUND: 'Fonds' }
+        stockMatches = (data.quotes || [])
             .filter(item => ['EQUITY', 'ETF', 'MUTUALFUND'].includes((item.quoteType || '').toUpperCase()))
             .map(item => ({
               symbol: item.symbol,
+              isin: isIsinQuery ? qUpper : undefined,
               name: item.shortname || item.longname || item.symbol,
               exchange: item.exchDisp || item.exchange || '',
               type: typeMap[(item.quoteType || '').toUpperCase()] || 'Wertpapier',
@@ -777,6 +823,5 @@
       console.warn('[searchAssets] Yahoo-Suche fehlgeschlagen:', err.message)
     }
 
-    // Krypto oben anheften, falls Treffer vorhanden, gefolgt von Aktien/ETFs
-    return [...cryptoMatches, ...stockMatches]
+    return [...ownMatches, ...cryptoMatches, ...stockMatches]
   }
