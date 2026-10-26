@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import UpcomingDividends from "../components/UpcomingDividends.jsx"
 import DividendCalendar from "../components/DividendCalendar.jsx"
 import DividendCalculator from '../pages/DividendCalculator'
 import DripSimulator from '../pages/DripSimulator'
 import EmptyStateView from "./EmptyStateView.jsx"
+import { fetchAllDbActivities } from '../utils/manualActivities'
 
 export default function DividendsPageView({
                                               page,
@@ -16,15 +17,39 @@ export default function DividendsPageView({
                                               error,
                                               activities = []
                                           }) {
+    const [dbActivities, setDbActivities] = useState([])
+    const [dbLoading, setDbLoading] = useState(false)
+
+    useEffect(() => {
+        if (page !== 'calendar' || Object.keys(monthly || {}).length > 0 || activities.length > 0) return
+
+        let cancelled = false
+        setDbLoading(true)
+        fetchAllDbActivities()
+            .then(data => {
+                if (!cancelled) setDbActivities(data || [])
+            })
+            .catch(fetchError => {
+                if (!cancelled) console.warn('Kalenderdaten aus Supabase konnten nicht geladen werden:', fetchError.message)
+            })
+            .finally(() => {
+                if (!cancelled) setDbLoading(false)
+            })
+
+        return () => { cancelled = true }
+    }, [page, monthly, activities])
+
+    const effectiveActivities = activities.length > 0 ? activities : dbActivities
+
     const hasDividendData = useMemo(() => {
         const hasMonthly = Boolean(monthly && Object.keys(monthly).length > 0)
         if (hasMonthly) return true
 
-        const hasManualDivs = Array.isArray(activities) && activities.some(a =>
+        const hasManualDivs = Array.isArray(effectiveActivities) && effectiveActivities.some(a =>
             String(a.type).toLowerCase() === 'dividend' && (Number(a.amount) > 0 || Number(a.amountNet) > 0)
         )
         return hasManualDivs
-    }, [monthly, activities])
+    }, [monthly, effectiveActivities])
 
     const safePortfolioData = useMemo(() => {
         if (portfolioData && portfolioData.currentValue > 0) {
@@ -67,7 +92,11 @@ export default function DividendsPageView({
                     </p>
                 </div>
 
-                {!hasDividendData ? (
+                {!hasDividendData && (loading || dbLoading) ? (
+                    <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>
+                        Lade Kalenderdaten aus Supabase…
+                    </div>
+                ) : !hasDividendData ? (
                     <EmptyStateView onRefresh={loadData} loading={loading} error={error} />
                 ) : (
                     <>
@@ -80,7 +109,7 @@ export default function DividendsPageView({
                             forecastByHolding={forecastByHolding || {}}
                             byHolding={byHolding || {}}
                             monthly={monthly || {}}
-                            activities={activities}
+                            activities={effectiveActivities}
                         />
                     </>
                 )}
