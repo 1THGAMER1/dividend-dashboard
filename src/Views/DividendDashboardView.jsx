@@ -104,12 +104,20 @@ export default function DividendDashboardView(props) {
         const m = {}
         const h = {}
         let totalBuy = 0
+        const trades = {}   // Wertpapier -> [{ t, d }]  (+ Zugang / − Abgang an Anteilen)
+        const divPays = {}  // Wertpapier -> [{ idx, net, shares, t }]
 
         ;(dbActs || []).forEach(a => {
             const type = String(a.type || '').toLowerCase()
             const amt = Number(a.amount ?? 0)
             if (type === 'buy') totalBuy += amt
             if (type === 'sell') totalBuy = Math.max(0, totalBuy - amt)
+            // Anteilsbewegungen, damit der Bestand zu jedem Zeitpunkt bekannt ist
+            const sh = Number(a.shares) || 0
+            const tradeKey = a.isin || a.name || 'Unbekannt'
+            const tradeT = new Date(a.date || a.datetime || 0).getTime()
+            const delta = ['buy', 'transfer_in'].includes(type) ? sh : (['sell', 'transfer_out'].includes(type) ? -sh : 0)
+            if (delta !== 0 && !isNaN(tradeT)) (trades[tradeKey] ||= []).push({ t: tradeT, d: delta })
             if (type !== 'dividend') return
 
             const d = new Date(a.date || a.datetime || 0)
@@ -120,6 +128,7 @@ export default function DividendDashboardView(props) {
             const tax = Number(a.tax ?? 0)
             const gross = (Number(a.gross) > net) ? Number(a.gross) : +(net + tax).toFixed(2)
             const key = a.isin || a.name || 'Unbekannt'
+            ;(divPays[key] ||= []).push({ idx: y * 12 + mon, net, shares: sh, t: d.getTime() })
 
             if (!m[y]) m[y] = Array(12).fill(0)
             m[y][mon] = +(m[y][mon] + net).toFixed(2)
@@ -140,71 +149,79 @@ export default function DividendDashboardView(props) {
             let running = 0
             for (let i = 0; i < 12; i++) { running += (m[y][i] || 0); cumLocal[y][i] = +running.toFixed(2) }
         })
+        // ── PROGNOSE: Dividende je Anteil × aktueller Bestand ──────────────────
+        // Das Wachstum ist reines Dividendenwachstum JE ANTEIL. Zukäufe, Sparpläne und Verkäufe
+        // fließen nicht ein. Der aktuelle Bestand bestimmt nur, wie viele Anteile ausschütten.
+        const MAX_GROWTH = 1.2   // Deckel für das Wachstum je Anteil pro Jahr (wie in buildForecast)
+        const MIN_GROWTH = 0.9
+        const nowIdx = cy * 12 + cm
 
-        // ── WACHSTUMSBASIERTE PROGNOSE PRO POSITION ────────────────────────────
-        // Berechnet pro Position einen individuellen Wachstumsfaktor (TTM vs. Vorjahres-TTM)
-        // und wendet ihn auf die Vorjahreszahlung desselben Kalendermonats an.
+        const sharesAt = (key, ts) => (trades[key] || []).reduce((s, x) => (x.t <= ts ? s + x.d : s), 0)
 
-        const sumRange = (holdingMonthly, endY, endM, monthsBack) => {
-            let sum = 0
-            for (let i = 0; i < monthsBack; i++) {
-                let mo = endM - i, y = endY
-                if (mo < 0) { mo += 12; y -= 1 }
-                sum += holdingMonthly?.[y]?.[mo] || 0
-            }
-            return sum
-        }
-
-        const findLastKnownForMonth = (holdingMonthly, targetMonth, beforeYear) => {
-            const years = Object.keys(holdingMonthly).map(Number).sort((a, b) => b - a)
-            for (const y of years) {
-                if (y >= beforeYear) continue
-                const v = holdingMonthly[y]?.[targetMonth]
-                if (v > 0) return v
-            }
-            return 0
-        }
-
-        const MAX_GROWTH_FACTOR = 5    // Deckel nach oben (verhindert Explosion bei Kleinstbeträgen)
-        const MIN_GROWTH_FACTOR = 0.3  // Deckel nach unten (verhindert unrealistischen Totalausfall)
+        // Aktueller Bestand: bevorzugt von Parqet (splitbereinigt), sonst aus den eigenen Käufen/Verkäufen
+        const holdingShares = {}
+        ;[...(holdings || []), ...(enrichedHoldings || [])].forEach(p => {
+            const s = Number(p.shares)
+            if (!Number.isFinite(s)) return
+                ;[p.isin, p.id].filter(Boolean).forEach(k => { holdingShares[k] = s })
+        })
+        const sharesNow = (key) => (key in holdingShares ? holdingShares[key] : sharesAt(key, Infinity))
 
         const forecastH = {}
         const forecastM = {}
         ;[cy, cy + 1].forEach(ty => { forecastM[ty] = Array(12).fill(0) })
+        let base12 = 0, fc12 = 0   // nächste 12 Monate: ohne und mit Wachstum (für die Anzeige)
 
         Object.entries(h).forEach(([key, hh]) => {
-            // TTM der letzten bekannten 12 Monate vs. die 12 Monate davor (für diese EINE Position)
-            const ttmCurrent = sumRange(hh.monthly, cy, cm, 12)
-            const ttmPrevious = sumRange(hh.monthly, cy, cm - 12, 12)
+            // Dividende je Anteil pro Monat (Summe, falls mehrere Zahlungen im Monat)
+            const dpsAt = {}
+            ;(divPays[key] || []).forEach(p => {
+                const sh = p.shares > 0 ? p.shares : sharesAt(key, p.t)
+                if (sh > 0) dpsAt[p.idx] = (dpsAt[p.idx] || 0) + p.net / sh
+            })
 
-            let growthFactor = 1
-            if (ttmPrevious > 0 && ttmCurrent > 0) {
-                growthFactor = ttmCurrent / ttmPrevious
-                // Deckel anwenden, um Extremwerte abzufedern
-                growthFactor = Math.min(MAX_GROWTH_FACTOR, Math.max(MIN_GROWTH_FACTOR, growthFactor))
-            } else if (ttmPrevious === 0 && ttmCurrent > 0) {
-                // Komplett neue Position ohne Vorjahresbasis: kein künstliches Wachstum aufschlagen
-                growthFactor = 1
+            // Wachstum je Anteil: gleiche Zahlungsmonate, letzte 12 Monate gegen die 12 Monate davor
+            let sumNow = 0, sumPrev = 0
+            const base = Array(12).fill(0)   // letzte bekannte Dividende je Anteil pro Kalendermonat
+            for (let k = 0; k < 12; k++) {
+                const idx = nowIdx - k
+                const a = dpsAt[idx] || 0
+                const b = dpsAt[idx - 12] || 0
+                if (a > 0 && b > 0) { sumNow += a; sumPrev += b }
+                base[idx % 12] = a > 0 ? a : (k === 0 ? b : 0)   // laufender Monat noch offen: Vorjahr als Basis
             }
+            const growth = sumPrev > 0 ? Math.min(MAX_GROWTH, Math.max(MIN_GROWTH, sumNow / sumPrev)) : 1
 
+            const shares = sharesNow(key)
+            const held = shares > 0.000001
             const fMonthly = {}
+
             ;[cy, cy + 1].forEach(ty => {
                 fMonthly[ty] = Array(12).fill(0)
                 for (let i = 0; i < 12; i++) {
-                    let val = 0
-                    if (ty === cy && i <= cm) {
-                        // Vergangene Monate: Ist-Werte 1:1 übernehmen
-                        val = hh.monthly?.[cy]?.[i] || 0
+                    const actual = hh.monthly?.[ty]?.[i] || 0
+                    const isPast = ty === cy && i < cm
+                    const isNow = ty === cy && i === cm
+                    let val
+
+                    if (isPast || (isNow && actual > 0) || !held) {
+                        // Ist-Werte; verkaufte Positionen haben keine Prognose
+                        val = (ty === cy && i <= cm) ? actual : 0
                     } else {
-                        // Zukünftige Monate: Vorjahreswert * individueller Wachstumsfaktor
-                        const baseVal = hh.monthly?.[ty - 1]?.[i] || findLastKnownForMonth(hh.monthly, i, ty)
-                        val = baseVal * growthFactor
+                        const monthsAhead = (ty - cy) * 12 + (i - cm)
+                        const years = Math.max(1, Math.ceil(monthsAhead / 12))
+                        val = (base[i] || 0) * Math.pow(growth, years) * shares
+                        if (monthsAhead >= 1 && monthsAhead <= 12) {
+                            base12 += (base[i] || 0) * shares
+                            fc12 += val
+                        }
                     }
+
                     fMonthly[ty][i] = +val.toFixed(2)
                     forecastM[ty][i] = +((forecastM[ty][i] || 0) + val).toFixed(2)
                 }
             })
-            forecastH[key] = { ...hh, monthly: fMonthly, growthFactor: +growthFactor.toFixed(2) }
+            forecastH[key] = { ...hh, monthly: fMonthly, growthFactor: +growth.toFixed(3), sharesNow: shares }
         })
 
         // Kumulierte Prognose
@@ -215,16 +232,16 @@ export default function DividendDashboardView(props) {
             for (let i = 0; i < 12; i++) { running += (forecastM[ty][i] || 0); forecastC[ty][i] = +running.toFixed(2) }
         })
 
-        // forecast12m: Summe der nächsten 12 Monate ab dem Folgemonat
+        // Nächste 12 Monate ab dem Folgemonat
         let total = 0
         for (let i = 0; i < 12; i++) {
             const fm = (cm + 1 + i) % 12
             const fy = cy + Math.floor((cm + 1 + i) / 12)
             total += forecastM?.[fy]?.[fm] ?? 0
         }
-        const forecast12mLocal = { total: +total.toFixed(2), avg: +(total / 12).toFixed(2), net: +total.toFixed(2) }
+        const growthPct = base12 > 0 ? +(((fc12 / base12) - 1) * 100).toFixed(1) : null
+        const forecast12mLocal = { total: +total.toFixed(2), avg: +(total / 12).toFixed(2), net: +total.toFixed(2), growthPct }
 
-        // yoy exakt wie im Original
         const latest = rolling12m(m, cy, cm)
         const prevY = rolling12m(m, cy - 1, cm)
         const yoyLocal = (latest < 1 || prevY < 1) ? null : +((latest / prevY - 1) * 100).toFixed(1)
@@ -280,7 +297,9 @@ export default function DividendDashboardView(props) {
             '3y': buildKpiForRange('3y'),
         }
 
-        const liveVal = propCurrentValue > 0 ? propCurrentValue : totalBuy
+        const holdingsValue = (enrichedHoldings?.length ? enrichedHoldings : holdings || [])
+            .reduce((s, p) => s + (Number(p.value) || 0), 0)
+        const liveVal = propCurrentValue > 0 ? propCurrentValue : (holdingsValue > 0 ? holdingsValue : totalBuy)
 
         const dividendYieldLocal = {}
         ;['all', 'ytd', '12m', '3y'].forEach(r => {
@@ -302,7 +321,7 @@ export default function DividendDashboardView(props) {
             currentValue: liveVal, realTotal: realVal, inflation: nominalTotal - realVal,
             hasRealData: hasReal, hasRecords: Object.keys(m).length > 0,
         }
-    }, [hasPropData, dbActs, propCurrentValue, cy, cm])
+    }, [hasPropData, dbActs, propCurrentValue, cy, cm, holdings, enrichedHoldings])
 
     // ── EFFEKTIVE WERTE: Props haben IMMER Vorrang vor dem Fallback ───────────
     const monthly = hasPropData ? propMonthly : (fallback?.monthly || {})
@@ -455,7 +474,7 @@ export default function DividendDashboardView(props) {
                         return (growth >= 0 ? '+' : '') + growth.toFixed(1).replace('.', ',') + ' %';
                     })()}
                     color="#22c55e"
-                    sub="Prognose Gesamtjahr"
+                    sub={forecast12m?.growthPct != null ? `Dividendenwachstum je Anteil: ${forecast12m.growthPct >= 0 ? '+' : ''}${String(forecast12m.growthPct).replace('.', ',')} %` : 'Basierend auf Vorjahren'}
                 />
                 <KpiCard
                     label="Progn. Dividendenrendite"
