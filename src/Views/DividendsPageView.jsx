@@ -21,7 +21,7 @@ export default function DividendsPageView({
     const [dbLoading, setDbLoading] = useState(false)
 
     useEffect(() => {
-        if (page !== 'calendar' || Object.keys(monthly || {}).length > 0 || activities.length > 0) return
+        if (!['calendar', 'calculator', 'drip'].includes(page) || Object.keys(monthly || {}).length > 0 || activities.length > 0) return
 
         let cancelled = false
         setDbLoading(true)
@@ -51,7 +51,68 @@ export default function DividendsPageView({
         return hasManualDivs
     }, [monthly, effectiveActivities])
 
+    const manualPortfolioData = useMemo(() => {
+        if (effectiveActivities.length === 0) return null
+
+        const shares = {}
+        const cost = {}
+        const dividends = []
+        const dividendPerShare = {}
+
+        effectiveActivities
+            .slice()
+            .sort((a, b) => new Date(a.date || a.datetime || 0) - new Date(b.date || b.datetime || 0))
+            .forEach(activity => {
+                const type = String(activity.type || '').toLowerCase()
+                const key = activity.isin || activity.name || 'Unbekannt'
+                const quantity = Number(activity.shares) || 0
+                const amount = Number(activity.amountNet ?? activity.amount) || 0
+
+                if (['buy', 'transfer_in'].includes(type)) {
+                    shares[key] = (shares[key] || 0) + quantity
+                    cost[key] = (cost[key] || 0) + (type === 'buy' ? amount : 0)
+                } else if (['sell', 'transfer_out'].includes(type)) {
+                    shares[key] = Math.max(0, (shares[key] || 0) - quantity)
+                } else if (type === 'dividend') {
+                    const date = new Date(activity.date || activity.datetime || 0)
+                    if (!Number.isNaN(date.getTime())) {
+                        dividends.push({ date, amount })
+                        if (quantity > 0) {
+                            const month = date.getMonth()
+                            dividendPerShare[key] = { ...(dividendPerShare[key] || {}), [month]: amount / quantity }
+                        }
+                    }
+                }
+            })
+
+        const now = new Date()
+        const currentValue = Object.keys(shares).reduce((sum, key) => sum + (shares[key] || 0) * ((cost[key] || 0) / Math.max(shares[key] || 1, 1)), 0)
+        const since = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+        const totalDividendsNet = dividends
+            .filter(item => item.date >= since)
+            .reduce((sum, item) => sum + item.amount, 0)
+        let forecastDividend = 0
+        for (let offset = 1; offset <= 12; offset++) {
+            const month = (now.getMonth() + offset) % 12
+            Object.keys(shares).forEach(key => {
+                forecastDividend += (dividendPerShare[key]?.[month] || 0) * (shares[key] || 0)
+            })
+        }
+
+        const dividendYield = currentValue > 0 ? totalDividendsNet / currentValue : 0
+        return {
+            currentValue,
+            totalDividendsNet,
+            dividendYield,
+            forecastDividendYield: currentValue > 0 ? forecastDividend / currentValue : 0,
+            cagrTotal: 0,
+        }
+    }, [effectiveActivities])
+
     const safePortfolioData = useMemo(() => {
+        if (manualPortfolioData && (!portfolioData || portfolioData.currentValue <= 0)) {
+            return manualPortfolioData
+        }
         if (portfolioData && portfolioData.currentValue > 0) {
             return portfolioData
         }
@@ -75,10 +136,16 @@ export default function DividendsPageView({
             forecastDividendYield: portfolioData?.forecastDividendYield || divYield,
             cagrTotal: portfolioData?.cagrTotal || 0,
         }
-    }, [portfolioData, byHolding])
+    }, [portfolioData, byHolding, manualPortfolioData])
 
-    if (page === 'calculator') return <DividendCalculator portfolioData={safePortfolioData} />
-    if (page === 'drip')       return <DripSimulator portfolioData={safePortfolioData} />
+    if (page === 'calculator') {
+        if (dbLoading) return <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>Lade Rechnerdaten aus Supabase…</div>
+        return <DividendCalculator portfolioData={safePortfolioData} />
+    }
+    if (page === 'drip') {
+        if (dbLoading) return <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>Lade DRIP-Daten aus Supabase…</div>
+        return <DripSimulator portfolioData={safePortfolioData} />
+    }
 
     if (page === 'calendar') {
         return (
