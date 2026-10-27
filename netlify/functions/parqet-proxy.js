@@ -1,5 +1,5 @@
 // Erlaubte Origin – passe ggf. auf deine Netlify-URL an
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://dividend-dashboard.netlify.app'
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://karolbennardo.tech'
 
 function corsHeaders(requestOrigin) {
   // Im Entwicklungsmodus (localhost) alles erlauben, sonst nur ALLOWED_ORIGIN
