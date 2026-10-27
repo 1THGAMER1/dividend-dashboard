@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { handleCallback, isLoggedIn } from '../auth'
-import { groupByYearMonth, toCumulative, buildForecast, groupByHolding } from '../utils/dataUtils.js'
+import { groupByYearMonth, toCumulative, buildForecast, groupByHolding, formatAssetType } from '../utils/dataUtils.js'
 import {
     calcKpiFromActivities,
     fetchHoldingNames,
@@ -23,7 +23,7 @@ function applyParqetPositions(list, positions) {
             positions[item.isin] ||
             Object.entries(positions).find(([k]) => k.startsWith(item.isin) || item.isin?.startsWith(k))?.[1];
 
-        if (!pos) return item // Rückfall: eigene Berechnung aus Käufen/Verkäufen
+        if (!pos) return { ...item, type: formatAssetType(item.type || item.assetType || 'Aktie') }
         return {
             ...item,
             shares:       pos.shares,
@@ -32,6 +32,7 @@ function applyParqetPositions(list, positions) {
             realizedGain: pos.realizedGain,
             dividends:    pos.dividends ?? 0,
             logo:         pos.logo || item.logo,
+            type:         formatAssetType(item.type || item.assetType || 'Aktie'),
         }
     })
 }

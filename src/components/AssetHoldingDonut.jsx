@@ -79,6 +79,8 @@ export default function AssetHoldingDonut({ holdings = [], compact = false, onNa
                                 stroke="#161b27"
                                 strokeWidth={2}
                                 isAnimationActive={false}
+                                startAngle={90}
+                                endAngle={-270}
                             />
                         </PieChart>
                     </ResponsiveContainer>
@@ -178,6 +180,8 @@ const handleGoToXray = () => onNavigate?.('portfolio-xray')
                                 stroke="#161b27"
                                 strokeWidth={3}
                                 isAnimationActive={false}
+                                startAngle={90}
+                                endAngle={-270}
                             />
                         </PieChart>
                     </ResponsiveContainer>

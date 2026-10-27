@@ -566,22 +566,22 @@ export function sumCalendarEventsByMonth(events) {
 export function formatAssetType(rawType) {
   if (!rawType) return 'Aktie';
 
-  const t = rawType.toLowerCase();
+  const t = String(rawType).toLowerCase().replace(/[_\-\s]+/g, '');
 
-  if (t.includes('crypto') || t.includes('coin') || t.includes('token')) {
+  if (t.includes('crypto') || t.includes('krypto') || t.includes('coin') || t.includes('token') || t.includes('cryptocurrency')) {
     return 'Krypto';
   }
-  if (t.includes('etf') || t.includes('fund') || t.includes('fonds') || t.includes('mutualfund')) {
+  if (t.includes('etf') || t.includes('fund') || t.includes('fonds') || t.includes('mutualfund') || t.includes('indexfund')) {
     return 'ETF';
   }
-  if (t.includes('stock') || t.includes('equity') || t.includes('aktie')) {
+  if (t.includes('stock') || t.includes('equity') || t.includes('aktie') || t.includes('share') || t.includes('security') || t.includes('wertpapier') || t.includes('holding')) {
     return 'Aktie';
   }
-  if (t.includes('commodity') || t.includes('precious') || t.includes('gold')) {
+  if (t.includes('commodity') || t.includes('precious') || t.includes('gold') || t.includes('rohstoff')) {
     return 'Rohstoff';
   }
 
-  return 'Wertpapier';
+  return 'Aktie';
 }
 
 export function getAssetAllocation(enrichedHoldings, totalPortfolioValue = 0) {
@@ -589,8 +589,9 @@ export function getAssetAllocation(enrichedHoldings, totalPortfolioValue = 0) {
   let holdingsSum = 0
 
   for (const item of enrichedHoldings) {
-    if (item.shares <= 0) continue
-    const type = item.type || 'Aktie oder ETF'
+    if ((item.shares ?? 0) <= 0) continue
+    const rawType = item.type || item.assetType || 'Aktie oder ETF'
+    const type = formatAssetType(rawType)
     const val = item.value || 0
     allocation[type] = (allocation[type] || 0) + val
     holdingsSum += val
