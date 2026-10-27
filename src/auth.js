@@ -145,6 +145,12 @@ export async function handleCallback() {
   const clientId = await getClientId()
   const redirectUri = getRedirectUri()
 
+// TEMPORÄR ZUM DEBUGGEN:
+  console.log('🔍 DEBUG redirect_uri beim Token-Austausch:', redirectUri)
+  console.log('🔍 DEBUG aktuelle Browser-URL:', window.location.href)
+
+  if (!codeVerifier || !clientId) return false
+
   if (!codeVerifier || !clientId) return false
 
   const body = new URLSearchParams({
