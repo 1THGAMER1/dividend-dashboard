@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 import useDividendData from '../hooks/useDividendData'
 import { computePortfolioXRay } from '../utils/portfolioXray'
 import { loadEtfHoldingsMapFor } from '../utils/etfHoldingsStore'
-import { getClientId, saveClientId } from '../auth'
+import { getClientId, saveClientId, startOAuthFlow, isLoggedIn, disconnectParqet } from '../auth'
 
 const RANDOM_NAMES = [
     'DividendHero', 'ZinseszinsKing', 'CashflowCaptain', 'DividendenFuchs',
@@ -24,6 +24,7 @@ export default function ProfilePage({ appUser, onNavigate }) {
     const [message, setMessage] = useState(null)
     const [imgError, setImgError] = useState(false)
     const [existingToken, setexistingToken] = useState(null)
+    const [parqetConnected, setParqetConnected] = useState(false)
 
     // Community Ranking States
     const [participateRanking, setParticipateRanking] = useState(false)
@@ -40,6 +41,8 @@ export default function ProfilePage({ appUser, onNavigate }) {
         async function loadProfile() {
             if (!appUser) return
             try {
+                setParqetConnected(isLoggedIn())
+
                 const { data, error } = await supabase
                     .from('profiles')
                     .select('parqet_client_id, share_token, newsletter_active')
@@ -429,28 +432,80 @@ export default function ProfilePage({ appUser, onNavigate }) {
             {/* PARQET ANBINDUNG KARTE */}
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 24 }}>
                 <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    🔑 Parqet Client ID
+                    🔗 Parqet Anbindung
                 </h3>
                 <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#94a3b8' }}>
-                    Hinterlege hier deine Parqet Client ID, um dein Portfolio automatisch im Dashboard zu synchronisieren.
+                    Verbinde dein Parqet-Konto, um dein Portfolio automatisch zu synchronisieren.
                 </p>
 
-                <form onSubmit={handleSaveParqetId} style={{ display: 'flex', gap: 10 }}>
-                    <input
-                        type="text"
-                        placeholder="z.B. 60f7b1234a56789012345678"
-                        value={parqetId}
-                        onChange={(e) => setParqetId(e.target.value)}
-                        style={{ flex: 1, padding: '10px 14px', borderRadius: 8, border: '1px solid #2a3a50', background: '#0f1420', color: '#e0e6f0', fontSize: 14 }}
-                    />
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        style={{ background: loading ? '#1a2233' : '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: 8, padding: '0 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
-                    >
-                        {loading ? '⟳' : 'Speichern'}
-                    </button>
-                </form>
+                {parqetConnected ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ background: '#0a2d1a', border: '1px solid #14532d', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: 16 }}>✓</span>
+                            <span style={{ color: '#86efac', fontSize: 13, fontWeight: 600 }}>Parqet ist verbunden</span>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                await disconnectParqet()
+                                setParqetConnected(false)
+                                setMessage({ type: 'success', text: 'Parqet-Verbindung wurde getrennt.' })
+                            }}
+                            style={{ background: '#7f1d1d', color: '#fca5a5', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start' }}
+                        >
+                            Verbindung trennen
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <form onSubmit={handleSaveParqetId} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <label style={{ fontSize: 12, color: '#94a3b8' }}>Parqet Client ID:</label>
+                            <div style={{ display: 'flex', gap: 10 }}>
+                                <input
+                                    type="text"
+                                    placeholder="z.B. 60f7b1234a56789012345678"
+                                    value={parqetId}
+                                    onChange={(e) => setParqetId(e.target.value)}
+                                    style={{ flex: 1, padding: '10px 14px', borderRadius: 8, border: '1px solid #2a3a50', background: '#0f1420', color: '#e0e6f0', fontSize: 14 }}
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    style={{ background: loading ? '#1a2233' : '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: 8, padding: '0 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    {loading ? '⟳' : 'Speichern'}
+                                </button>
+                            </div>
+                        </form>
+
+                        <button
+                            onClick={() => {
+                                startOAuthFlow()
+                            }}
+                            disabled={!parqetId.trim()}
+                            style={{
+                                background: parqetId.trim() ? '#009991' : '#1a2233',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: 8,
+                                padding: '10px 20px',
+                                fontSize: 14,
+                                fontWeight: 600,
+                                cursor: parqetId.trim() ? 'pointer' : 'not-allowed',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8
+                            }}
+                        >
+                            <span>🔗</span>
+                            <span>Mit Parqet verbinden</span>
+                        </button>
+
+                        <div style={{ background: '#0f1420', border: '1px solid #1e2a3a', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#94a3b8' }}>
+                            💡 Trage zuerst deine Client ID ein und speichere sie. Danach kannst du dich mit Parqet verbinden.
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )

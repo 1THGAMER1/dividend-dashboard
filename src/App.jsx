@@ -327,30 +327,28 @@ export default function App() {
               <span>Aktivität</span>
             </button>
 
-            {loggedIn && (
-                <button
-                    onClick={handleManualRefresh}
-                    disabled={loading}
-                    title={error || "Parqet-Daten aktualisieren"}
-                    style={{
-                      background: refreshSuccess ? '#059669' : loading ? '#1a2233' : '#1e3a5f',
-                      border: `1px solid ${refreshSuccess ? '#10b981' : error ? '#ef4444' : '#3b82f6'}`,
-                      color: refreshSuccess ? '#ffffff' : error ? '#fca5a5' : '#93c5fd',
-                      padding: '5px 9px',
-                      borderRadius: 8,
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      transition: 'all 0.2s ease',
-                    }}
-                >
-                  <span>{loading ? '⏳' : refreshSuccess ? '✓' : '↻'}</span>
-                  {!isMobile && <span>{loading ? 'Lädt…' : refreshSuccess ? 'Aktuell' : 'Aktualisieren'}</span>}
-                </button>
-            )}
+            <button
+                onClick={handleManualRefresh}
+                disabled={loading}
+                title="Daten aus Supabase neu laden"
+                style={{
+                  background: refreshSuccess ? '#059669' : loading ? '#1a2233' : '#1e3a5f',
+                  border: `1px solid ${refreshSuccess ? '#10b981' : error ? '#ef4444' : '#3b82f6'}`,
+                  color: refreshSuccess ? '#ffffff' : error ? '#fca5a5' : '#93c5fd',
+                  padding: '5px 9px',
+                  borderRadius: 8,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  transition: 'all 0.2s ease',
+                }}
+            >
+              <span>{loading ? '⏳' : refreshSuccess ? '✓' : '↻'}</span>
+              {!isMobile && <span>{loading ? 'Lädt…' : refreshSuccess ? 'Aktuell' : 'Aktualisieren'}</span>}
+            </button>
 
             <div style={{ position: 'relative' }} ref={menuRef}>
               <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ background: '#1e2a3a', border: '1px solid #2a3a50', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, overflow: 'hidden' }}>

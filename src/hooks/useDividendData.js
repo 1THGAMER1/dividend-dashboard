@@ -402,8 +402,13 @@ export default function useDividendData() {
                 setCacheInfo(null)
                 setError(null)
             } catch (apiErr) {
+                const isTokenExpired = apiErr.message === 'PARQET_TOKEN_EXPIRED'
                 const isRateLimit = apiErr.message?.includes('429')
-                if (isRateLimit) {
+
+                if (isTokenExpired) {
+                    setError('⚠️ Parqet-Verbindung abgelaufen. Bitte gehe zu Profil → Parqet Anbindung und verbinde dich erneut.')
+                    setDataSource(null)
+                } else if (isRateLimit) {
                     const stale = await readStaleCache()
                     if (stale) {
                         applyData(stale.payload)

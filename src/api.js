@@ -83,7 +83,11 @@
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`API Fehler ${res.status}: ${path} ${body.slice(0, 200)}`)
+      // Spezielle Behandlung für 401-Fehler (ungültiges Token)
+    if (res.status === 401) {
+      throw new Error('PARQET_TOKEN_EXPIRED')
+    }
+    throw new Error(`API Fehler ${res.status}: ${path} ${body.slice(0, 200)}`)
     }
     return res.json()
   }
