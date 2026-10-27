@@ -125,9 +125,15 @@ export async function startOAuthFlow() {
     state: state,
   })
 
+  // ─── TEMPORÄRES DEBUGGING ───────────────────────────────────────
+  console.log('🔍 Verwendete Client-ID:', clientId)
+  console.log('🔍 Verwendete redirect_uri:', redirectUri)
+  console.log('🔍 Komplette Auth-URL:', url)
+  alert('Client-ID: ' + clientId + '\n\nRedirect URI: ' + redirectUri)
+  // ─────────────────────────────────────────────────────────────
+
   window.location.href = url
 }
-
 // 6. Callback nach Parqet Login
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
