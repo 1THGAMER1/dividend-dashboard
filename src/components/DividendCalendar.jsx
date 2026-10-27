@@ -32,7 +32,7 @@ export default function DividendCalendar({
     fetchAllDbActivities()
       .then(setDbActivities)
       .catch(error => {
-        console.warn('Fehler beim Laden der Kalenderdaten aus Supabase:', error.message)
+        console.warn('Fehler beim Laden der Kalenderdaten aus der Datenbank:', error.message)
         setDbActivities([])
       })
   }, [activities, monthly])

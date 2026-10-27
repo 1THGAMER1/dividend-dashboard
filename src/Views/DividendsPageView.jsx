@@ -30,7 +30,7 @@ export default function DividendsPageView({
                 if (!cancelled) setDbActivities(data || [])
             })
             .catch(fetchError => {
-                if (!cancelled) console.warn('Kalenderdaten aus Supabase konnten nicht geladen werden:', fetchError.message)
+                if (!cancelled) console.warn('Kalenderdaten aus der Datenbank konnten nicht geladen werden:', fetchError.message)
             })
             .finally(() => {
                 if (!cancelled) setDbLoading(false)
@@ -157,11 +157,11 @@ export default function DividendsPageView({
     }, [portfolioData, byHolding, manualPortfolioData])
 
     if (page === 'calculator') {
-        if (dbLoading) return <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>Lade Rechnerdaten aus Supabase…</div>
+        if (dbLoading) return <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>Lade Rechnerdaten…</div>
         return <DividendCalculator portfolioData={safePortfolioData} />
     }
     if (page === 'drip') {
-        if (dbLoading) return <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>Lade DRIP-Daten aus Supabase…</div>
+        if (dbLoading) return <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>Lade DRIP-Daten…</div>
         return <DripSimulator portfolioData={safePortfolioData} />
     }
 
@@ -179,7 +179,7 @@ export default function DividendsPageView({
 
                 {!hasDividendData && (loading || dbLoading) ? (
                     <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>
-                        Lade Kalenderdaten aus Supabase…
+                        Lade Kalenderdaten…
                     </div>
                 ) : !hasDividendData ? (
                     <EmptyStateView onRefresh={loadData} loading={loading} error={error} />

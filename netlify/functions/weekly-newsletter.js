@@ -263,7 +263,7 @@ export const handler = async function(event, context) {
             }
         )
         if (!profilesRes.ok) {
-            throw new Error(`Konnte Profile nicht aus Supabase laden: ${profilesRes.status}`)
+            throw new Error(`Konnte Profile nicht laden: ${profilesRes.status}`)
         }
         const profiles = await profilesRes.json()
 

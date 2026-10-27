@@ -354,7 +354,7 @@ export default function PortfolioPageView({
     return (
         <div>
             {page === 'portfolio-overview' && dbLoading && manualMode ? (
-                <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>Lade Bestände aus Supabase…</div>
+                <div style={{ color: '#7a8ba0', fontSize: 13, padding: 20 }}>Lade Bestände…</div>
             ) : page === 'portfolio-overview' && (
                 <>
                     <div style={{ marginBottom: 14 }}>

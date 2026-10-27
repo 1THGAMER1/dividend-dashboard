@@ -167,7 +167,7 @@ export default function ActivitiesView({ holdings = [], enrichedHoldings = [] })
     const shown = filtered.slice(0, visible)
 
     if (loading && rows.length === 0) {
-        return <div style={{ ...card, color: '#64748b', fontSize: 13 }}>Lade Aktivitäten aus Supabase…</div>
+        return <div style={{ ...card, color: '#64748b', fontSize: 13 }}>Lade Aktivitäten…</div>
     }
 
     return (

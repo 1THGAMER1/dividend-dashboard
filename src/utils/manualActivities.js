@@ -235,8 +235,6 @@ export function formatActivity(row) {
         currency: row.currency || 'EUR'
     }
 }
-
-// Lädt jetzt ALLES direkt und ausschließlich aus Supabase
 // Lädt ALLES aus Supabase, seitenweise (Supabase liefert pro Abfrage höchstens 1000 Zeilen)
 export async function fetchAllDbActivities() {
     const { data: { user } } = await supabase.auth.getUser()

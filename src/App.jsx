@@ -333,7 +333,7 @@ export default function App() {
             <button
                 onClick={handleManualRefresh}
                 disabled={loading}
-                title="Daten aus Supabase neu laden"
+                title="Daten neu laden"
                 style={{
                   background: refreshSuccess ? '#059669' : loading ? '#1a2233' : '#1e3a5f',
                   border: `1px solid ${refreshSuccess ? '#10b981' : error ? '#ef4444' : '#3b82f6'}`,
