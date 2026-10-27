@@ -156,51 +156,78 @@ export default function PortfolioDashboard({
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* 4 KPI-KARTEN OBEN */}
+            {/* GROSSE HERO KPI-CARD (RESPONSIV: PC NEBENEINANDER, HANDY UNTEREINANDER) */}
             <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 12rem), 1fr))',
-                gap: 10,
+                background: '#161b27',
+                border: '1px solid #1e2a3a',
+                borderRadius: 16,
+                padding: 'clamp(14px, 2.5vw, 24px)',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 20,
+                alignItems: 'center',
                 width: '100%',
                 boxSizing: 'border-box',
+                marginBottom: 20,
+                overflow: 'hidden'
             }}>
-                <KpiCard
-                    label="Aktive Positionen"
-                    value={activeHoldings.length.toString()}
-                    color="#a78bfa"
-                    sub="Assets im Depot"
-                />
-                <KpiCard
-                    label={range === 'MAX' ? "Kursgewinn" : "Kursgewinn Zeitraum"}
-                    value={`${periodUnrealized >= 0 ? '+' : ''}${fmt(periodUnrealized)}`}
-                    color={periodUnrealized >= 0 ? "#22c55e" : "#ef4444"}
-                    sub={range === 'MAX' ? "Unrealisiert" : `Zeitraum: ${range}`}
-                />
-                <KpiCard
-                    label={range === 'MAX' ? "Realisierter Gewinn" : "Realisiert Zeitraum"}
-                    value={`${periodRealized >= 0 ? '+' : ''}${fmt(periodRealized)}`}
-                    color={periodRealized >= 0 ? "#22c55e" : "#ef4444"}
-                    sub={range === 'MAX' ? "Teilverkäufe" : `Zeitraum: ${range}`}
-                />
-                <KpiCard
-                    label={range === 'MAX' ? "Dividenden" : "Dividenden Zeitraum"}
-                    value={periodDividends > 0 ? `+${fmt(periodDividends)}` : '0,00 €'}
-                    color="#22c55e"
-                    sub={range === 'MAX' ? "Erhalten" : `Zeitraum: ${range}`}
-                />
+                {/* Donut mit Gesamtwert */}
+                <div style={{
+                    flex: '1 1 16rem',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    minWidth: 0,
+                    width: '100%'
+                }}>
+                    <AssetHoldingDonut holdings={activeHoldings} compact={true} />
+                </div>
+                {/* Die 4 KPI-Karten: Synchron mit dem gewählten Zeitraum */}
+                <div style={{
+                    flex: '2 1 20rem',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 9rem), 1fr))',
+                    gap: 10,
+                    minWidth: 0,
+                }}>
+                    <KpiCard
+                        label="Aktive Positionen"
+                        value={activeHoldings.length.toString()}
+                        color="#a78bfa"
+                        sub="Assets im Depot"
+                    />
+                    <KpiCard
+                        label={range === 'MAX' ? "Kursgewinn" : "Kursgewinn Zeitraum"}
+                        value={`${periodUnrealized >= 0 ? '+' : ''}${fmt(periodUnrealized)}`}
+                        color={periodUnrealized >= 0 ? "#22c55e" : "#ef4444"}
+                        sub={range === 'MAX' ? "Unrealisiert" : `Zeitraum: ${range}`}
+                    />
+                    <KpiCard
+                        label={range === 'MAX' ? "Realisierter Gewinn" : "Realisiert Zeitraum"}
+                        value={`${periodRealized >= 0 ? '+' : ''}${fmt(periodRealized)}`}
+                        color={periodRealized >= 0 ? "#22c55e" : "#ef4444"}
+                        sub={range === 'MAX' ? "Teilverkäufe" : `Zeitraum: ${range}`}
+                    />
+                    <KpiCard
+                        label={range === 'MAX' ? "Dividenden" : "Dividenden Zeitraum"}
+                        value={periodDividends > 0 ? `+${fmt(periodDividends)}` : '0,00 €'}
+                        color="#22c55e"
+                        sub={range === 'MAX' ? "Erhalten" : `Zeitraum: ${range}`}
+                    />
+                </div>
             </div>
 
-            {/* 2 CHARTS + PIE: PC 3-SPALTEN (CHART | CHART | PIE), HANDY UNTEREINANDER */}
+            {/* 2 CHARTS: PC NEBENEINANDER, HANDY UNTEREINANDER */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 380px), 1fr))',
                 gap: 16,
                 width: '100%',
                 boxSizing: 'border-box',
                 marginBottom: 24,
                 alignItems: 'stretch'
             }}>
-                {/* Chart 1: Portfolio-Wert in Euro / Drawdown */}
+                {/* Linker Chart: Portfolio-Wert in Euro / Drawdown */}
                 <PortfolioPerformanceChart
                     series={performanceSeries}
                     range={range}
@@ -209,7 +236,7 @@ export default function PortfolioDashboard({
                     forcedMode="value"
                 />
 
-                {/* Chart 2: Rendite in % */}
+                {/* Rechter Chart: Rendite in % */}
                 <PortfolioPerformanceChart
                     series={performanceSeries}
                     range={range}
@@ -217,20 +244,6 @@ export default function PortfolioDashboard({
                     portfolioPerformance={portfolioPerfByRange[range]}
                     forcedMode="return"
                 />
-
-                {/* Pie Chart */}
-                <div style={{
-                    background: '#161b27',
-                    border: '1px solid #1e2a3a',
-                    borderRadius: 16,
-                    padding: 'clamp(14px, 2.5vw, 24px)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    minHeight: 300
-                }}>
-                    <AssetHoldingDonut holdings={activeHoldings} compact={true} />
-                </div>
             </div>
 
             {/* AKTIVE BESTÄNDE MIT SORTIERLEISTE (Clean ohne doppelte Umrahmung) */}
