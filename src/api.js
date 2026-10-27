@@ -49,12 +49,13 @@
     _portfolioId = (data.items || data.portfolios || [])[0]?.id
     return _portfolioId
   }
-  
+
   async function request(path, options = {}) {
     const token = await getAccessToken()
     if (!token) throw new Error('Nicht eingeloggt')
     const res = await fetch(BASE + path, {
       ...options,
+      cache: 'no-store', // Verhindert, dass der Browser alte Account-Daten aus dem HTTP-Cache liefert
       headers: {
         Authorization:  `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -592,6 +593,14 @@
       gu: p.gu != null ? +p.gu.toFixed(2) : null,
       dd: p.dd != null ? +p.dd.toFixed(2) : null,
     }))
+  }
+
+  // Setzt alle account-/portfolio-spezifischen Caches zurück (bei Logout / Account-Wechsel)
+  export function resetApiCaches() {
+    _portfolioId = null
+    historyCache.clear()
+    stockDetailsCache.clear()
+    invalidateKnownAssets()
   }
   // Aktuelle Positionen aus der Performance-Antwort (Splits sind von Parqet schon eingerechnet)
   function extractPositions(data) {

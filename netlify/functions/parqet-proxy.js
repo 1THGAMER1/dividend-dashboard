@@ -69,6 +69,7 @@ export default async (request, context) => {
 
     const responseHeaders = new Headers()
     responseHeaders.set('content-type', response.headers.get('content-type') || 'application/json')
+    responseHeaders.set('cache-control', 'no-store')
     Object.entries(CORS).forEach(([k, v]) => responseHeaders.set(k, v))
 
     return new Response(body, {

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { resetApiCaches } from './api'
 
 const PARQET_AUTH_DIRECT = 'https://connect.parqet.com'
 // Die Edge Function lauscht direkt auf /oauth/token und /api/*, NICHT unter /.netlify/functions/...
@@ -100,6 +101,14 @@ async function generateCodeChallenge(verifier) {
 
 // 5. OAuth-Flow starten
 export async function startOAuthFlow() {
+  // Sicherheits-Reset: Verhindert, dass alte Tokens/Caches eines anderen
+  // Parqet-Accounts das Ergebnis des neuen Logins verfälschen.
+  sessionStorage.removeItem('parqet_access_token')
+  localStorage.removeItem('parqet_access_token')
+  localStorage.removeItem('parqet_refresh_token')
+  clearCachedClientId()
+  resetApiCaches()
+
   const clientId = await getClientId()
   if (!clientId) {
     alert('Bitte zuerst die Parqet Client-ID in den Einstellungen eintragen.')
@@ -125,15 +134,9 @@ export async function startOAuthFlow() {
     state: state,
   })
 
-  // ─── TEMPORÄRES DEBUGGING ───────────────────────────────────────
-  console.log('🔍 Verwendete Client-ID:', clientId)
-  console.log('🔍 Verwendete redirect_uri:', redirectUri)
-  console.log('🔍 Komplette Auth-URL:', url)
-  alert('Client-ID: ' + clientId + '\n\nRedirect URI: ' + redirectUri)
-  // ─────────────────────────────────────────────────────────────
-
   window.location.href = url
 }
+
 // 6. Callback nach Parqet Login
 export async function handleCallback() {
   const params = new URLSearchParams(window.location.search)
@@ -274,9 +277,11 @@ export async function getAccessToken() {
 
   return null
 }
-
-// 8. Logout
+// 8. Logout (jetzt mit Supabase-Cache-Bereinigung)
 export async function logout() {
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Lokale Speicher vollständig leeren
   sessionStorage.removeItem('parqet_access_token')
   sessionStorage.removeItem('parqet_code_verifier')
   sessionStorage.removeItem('parqet_oauth_state')
@@ -284,12 +289,21 @@ export async function logout() {
   localStorage.removeItem('parqet_refresh_token')
   localStorage.removeItem('skip_parqet')
   clearCachedClientId()
+  resetApiCaches()
+
+  if (user) {
+    try {
+      await supabase.from('parqet_cache').delete().eq('user_id', user.id)
+    } catch (err) {
+      console.warn('Konnte parqet_cache nicht bereinigen:', err)
+    }
+  }
 
   await supabase.auth.signOut()
   window.location.href = '/'
 }
 
-// 9. Parqet trennen
+// 9. Parqet trennen (ebenfalls mit Cache-Bereinigung)
 export async function disconnectParqet() {
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
@@ -297,8 +311,15 @@ export async function disconnectParqet() {
         .from('profiles')
         .update({ parqet_refresh_token: null, parqet_client_id: null })
         .eq('id', user.id)
+    try {
+      await supabase.from('parqet_cache').delete().eq('user_id', user.id)
+    } catch (err) {
+      console.warn('Konnte parqet_cache nicht bereinigen:', err)
+    }
   }
   sessionStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_access_token')
   localStorage.removeItem('parqet_refresh_token')
+  clearCachedClientId()
+  resetApiCaches()
 }
