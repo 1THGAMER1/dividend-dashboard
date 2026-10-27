@@ -42,12 +42,31 @@
   function emitProgress(done, total, label) {
     _onTickerProgress?.({ done, total, label })
   }
-  
+
+  let _portfolioIdPromise = null
+
   export async function getPortfolioId() {
     if (_portfolioId) return _portfolioId
-    const data = await request('/portfolios')
-    _portfolioId = (data.items || data.portfolios || [])[0]?.id
-    return _portfolioId
+    if (!_portfolioIdPromise) {
+      _portfolioIdPromise = (async () => {
+        // 1. Gespeicherte ID aus dem Profil (nur wenn sie wie eine Portfolio-ID aussieht)
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data } = await supabase.from('profiles').select('parqet_client_id').eq('id', user.id).maybeSingle()
+            const id = String(data?.parqet_client_id || '').trim()
+            if (/^[a-f0-9]{24}$/i.test(id)) { _portfolioId = id; return id }
+          }
+        } catch { /* weiter mit der Liste */ }
+
+        // 2. Liste der freigegebenen Portfolios
+        const data = await request('/portfolios')
+        const list = Array.isArray(data) ? data : (data.items || data.portfolios || [])
+        _portfolioId = list[0]?.id
+        return _portfolioId
+      })().catch(err => { _portfolioIdPromise = null; throw err })
+    }
+    return _portfolioIdPromise
   }
 
   async function request(path, options = {}) {
