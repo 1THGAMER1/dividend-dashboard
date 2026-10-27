@@ -303,10 +303,12 @@ export default function App() {
                 </button>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            <span className="desktop-only-timestamp" style={{ fontSize: 11, color: error ? '#fca5a5' : '#7a8ba0', whiteSpace: 'nowrap' }}>
-              {error ? `⚠️ ${error}` : (loggedIn ? 'Parqet aktiv' : 'Modus: Manuell')}
-            </span>
+          <div style={{ display: 'flex', gap: isMobile ? 4 : 8, alignItems: 'center', flexShrink: 0 }}>
+            {!isMobile && (
+              <span className="desktop-only-timestamp" style={{ fontSize: 11, color: error ? '#fca5a5' : '#7a8ba0', whiteSpace: 'nowrap' }}>
+                {error ? `⚠️ ${error}` : (loggedIn ? 'Parqet aktiv' : 'Modus: Manuell')}
+              </span>
+            )}
             <button
                 onClick={() => setShowAddActivity(true)}
                 style={{
@@ -314,17 +316,18 @@ export default function App() {
                   color: '#fff',
                   border: 'none',
                   borderRadius: 8,
-                  padding: '6px 12px',
+                  padding: isMobile ? '6px 8px' : '6px 12px',
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 5
+                  gap: isMobile ? 3 : 5,
+                  whiteSpace: 'nowrap'
                 }}
             >
               <span>+</span>
-              <span>Aktivität</span>
+              {!isMobile && <span>Aktivität</span>}
             </button>
 
             <button
@@ -335,7 +338,7 @@ export default function App() {
                   background: refreshSuccess ? '#059669' : loading ? '#1a2233' : '#1e3a5f',
                   border: `1px solid ${refreshSuccess ? '#10b981' : error ? '#ef4444' : '#3b82f6'}`,
                   color: refreshSuccess ? '#ffffff' : error ? '#fca5a5' : '#93c5fd',
-                  padding: '5px 9px',
+                  padding: isMobile ? '5px 8px' : '5px 9px',
                   borderRadius: 8,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   fontSize: 12,
@@ -347,7 +350,6 @@ export default function App() {
                 }}
             >
               <span>{loading ? '⏳' : refreshSuccess ? '✓' : '↻'}</span>
-              {!isMobile && <span>{loading ? 'Lädt…' : refreshSuccess ? 'Aktuell' : 'Aktualisieren'}</span>}
             </button>
 
             <div style={{ position: 'relative' }} ref={menuRef}>

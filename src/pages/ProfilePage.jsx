@@ -4,6 +4,7 @@ import useDividendData from '../hooks/useDividendData'
 import { computePortfolioXRay } from '../utils/portfolioXray'
 import { loadEtfHoldingsMapFor } from '../utils/etfHoldingsStore'
 import { getClientId, saveClientId, startOAuthFlow, isLoggedIn, disconnectParqet } from '../auth'
+import { syncParqetToSupabase } from '../utils/manualActivities'
 
 const RANDOM_NAMES = [
     'DividendHero', 'ZinseszinsKing', 'CashflowCaptain', 'DividendenFuchs',
@@ -25,6 +26,7 @@ export default function ProfilePage({ appUser, onNavigate }) {
     const [imgError, setImgError] = useState(false)
     const [existingToken, setexistingToken] = useState(null)
     const [parqetConnected, setParqetConnected] = useState(false)
+    const [loadingParqetData, setLoadingParqetData] = useState(false)
 
     // Community Ranking States
     const [participateRanking, setParticipateRanking] = useState(false)
@@ -444,13 +446,48 @@ export default function ProfilePage({ appUser, onNavigate }) {
                             <span style={{ fontSize: 16 }}>✓</span>
                             <span style={{ color: '#86efac', fontSize: 13, fontWeight: 600 }}>Parqet ist verbunden</span>
                         </div>
+
+                        <button
+                            onClick={async () => {
+                                setLoadingParqetData(true)
+                                setMessage(null)
+                                try {
+                                    await syncParqetToSupabase()
+                                    setMessage({ type: 'success', text: 'Parqet-Daten erfolgreich in Supabase importiert!' })
+                                } catch (err) {
+                                    setMessage({ type: 'error', text: 'Fehler beim Import: ' + err.message })
+                                } finally {
+                                    setLoadingParqetData(false)
+                                }
+                            }}
+                            disabled={loadingParqetData}
+                            style={{
+                                background: loadingParqetData ? '#1a2233' : '#009991',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: 8,
+                                padding: '10px 20px',
+                                fontSize: 14,
+                                fontWeight: 600,
+                                cursor: loadingParqetData ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8,
+                                alignSelf: 'flex-start'
+                            }}
+                        >
+                            <span>{loadingParqetData ? '⏳' : '⚡'}</span>
+                            <span>{loadingParqetData ? 'Importiere...' : 'Parqet-Daten jetzt laden'}</span>
+                        </button>
+
                         <button
                             onClick={async () => {
                                 await disconnectParqet()
                                 setParqetConnected(false)
                                 setMessage({ type: 'success', text: 'Parqet-Verbindung wurde getrennt.' })
                             }}
-                            style={{ background: '#7f1d1d', color: '#fca5a5', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start' }}
+                            style={{ background: 'transparent', color: '#fca5a5', border: '1px solid #7f1d1d', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start' }}
                         >
                             Verbindung trennen
                         </button>
