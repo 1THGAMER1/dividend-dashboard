@@ -7,18 +7,29 @@ const MONTHS_SHORT = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Ok
 
 const typeLabel = (type, name = '') => {
     const n = (name || '').toUpperCase()
+    const t = (type || '').toLowerCase()
+
+    // Prüfe ob es Krypto ist (Name oder Type)
+    if (t.includes('crypto') || t.includes('krypto') || t.includes('coin') || t.includes('token')) return 'Krypto'
+    if (['ADA','BTC','ETH','SOL','DOGE', 'BONK', 'AVAX', 'ATOM', 'KSM', 'LTC', 'GRT', 'XRP', 'DOT', 'LINK', 'MATIC', 'BNB', 'USDT', 'USDC'].some(s => n.includes(s))) return 'Krypto'
+
+    // Prüfe ob es ETF ist
     if (n.endsWith('ETF') || n.includes('UCITS') || n.includes('INDEX FUND')) return 'ETF'
-    if (type === 'crypto' || ['ADA','BTC','ETH','SOL','DOGE', 'BONK', 'AVAX', 'ATOM', 'KSM', 'LTC', 'GRT'].some(s => n.includes(s))) return 'Crypto'
-    if (type === 'etf')      return 'ETF'
-    if (type === 'security') return 'Aktie'
-    if (type === 'fund')     return 'Fonds'
+    if (t === 'etf') return 'ETF'
+
+    // Parqet-Typen (englisch) zu Deutsch
+    if (t === 'security' || t === 'stock' || t === 'equity') return 'Aktie'
+    if (t === 'fund' || t === 'mutualfund') return 'Fonds'
+
+    // Default
     return 'Aktie'
 }
 
 const typeColor = label => {
     if (label === 'ETF')    return { bg: '#1e3a5f', color: '#60a5fa' }
     if (label === 'Aktie')  return { bg: '#2e1b5e', color: '#a78bfa' }
-    if (label === 'Crypto') return { bg: '#1e3a2e', color: '#34d399' }
+    if (label === 'Krypto') return { bg: '#1e3a2e', color: '#34d399' }
+    if (label === 'Fonds')  return { bg: '#2e2a1b', color: '#facc15' }
     return                         { bg: '#2e2a1b', color: '#facc15' }
 }
 
