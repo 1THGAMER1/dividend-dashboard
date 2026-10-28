@@ -3,6 +3,14 @@ import HoldingPriceChart from './HoldingPriceChart.jsx'
 import { etfKeyFor, loadCatalog, loadMySubmissions } from '../utils/etfHoldingsStore'
 import { isEtfName, normalizeName, sameCompany } from '../utils/portfolioXray'
 
+const KNOWN_CRYPTO = ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'MATIC', 'BNB', 'USDT', 'USDC']
+
+const isCryptoHolding = (h) => {
+    const type = String(h?.type || '')
+    const symbolOrIsin = String(h?.isin || h?.id || '').toUpperCase()
+    return /crypto|krypto|coin|token/i.test(type) || KNOWN_CRYPTO.includes(symbolOrIsin)
+}
+
 const fmt = (n) => {
     const val = Number(n || 0)
     return new Intl.NumberFormat('de-DE', {
@@ -38,7 +46,7 @@ export default function HoldingDetailModal({
     const sharesNum = parseFloat(holding.shares) || 0
     const isSold = sharesNum <= 0
     const val = holding.value || 0
-    const isNonEquity = /krypto|crypto|coin|commodity|rohstoff|cash|bargeld/i.test(String(holding.type || ''))
+    const isNonEquity = isCryptoHolding(holding) || /commodity|rohstoff|cash|bargeld/i.test(String(holding.type || ''))
     const myEtfs = useMemo(() => {
         return (allHoldings || []).filter(h => {
             const shares = parseFloat(h.shares) || 0
@@ -363,8 +371,8 @@ export default function HoldingDetailModal({
                     {tab === 'overview' && (
                         <>
                             <HoldingPriceChart
-                                symbol={/krypto|crypto/i.test(holding.type || '')
-                                    ? `${String(holding.isin || '').toUpperCase()}-EUR`
+                                symbol={isCryptoHolding(holding)
+                                    ? `${String(holding.isin || holding.id || '').toUpperCase()}-EUR`
                                     : (holding.isin || holding.id)}
                                 activities={allActivities}
                             />

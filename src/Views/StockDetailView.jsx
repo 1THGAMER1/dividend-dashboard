@@ -11,6 +11,7 @@ const RANGES = [
     { id: '3Y', label: '3J', months: 36 },
     { id: 'MAX', label: 'Max', months: null },
 ]
+const KNOWN_CRYPTO = ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'MATIC', 'BNB', 'USDT', 'USDC']
 
 const fmtEur = (n) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n || 0)
@@ -78,7 +79,8 @@ export default function StockDetailView({
     const assetKind = useMemo(() => {
         const t = (stock?.type || '').toLowerCase()
         const n = (stock?.name || '').toLowerCase()
-        if (t.includes('crypto') || t.includes('krypto') || isin.includes('BTC') || isin.includes('ETH')) {
+        const symbolUpper = isin.replace('-EUR', '').toUpperCase()
+        if (/crypto|krypto|coin|token/.test(t) || KNOWN_CRYPTO.includes(symbolUpper)) {
             return 'CRYPTO'
         }
         if (t.includes('etf') || t.includes('fonds') || isEtfName(n)) {
@@ -182,7 +184,7 @@ export default function StockDetailView({
         const activityKeys = [
             a.asset?.isin, a.asset?.symbol, a.holdingId, a.isin, a.asset_isin,
         ].map(normalizeKey).filter(Boolean)
-        const stockKeys = [isin, stock.id, stock.name].map(normalizeKey).filter(Boolean)
+        const stockKeys = [isin, stock.id, stock.holdingId, stock.name].map(normalizeKey).filter(Boolean)
         return activityKeys.some(key => stockKeys.includes(key))
     }
     const myBuys = (buyActs || []).filter(isMyAct).map(a => ({ ...a, _type: 'BUY' }))
@@ -520,7 +522,7 @@ export default function StockDetailView({
                                 <div>
                                     <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{item.etfName}</div>
                                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                                        Gewichtung: <strong style={{ color: '#94a3b8' }}>{fmtPct(item.weight)}</strong>
+                                        Gewichtung: <strong style={{ color: '#94a3b8' }}>{item.weight.toFixed(2).replace('.', ',')} %</strong>
                                     </div>
                                 </div>
                                 <div style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8' }}>
@@ -581,7 +583,7 @@ export default function StockDetailView({
                             })}
                         </div>
 
-                        {allActivities.length > 10 && (
+                        {allActivities.length > 5 && (
                             <button
                                 onClick={() => setShowAllActivities(v => !v)}
                                 style={{
