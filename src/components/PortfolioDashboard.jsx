@@ -103,7 +103,13 @@ export default function PortfolioDashboard({
 
     const getShares = (item) => parseFloat(item.shares) || 0
 
-    const rawActiveHoldings = (holdings || []).filter(h => (h.shares || 0) > 0.0001 && (h.value || 0) > 0)
+    const rawActiveHoldings = (holdings || [])
+        .filter(h => (h.shares || 0) > 0.0001)
+        .map(h => {
+            const hasLiveValue = (h.value || 0) > 0
+            return hasLiveValue ? h : { ...h, value: h.costValue || 0 }
+        })
+        .filter(h => (h.value || 0) > 0)
 
     // activeHoldings MUSS VOR periodRealized / periodDividends stehen:
     const activeHoldings = useMemo(() => {

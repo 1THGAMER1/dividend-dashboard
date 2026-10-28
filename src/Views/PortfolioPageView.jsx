@@ -157,18 +157,30 @@ export default function PortfolioPageView({
         })
 
         return Object.values(result).map(item => {
-            const price = Number(manualPrices[item.isin]) || Number(manualPrices[item.name]) || 0
+            // ── EINHEITLICHE PREIS-PRIORITÄT (identisch zur Logik im Performance-Chart) ──
+            // 1. Bevorzugt: letzter Schlusskurs aus manualHistories (dieselbe Quelle wie der Chart!)
+            // 2. Fallback: manualPrices (fetchCurrentPrice)
+            // 3. Letzter Fallback: Einstandswert
+            const histEntry = manualHistories[item.isin] || manualHistories[item.name]
+            const histRows = histEntry?.history
+            const lastHistPrice = Array.isArray(histRows) && histRows.length > 0
+                ? Number(histRows[histRows.length - 1]?.close) || 0
+                : 0
+
+            const directPrice = Number(manualPrices[item.isin]) || Number(manualPrices[item.name]) || 0
+            const price = lastHistPrice > 0 ? lastHistPrice : directPrice
+
             const value = price > 0 ? item.shares * price : item.costValue
             return {
-            ...item,
-            shares: +item.shares.toFixed(6),
-            value: +value.toFixed(2),
-            costValue: +item.costValue.toFixed(2),
-            realizedGain: +item.realizedGain.toFixed(2),
-            dividends: +item.dividends.toFixed(2),
+                ...item,
+                shares: +item.shares.toFixed(6),
+                value: +value.toFixed(2),
+                costValue: +item.costValue.toFixed(2),
+                realizedGain: +item.realizedGain.toFixed(2),
+                dividends: +item.dividends.toFixed(2),
             }
         }).filter(item => item.shares > 0.000001 || item.dividends > 0 || item.realizedGain !== 0)
-    }, [dbActivities, manualPrices])
+    }, [dbActivities, manualPrices, manualHistories])
 
     const manualMode = !enrichedHoldings?.length && !holdings?.length
     const activeHoldings = enrichedHoldings?.length ? enrichedHoldings : holdings?.length ? holdings : manualHoldings
