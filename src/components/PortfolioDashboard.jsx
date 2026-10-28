@@ -180,7 +180,7 @@ export default function PortfolioDashboard({
                     minWidth: 0,
                     width: '100%'
                 }}>
-                    <AssetHoldingDonut holdings={activeHoldings} compact={true} />
+                    <AssetHoldingDonut holdings={activeHoldings} currentValue={currentValue} compact={true} />
                 </div>
                 {/* Die 4 KPI-Karten: Synchron mit dem gewählten Zeitraum */}
                 <div style={{

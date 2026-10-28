@@ -8,29 +8,36 @@ const COLORS = [
 ]
 const fmtVal = n => (+n).toFixed(2).replace('.', ',') + ' €'
 
-export default function AssetHoldingDonut({ holdings = [], compact = false, onNavigate }) {
+export default function AssetHoldingDonut({ holdings = [], currentValue = 0, compact = false, onNavigate }) {
+    // Aktive Positionen mit Marktwert (Zahlen erzwingen: Strings würden sich beim Addieren aneinanderhängen)
     const activeHoldings = useMemo(() => {
         return (holdings || [])
-            .filter(item => (item.shares || 0) > 0.000001 && (item.value || 0) > 0)
             .map(item => ({
                 name: item.name || item.isin,
-                value: item.value || 0
+                value: Number(item.value) || 0,
+                shares: parseFloat(item.shares) || 0,
             }))
+            .filter(item => item.shares > 0.000001 && item.value > 0)
+            .map(({ name, value }) => ({ name, value }))
             .sort((a, b) => b.value - a.value)
     }, [holdings])
 
-    const totalValue = useMemo(() => {
-        return activeHoldings.reduce((sum, item) => sum + item.value, 0)
-    }, [activeHoldings])
+    const holdingsSum = useMemo(
+        () => activeHoldings.reduce((sum, item) => sum + item.value, 0),
+        [activeHoldings]
+    )
+
+    // Gesamtwert des Depots inkl. Guthaben (Dividenden, Verkaufserlöse, Verrechnungskonto), falls bekannt
+    const cash = Number(currentValue) > holdingsSum + 0.5 ? Number(currentValue) - holdingsSum : 0
+    const totalValue = holdingsSum + cash
 
     const coloredData = useMemo(() => {
-        return activeHoldings.map((item, index) => ({
-            ...item,
-            fill: COLORS[index % COLORS.length]
-        }))
-    }, [activeHoldings])
+        const list = activeHoldings.map((item, index) => ({ ...item, fill: COLORS[index % COLORS.length] }))
+        if (cash > 0) list.push({ name: 'Cash / Sonstiges', value: +cash.toFixed(2), fill: '#64748b' })
+        return list
+    }, [activeHoldings, cash])
 
-    if (!activeHoldings || activeHoldings.length === 0) {
+    if (activeHoldings.length === 0 && cash <= 0) {
         return (
             <div style={{ background: '#161b27', border: '1px solid #1e2a3a', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b', height: '100%', boxSizing: 'border-box' }}>
                 Keine aktiven Positionen verfügbar
