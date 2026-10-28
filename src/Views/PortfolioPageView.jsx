@@ -7,7 +7,7 @@ import HoldingDetailModal from "../components/HoldingDetailModal.jsx"
 import StockDetailView from './StockDetailView.jsx'
 import ActivitiesView from './ActivitiesView.jsx'
 import { fetchAllDbActivities } from '../utils/manualActivities'
-import { fetchCurrentPrice, fetchHoldingHistory, fetchYahooDividendsForHoldings } from '../api.js'
+import { fetchCurrentPrice, fetchHoldingHistory } from '../api.js'
 
 const KNOWN_CRYPTO = ['BTC', 'ETH', 'SOL', 'DOGE', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'MATIC', 'BNB', 'USDT', 'USDC']
 const FUND_BUYS_FROM_CASH = true
@@ -68,23 +68,16 @@ export default function PortfolioPageView({
     useEffect(() => {
         if (dbActivities.length === 0) return
 
-        // Dieselbe Preisermittlung wie im Parqet-Modus: Euro-Börsen, Krypto über CoinMarketCap
-        const tickers = {}
-        const types = {}
-        dbActivities
-            .filter(a => ['buy', 'transfer_in'].includes(String(a.type || '').toLowerCase()))
-            .forEach(a => {
-                const k = a.isin || a.name
-                if (k) { tickers[k] = k; types[k] = a.assetType || '' }
-            })
-
+        const keys = [...new Set(
+            dbActivities
+                .filter(activity => ['buy', 'transfer_in'].includes(String(activity.type || '').toLowerCase()))
+                .map(activity => activity.isin || activity.name)
+                .filter(Boolean)
+        )]
         let cancelled = false
-        fetchYahooDividendsForHoldings(tickers, types)
-            .then(map => {
-                if (cancelled) return
-                setManualPrices(Object.fromEntries(
-                    Object.entries(map).map(([k, v]) => [k, v?.price]).filter(([, p]) => p > 0)
-                ))
+        Promise.all(keys.map(async key => [key, await fetchCurrentPrice(key)]))
+            .then(entries => {
+                if (!cancelled) setManualPrices(Object.fromEntries(entries.filter(([, price]) => price > 0)))
             })
             .catch(error => console.warn('Manuelle Kurse konnten nicht geladen werden:', error.message))
 
