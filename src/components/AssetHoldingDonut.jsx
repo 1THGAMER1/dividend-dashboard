@@ -27,10 +27,12 @@ export default function AssetHoldingDonut({ holdings = [], currentValue = 0, com
         [activeHoldings]
     )
 
-    // Gesamtwert des Depots inkl. Guthaben (Dividenden, Verkaufserlöse, Verrechnungskonto), falls bekannt
-    const cash = Number(currentValue) > holdingsSum + 0.5 ? Number(currentValue) - holdingsSum : 0
-    const totalValue = holdingsSum + cash
-
+    // Übergebener Gesamtwert (Chart-Wert), der Rest über den Positionen ist Guthaben/Sonstiges
+    const given = Number(currentValue) || 0
+    const cash = given > holdingsSum + 0.5 ? given - holdingsSum : 0
+    const totalValue = holdingsSum + cash                  // Basis für die Prozente
+    const shownTotal = given > 0 ? given : totalValue      // Zahl in der Mitte: genau der übergebene Wert
+    console.log('Donut: ', {holdingsSum, currentValue, shownTotal})
     const coloredData = useMemo(() => {
         const list = activeHoldings.map((item, index) => ({ ...item, fill: COLORS[index % COLORS.length] }))
         if (cash > 0) list.push({ name: 'Cash / Sonstiges', value: +cash.toFixed(2), fill: '#64748b' })
@@ -45,7 +47,7 @@ export default function AssetHoldingDonut({ holdings = [], currentValue = 0, com
         )
     }
 
-    const eurTotal = Math.round(totalValue).toLocaleString('de-DE') + ' €'
+    const eurTotal = Math.round(shownTotal).toLocaleString('de-DE') + ' €'
 
     // 1. KOMPAKTE ANSICHT (für die große Dashboard-Karte)
     if (compact) {
@@ -202,7 +204,7 @@ const handleGoToXray = () => onNavigate?.('portfolio-xray')
                         pointerEvents: 'none'
                     }}>
                         <div style={{ fontSize: 12, color: '#7a8ba0', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Gesamtwert</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', marginTop: 2 }}>{fmtVal(totalValue)}</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: '#e0e6f0', marginTop: 2 }}>{fmtVal(shownTotal)}</div>
                     </div>
                 </div>
 

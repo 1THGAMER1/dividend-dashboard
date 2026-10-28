@@ -333,6 +333,8 @@ export default function PortfolioPageView({
     // Im manuellen Modus gehört das Guthaben (Dividenden, Verkaufserlöse) zum Gesamtwert, wie bei Parqet
     const manualCash = manualMode ? Math.max(0, manualPerformanceSeries.at(-1)?.k ?? 0) : 0
     const displayValue = manualMode ? manualValue + manualCash : (currentValue > 0 ? currentValue : manualValue)
+    const seriesValue = Number(effectivePerformanceSeries?.at?.(-1)?.v) || 0
+    const totalValue = seriesValue > 0 ? seriesValue : displayValue
     const [selectedHolding, setSelectedHolding] = useState(null)
     const [fullDetailStock, setFullDetailStock] = useState(null)
 
