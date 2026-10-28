@@ -228,8 +228,8 @@ async function sendEmailViaResend({ to, subject, html }) {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            from: 'Portfolio Dashboard <onboarding@resend.dev>',
-            to: ['carminebe22@gmail.com'],
+            from: 'KB Portfolio Tracker <newsletter@karolbennardo.tech>',
+            to: Array.isArray(to) ? to : [to],
             subject,
             html,
         }),
